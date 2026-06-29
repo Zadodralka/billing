@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}Личный кабинет{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-0 fw-bold">Личный кабинет</h4>
+        <small class="text-muted">
+            {% if user.telegram_username %}@{{ user.telegram_username }}{% endif %}
+            {% if user.email %}{{ user.email }}{% endif %}
+        </small>
+    </div>
+</div>
+
+<!-- Активные подписки -->
+<div class="row g-3 mb-4">
+{% if active_subs %}
+    {% for sub in active_subs %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <span class="badge badge-active px-3 py-2 rounded-pill">✅ Активна</span>
+                    <span class="text-muted small">{{ plans[sub.plan_key]['name'] }}</span>
+                </div>
+                <h5 class="card-title">VPN Подписка</h5>
+                {% if sub.expires_at %}
+                <p class="text-muted mb-3">
+                    <i class="bi bi-calendar3"></i>
+                    До {{ sub.expires_at.strftime('%d.%m.%Y') }}
+                    {% set days_left = (sub.expires_at - now).days %}
+                    <span class="badge {% if days_left < 7 %}bg-warning{% else %}bg-light text-dark{% endif %} ms-1">
+                        {{ days_left }} дн.
+                    </span>
+                </p>
+                {% endif %}
+                {% if sub.config_link %}
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Конфиг для подключения:</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control font-monospace"
+                            value="{{ sub.config_link }}" readonly id="config-{{ sub.id }}">
+                        <button class="btn btn-outline-secondary" onclick="copyConfig('config-{{ sub.id }}')">
+                            <i class="bi bi-copy"></i>
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <div style="font-size: 3rem;">🔒</div>
+                <h5 class="mt-3">Нет активных подписок</h5>
+                <p class="text-muted">Выберите тариф ниже чтобы начать</p>
+            </div>
+        </div>
+    </div>
+{% endif %}
+</div>
+
+<!-- Тарифы -->
+<h5 class="fw-bold mb-3" id="plans">💳 Тарифные планы</h5>
+<div class="row g-3 mb-4">
+    {% for key, plan in plans.items() %}
+    <div class="col-sm-6 col-lg-3">
+        <div class="card text-center {% if key == '3m' %}border-primary{% endif %}">
+            {% if key == '3m' %}
+            <div class="card-header bg-primary text-white py-1 small">Популярный</div>
+            {% endif %}
+            <div class="card-body">
+                <h6 class="fw-bold">{{ plan['name'] }}</h6>
+                <div class="display-6 fw-bold text-primary">{{ plan['price'] }}<span class="fs-6">₽</span></div>
+                <small class="text-muted d-block mb-3">{{ plan['days'] }} дней</small>
+                <a href="#" class="btn btn-primary btn-sm w-100" onclick="buyPlan('{{ key }}')">
+                    Купить
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- История платежей -->
+{% if recent_payments %}
+<h5 class="fw-bold mb-3">📋 История платежей</h5>
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Дата</th>
+                    <th>Тариф</th>
+                    <th>Сумма</th>
+                    <th>Статус</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for payment in recent_payments %}
+                <tr>
+                    <td class="text-muted small">{{ payment.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                    <td>{{ plans.get(payment.plan_key, {}).get('name', payment.plan_key) }}</td>
+                    <td>{{ payment.amount }} ₽</td>
+                    <td>
+                        {% if payment.status.value == 'success' %}
+                        <span class="badge badge-active">Оплачен</span>
+                        {% elif payment.status.value == 'pending' %}
+                        <span class="badge bg-warning text-dark">Ожидание</span>
+                        {% else %}
+                        <span class="badge badge-expired">Ошибка</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Модалка оплаты -->
+<div class="modal fade" id="payModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">💳 Оплата подписки</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center" id="payModalBody">
+                <div class="spinner-border text-primary"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function buyPlan(planKey) {
+    const modal = new bootstrap.Modal(document.getElementById('payModal'));
+    modal.show();
+    
+    const res = await fetch('/payment/create', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({plan_key: planKey})
+    });
+    const data = await res.json();
+    
+    document.getElementById('payModalBody').innerHTML = `
+        <div class="mb-3">
+            <strong>${data.plan_name}</strong><br>
+            <span class="display-6 fw-bold text-primary">${data.amount} ₽</span>
+        </div>
+        <a href="${data.payment_url}" target="_blank" class="btn btn-success btn-lg mb-3 w-100">
+            💳 Оплатить через ЮМани
+        </a>
+        <p class="text-muted small">После оплаты страница обновится автоматически</p>
+    `;
+    
+    // Поллинг статуса
+    const interval = setInterval(async () => {
+        const check = await fetch('/payment/status/' + data.label);
+        const status = await check.json();
+        if (status.paid) {
+            clearInterval(interval);
+            location.reload();
+        }
+    }, 5000);
+}
+
+function copyConfig(id) {
+    const input = document.getElementById(id);
+    input.select();
+    navigator.clipboard.writeText(input.value);
+    const btn = input.nextElementSibling;
+    btn.innerHTML = '<i class="bi bi-check2"></i>';
+    setTimeout(() => btn.innerHTML = '<i class="bi bi-copy"></i>', 2000);
+}
+</script>
+{% endblock %}
