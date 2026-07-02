@@ -39,8 +39,11 @@ async def yoomoney_webhook(request: Request, session: AsyncSession = Depends(get
     if not payment or payment.status == PaymentStatus.SUCCESS:
         return Response(status_code=200)
 
+    # withdraw_amount - сумма, списанная со счёта отправителя (то, что реально заплатил
+    # пользователь). Поле amount - сумма, зачисленная получателю за вычетом комиссии
+    # YooMoney, поэтому для сверки с ожидаемой ценой оно не подходит.
     try:
-        received_amount = float(data.get("amount", "0"))
+        received_amount = float(data.get("withdraw_amount") or data.get("amount", "0"))
     except (TypeError, ValueError):
         received_amount = 0.0
 
