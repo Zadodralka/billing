@@ -1,138 +1,337 @@
 {% extends "base.html" %}
-{% block title %}Личный кабинет{% endblock %}
+{% block title %}Кабинет — Unlock VPN{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── Сетка карточек ── */
+.subs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.1rem;
+    margin-bottom: 2rem;
+}
+
+/* ── Базовая карточка подписки ── */
+.sub-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: border-color .15s, box-shadow .15s;
+}
+.sub-card:hover { box-shadow: 0 8px 32px rgba(0,0,0,.3); }
+.sub-card.active  { border-color: rgba(61,220,132,.3); }
+.sub-card.paused  { border-color: rgba(239,91,91,.25); }
+.sub-card.expired { border-color: rgba(107,118,137,.25); opacity: .8; }
+
+/* ── Цветная шапка карточки ── */
+.sub-card-header {
+    padding: 1.1rem 1.3rem .9rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 1px solid var(--border);
+}
+.sub-card-header.active  { background: linear-gradient(135deg, rgba(61,220,132,.08) 0%, transparent 100%); }
+.sub-card-header.paused  { background: linear-gradient(135deg, rgba(239,91,91,.07) 0%, transparent 100%); }
+.sub-card-header.expired { background: linear-gradient(135deg, rgba(107,118,137,.06) 0%, transparent 100%); }
+
+.sub-card-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; font-size: 1.15rem; flex-shrink: 0;
+}
+.sub-card-icon.active  { background: rgba(61,220,132,.12); color: var(--accent); }
+.sub-card-icon.paused  { background: rgba(239,91,91,.12);  color: #ef5b5b; }
+.sub-card-icon.expired { background: rgba(107,118,137,.1); color: var(--muted); }
+
+/* ── Тело карточки ── */
+.sub-card-body { padding: 1.1rem 1.3rem; display: flex; flex-direction: column; gap: .55rem; flex: 1; }
+
+.sub-card-title { color: #fff; font-weight: 700; font-size: 1rem; }
+.sub-card-plan  { color: var(--muted); font-size: .78rem; font-weight: 500; }
+
+.sub-info-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: .45rem 0; border-bottom: 1px solid rgba(255,255,255,.04); font-size: .83rem;
+}
+.sub-info-row:last-of-type { border-bottom: none; }
+.sub-info-row .k { color: var(--muted); }
+.sub-info-row .v { color: #fff; font-weight: 500; }
+
+/* ── Прогресс-бар времени ── */
+.sub-progress-wrap { margin-top: .25rem; }
+.sub-progress-label { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted); margin-bottom: .35rem; }
+.sub-progress-bar  { height: 4px; background: var(--panel-3); border-radius: 9px; overflow: hidden; }
+.sub-progress-fill { height: 100%; border-radius: 9px; transition: width .3s; }
+.sub-progress-fill.green  { background: var(--accent); }
+.sub-progress-fill.orange { background: #f59e0b; }
+.sub-progress-fill.red    { background: #ef5b5b; }
+
+/* ── Баннер статуса для приостановленных ── */
+.sub-status-banner {
+    margin: 0 1.3rem .4rem; padding: .6rem .85rem; border-radius: 9px;
+    font-size: .8rem; font-weight: 500; display: flex; align-items: center; gap: .5rem;
+}
+.sub-status-banner.paused  { background: rgba(239,91,91,.1); color: #ef5b5b; border: 1px solid rgba(239,91,91,.2); }
+.sub-status-banner.expired { background: rgba(107,118,137,.1); color: var(--muted); border: 1px solid rgba(107,118,137,.2); }
+
+/* ── Кнопки в подвале карточки ── */
+.sub-card-footer { padding: .9rem 1.3rem; border-top: 1px solid var(--border); display: flex; gap: .6rem; }
+.sub-card-footer .btn { flex: 1; font-size: .82rem; padding: .55rem; }
+
+/* ── Модалка конфига ── */
+.config-row { display: flex; gap: .5rem; }
+.config-row input { flex: 1; font-size: .76rem; padding: .55rem .7rem; }
+.copy-btn {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    border-radius: var(--radius-sm); width: 38px; flex-shrink: 0; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+}
+.copy-btn:hover { background: var(--panel-3); }
+.connect-info-row { display: flex; justify-content: space-between; padding: .6rem 0; border-bottom: 1px solid var(--border); font-size: .87rem; }
+.connect-info-row:last-child { border-bottom: none; }
+.connect-info-row .k { color: var(--muted); }
+.connect-info-row .v { color: #fff; font-weight: 500; }
+
+/* ── Оплата ── */
+.pay-cta { display: block; text-align: center; padding: .85rem; border-radius: var(--radius-sm); background: var(--accent); color: #06140c; font-weight: 700; margin-bottom: .9rem; }
+.pay-cta:hover { background: #34c878; color: #06140c; }
+.pay-summary { text-align: center; margin-bottom: 1.3rem; }
+.pay-summary .pname { color: #fff; font-weight: 600; }
+.pay-summary .pamount { font-family: 'Space Grotesk', sans-serif; font-size: 1.8rem; font-weight: 700; color: var(--accent); margin-top: .25rem; }
+.pay-hint { text-align: center; color: var(--muted); font-size: .78rem; margin: 0; }
+.pay-loading { display: flex; flex-direction: column; align-items: center; gap: .8rem; padding: 1rem 0; }
+.spinner { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--panel-3); border-top-color: var(--accent); animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.renew-plan-btn {
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: .75rem 1rem; cursor: pointer; transition: border-color .12s; font-family: inherit;
+    color: var(--text); width: 100%; text-align: left; margin-bottom: .5rem;
+}
+.renew-plan-btn:hover { border-color: var(--accent); }
+.renew-plan-btn .rp-name { font-weight: 600; color: #fff; }
+.renew-plan-btn .rp-days { color: var(--muted); font-size: .78rem; }
+.renew-plan-btn .rp-price { color: var(--accent); font-weight: 700; }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="topbar">
     <div>
-        <h4 class="mb-0 fw-bold">Личный кабинет</h4>
-        <small class="text-muted">
-            {% if user.telegram_username %}@{{ user.telegram_username }}{% endif %}
-            {% if user.email %}{{ user.email }}{% endif %}
-        </small>
-    </div>
-</div>
-
-<!-- Активные подписки -->
-<div class="row g-3 mb-4">
-{% if active_subs %}
-    {% for sub in active_subs %}
-    <div class="col-md-6 col-lg-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start mb-3">
-                    <span class="badge badge-active px-3 py-2 rounded-pill">✅ Активна</span>
-                    <span class="text-muted small">{{ plans[sub.plan_key]['name'] }}</span>
-                </div>
-                <h5 class="card-title">VPN Подписка</h5>
-                {% if sub.expires_at %}
-                <p class="text-muted mb-3">
-                    <i class="bi bi-calendar3"></i>
-                    До {{ sub.expires_at.strftime('%d.%m.%Y') }}
-                    {% set days_left = (sub.expires_at - now).days %}
-                    <span class="badge {% if days_left < 7 %}bg-warning{% else %}bg-light text-dark{% endif %} ms-1">
-                        {{ days_left }} дн.
-                    </span>
-                </p>
-                {% endif %}
-                {% if sub.config_link %}
-                <div class="mb-3">
-                    <label class="form-label small fw-semibold">Конфиг для подключения:</label>
-                    <div class="input-group input-group-sm">
-                        <input type="text" class="form-control font-monospace"
-                            value="{{ sub.config_link }}" readonly id="config-{{ sub.id }}">
-                        <button class="btn btn-outline-secondary" onclick="copyConfig('config-{{ sub.id }}')">
-                            <i class="bi bi-copy"></i>
-                        </button>
-                    </div>
-                </div>
-                {% endif %}
-            </div>
+        <h1>Личный кабинет</h1>
+        <div class="sub">
+            {% if user.telegram_username %}@{{ user.telegram_username }}{% elif user.email %}{{ user.email }}{% endif %}
         </div>
     </div>
-    {% endfor %}
-{% else %}
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body text-center py-5">
-                <div style="font-size: 3rem;">🔒</div>
-                <h5 class="mt-3">Нет активных подписок</h5>
-                <p class="text-muted">Выберите тариф ниже чтобы начать</p>
-            </div>
-        </div>
-    </div>
-{% endif %}
+    <a href="/dashboard/plans" class="btn btn-accent"><i class="bi bi-plus-lg"></i> Купить подписку</a>
 </div>
 
-<!-- Тарифы -->
-<h5 class="fw-bold mb-3" id="plans">💳 Тарифные планы</h5>
-<div class="row g-3 mb-4">
-    {% for key, plan in plans.items() %}
-    <div class="col-sm-6 col-lg-3">
-        <div class="card text-center {% if key == '3m' %}border-primary{% endif %}">
-            {% if key == '3m' %}
-            <div class="card-header bg-primary text-white py-1 small">Популярный</div>
+{% set all_visible_subs = active_subs + paused_subs %}
+
+{% if all_visible_subs %}
+<h2 class="section-title">Мои подписки</h2>
+<div class="subs-grid">
+    {% for sub in all_visible_subs %}
+
+    {% if sub.status.value == 'active' and (not sub.expires_at or sub.expires_at > now) %}
+        {% set card_state = 'active' %}
+        {% set icon = 'bi-shield-check' %}
+    {% elif sub.status.value == 'cancelled' %}
+        {% set card_state = 'paused' %}
+        {% set icon = 'bi-pause-circle' %}
+    {% else %}
+        {% set card_state = 'expired' %}
+        {% set icon = 'bi-clock-history' %}
+    {% endif %}
+
+    {% set days_total = ((sub.expires_at - sub.starts_at).days) if sub.expires_at and sub.starts_at else 0 %}
+    {% set days_left = ((sub.expires_at - now).days) if sub.expires_at else 0 %}
+    {% set days_left = [days_left, 0] | max %}
+    {% set progress = ((days_left / days_total * 100) | int) if days_total > 0 else 0 %}
+    {% set progress = [progress, 100] | min %}
+
+    <div class="sub-card {{ card_state }}">
+        <!-- Шапка -->
+        <div class="sub-card-header {{ card_state }}">
+            <div>
+                <div class="sub-card-title">
+                    {% if card_state == 'active' %}🟢 Активна
+                    {% elif card_state == 'paused' %}⏸️ Приостановлена
+                    {% else %}🔴 Истекла{% endif %}
+                </div>
+                <div class="sub-card-plan">{{ all_plans.get(sub.plan_key, {}).get('name', sub.plan_key) }}</div>
+            </div>
+            <div class="sub-card-icon {{ card_state }}">
+                <i class="bi {{ icon }}"></i>
+            </div>
+        </div>
+
+        <!-- Тело -->
+        <div class="sub-card-body">
+            {% if sub.expires_at %}
+            <div class="sub-info-row">
+                <span class="k">Действует до</span>
+                <span class="v">{{ sub.expires_at.strftime('%d.%m.%Y') }}</span>
+            </div>
             {% endif %}
-            <div class="card-body">
-                <h6 class="fw-bold">{{ plan['name'] }}</h6>
-                <div class="display-6 fw-bold text-primary">{{ plan['price'] }}<span class="fs-6">₽</span></div>
-                <small class="text-muted d-block mb-3">{{ plan['days'] }} дней</small>
-                <a href="#" class="btn btn-primary btn-sm w-100" onclick="buyPlan('{{ key }}')">
-                    Купить
-                </a>
+            <div class="sub-info-row">
+                <span class="k">Трафик</span>
+                <span class="v">{% if sub.traffic_gb == 0 %}Безлимит{% else %}{{ sub.traffic_gb }} GB{% endif %}</span>
+            </div>
+
+            {% if card_state == 'active' and sub.expires_at and sub.starts_at %}
+            <div class="sub-progress-wrap">
+                <div class="sub-progress-label">
+                    <span>{{ days_left }} дн. осталось</span>
+                    <span>из {{ days_total }} дн.</span>
+                </div>
+                <div class="sub-progress-bar">
+                    <div class="sub-progress-fill {% if progress > 30 %}green{% elif progress > 10 %}orange{% else %}red{% endif %}"
+                         style="width: {{ progress }}%"></div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Баннер для приостановленных/истёкших -->
+        {% if card_state == 'paused' %}
+        <div class="sub-status-banner paused">
+            <i class="bi bi-exclamation-triangle"></i>
+            Доступ временно приостановлен администратором. Для возобновления обратитесь в <a href="/dashboard/support" style="color:#ef5b5b;font-weight:700;">поддержку</a>.
+        </div>
+        {% elif card_state == 'expired' %}
+        <div class="sub-status-banner expired">
+            <i class="bi bi-clock"></i>
+            Подписка истекла {{ sub.expires_at.strftime('%d.%m.%Y') if sub.expires_at else '' }}
+        </div>
+        {% endif %}
+
+        <!-- Кнопки -->
+        <div class="sub-card-footer">
+            {% if card_state == 'active' and sub.config_link %}
+            <button class="btn btn-accent" onclick="openSubModal('{{ sub.id }}')">
+                <i class="bi bi-qr-code"></i> Подключение
+            </button>
+            <button class="btn btn-outline-1" onclick="openRenewModal('{{ sub.id }}', '{{ sub.plan_key }}')">
+                <i class="bi bi-arrow-repeat"></i> Продлить
+            </button>
+            {% elif card_state == 'active' %}
+            <button class="btn btn-outline-1 w-100" onclick="openRenewModal('{{ sub.id }}', '{{ sub.plan_key }}')">
+                <i class="bi bi-arrow-repeat"></i> Продлить
+            </button>
+            {% elif card_state == 'paused' %}
+            <a href="/dashboard/support" class="btn btn-outline-1" style="flex:1;text-align:center;">
+                <i class="bi bi-life-preserver"></i> Написать в поддержку
+            </a>
+            {% else %}
+            <button class="btn btn-accent" style="flex:1;" onclick="openRenewModal('{{ sub.id }}', '{{ sub.plan_key }}')">
+                <i class="bi bi-arrow-repeat"></i> Возобновить подписку
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Модалка с конфигом (только для активных) -->
+    {% if card_state == 'active' and sub.config_link %}
+    <div class="modal-overlay" id="subModal-{{ sub.id }}">
+        <div class="modal-box">
+            <div class="modal-head">
+                <h3>VPN-подключение</h3>
+                <button class="modal-close" onclick="closeModal('subModal-{{ sub.id }}')"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div class="modal-body-c">
+                <div class="connect-info-row"><span class="k">Тариф</span><span class="v">{{ all_plans.get(sub.plan_key, {}).get('name', sub.plan_key) }}</span></div>
+                <div class="connect-info-row"><span class="k">Трафик</span><span class="v">{% if sub.traffic_gb == 0 %}Безлимит{% else %}{{ sub.traffic_gb }} GB{% endif %}</span></div>
+                {% if sub.expires_at %}
+                <div class="connect-info-row"><span class="k">Действует до</span><span class="v">{{ sub.expires_at.strftime('%d.%m.%Y %H:%M') }}</span></div>
+                {% endif %}
+                <div style="margin-top:1.1rem;">
+                    <label class="form-label">Ссылка для подключения</label>
+                    <div class="config-row">
+                        <input type="text" value="{{ sub.config_link }}" readonly id="config-{{ sub.id }}">
+                        <button class="copy-btn" onclick="copyConfig('config-{{ sub.id }}')"><i class="bi bi-copy"></i></button>
+                    </div>
+                    <a href="{{ sub.config_link }}" target="_blank" class="btn btn-accent" style="width:100%;text-align:center;display:block;margin-top:.9rem;padding:.75rem;">
+                        <i class="bi bi-box-arrow-up-right"></i> Открыть страницу подписки
+                    </a>
+                    <button class="btn btn-outline-1" style="width:100%;margin-top:.6rem;" onclick="closeModal('subModal-{{ sub.id }}'); openRenewModal('{{ sub.id }}', '{{ sub.plan_key }}')">
+                        <i class="bi bi-arrow-repeat"></i> Продлить эту подписку
+                    </button>
+                    <p style="color:var(--muted);font-size:.76rem;margin-top:.9rem;text-align:center;">
+                        Вставьте ссылку в VPN-клиент (v2rayNG, Hiddify, Streisand) или откройте на телефоне для автонастройки
+                    </p>
+                </div>
             </div>
         </div>
     </div>
+    {% endif %}
     {% endfor %}
 </div>
 
-<!-- История платежей -->
-{% if recent_payments %}
-<h5 class="fw-bold mb-3">📋 История платежей</h5>
-<div class="card">
-    <div class="table-responsive">
-        <table class="table table-hover mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>Дата</th>
-                    <th>Тариф</th>
-                    <th>Сумма</th>
-                    <th>Статус</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for payment in recent_payments %}
-                <tr>
-                    <td class="text-muted small">{{ payment.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
-                    <td>{{ plans.get(payment.plan_key, {}).get('name', payment.plan_key) }}</td>
-                    <td>{{ payment.amount }} ₽</td>
-                    <td>
-                        {% if payment.status.value == 'success' %}
-                        <span class="badge badge-active">Оплачен</span>
-                        {% elif payment.status.value == 'pending' %}
-                        <span class="badge bg-warning text-dark">Ожидание</span>
-                        {% else %}
-                        <span class="badge badge-expired">Ошибка</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+{% else %}
+<div class="card" style="margin-bottom:2rem;">
+    <div style="text-align:center;padding:3.5rem 1.5rem;">
+        <div style="font-size:2.6rem;margin-bottom:.8rem;">🔒</div>
+        <h5 style="color:#fff;font-weight:700;margin-bottom:.3rem;">Нет активных подписок</h5>
+        <p style="color:var(--muted);margin:0 0 1.2rem;">Оформите подписку чтобы получить доступ к VPN</p>
+        <a href="/dashboard/plans" class="btn btn-accent">Выбрать тариф</a>
     </div>
 </div>
 {% endif %}
+
+{% if recent_payments %}
+<h2 class="section-title">История платежей</h2>
+<div class="table-card">
+    <div class="table-wrap">
+    <table>
+        <thead><tr><th>Дата</th><th>Тариф</th><th>Сумма</th><th>Статус</th></tr></thead>
+        <tbody>
+            {% for payment in recent_payments %}
+            <tr>
+                <td class="mono" style="color:var(--muted);font-size:.8rem;">{{ payment.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td>{{ all_plans.get(payment.plan_key, {}).get('name', payment.plan_key) }}</td>
+                <td class="mono">{{ payment.amount }} ₽</td>
+                <td>
+                    {% if payment.status.value == 'success' %}<span class="badge badge-on">Оплачен</span>
+                    {% elif payment.status.value == 'pending' %}<span class="badge badge-mid">Ожидание</span>
+                    {% else %}<span class="badge badge-neutral">Отменён</span>{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Модалка продления -->
+<div class="modal-overlay" id="renewModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Продлить подписку</h3>
+            <button class="modal-close" onclick="closeModal('renewModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c">
+            <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem;">Конфиг останется тем же — изменится только дата окончания.</p>
+            <div id="renewPlansList"></div>
+        </div>
+    </div>
+</div>
 
 <!-- Модалка оплаты -->
-<div class="modal fade" id="payModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">💳 Оплата подписки</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body text-center" id="payModalBody">
-                <div class="spinner-border text-primary"></div>
-            </div>
+<div class="modal-overlay" id="payModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Оплата</h3>
+            <button class="modal-close" onclick="closeModal('payModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c" id="payModalBody">
+            <div class="pay-loading"><div class="spinner"></div></div>
         </div>
     </div>
 </div>
@@ -140,46 +339,75 @@
 
 {% block extra_scripts %}
 <script>
-async function buyPlan(planKey) {
-    const modal = new bootstrap.Modal(document.getElementById('payModal'));
-    modal.show();
-    
-    const res = await fetch('/payment/create', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({plan_key: planKey})
-    });
-    const data = await res.json();
-    
-    document.getElementById('payModalBody').innerHTML = `
-        <div class="mb-3">
-            <strong>${data.plan_name}</strong><br>
-            <span class="display-6 fw-bold text-primary">${data.amount} ₽</span>
-        </div>
-        <a href="${data.payment_url}" target="_blank" class="btn btn-success btn-lg mb-3 w-100">
-            💳 Оплатить через ЮМани
-        </a>
-        <p class="text-muted small">После оплаты страница обновится автоматически</p>
-    `;
-    
-    // Поллинг статуса
-    const interval = setInterval(async () => {
-        const check = await fetch('/payment/status/' + data.label);
-        const status = await check.json();
-        if (status.paid) {
-            clearInterval(interval);
-            location.reload();
-        }
-    }, 5000);
-}
+const ALL_PLANS = {{ plans | tojson }};
+let paymentPollInterval = null;
+
+function openSubModal(id) { openModal('subModal-' + id); }
 
 function copyConfig(id) {
     const input = document.getElementById(id);
-    input.select();
-    navigator.clipboard.writeText(input.value);
+    input.select(); navigator.clipboard.writeText(input.value);
     const btn = input.nextElementSibling;
     btn.innerHTML = '<i class="bi bi-check2"></i>';
     setTimeout(() => btn.innerHTML = '<i class="bi bi-copy"></i>', 2000);
+}
+
+function openRenewModal(subId, currentPlanKey) {
+    const list = document.getElementById('renewPlansList');
+    list.innerHTML = '';
+    for (const [key, plan] of Object.entries(ALL_PLANS)) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'renew-plan-btn';
+        btn.innerHTML = `<div><div class="rp-name">${plan.name}</div><div class="rp-days">${plan.days} дней</div></div><div class="rp-price">${plan.price} ₽</div>`;
+        btn.onclick = () => startRenewPayment(subId, key);
+        list.appendChild(btn);
+    }
+    openModal('renewModal');
+}
+
+async function startRenewPayment(subId, planKey) {
+    closeModal('renewModal');
+    openModal('payModal');
+    document.getElementById('payModalBody').innerHTML = `<div class="pay-loading"><div class="spinner"></div><span style="color:var(--muted);font-size:.85rem;">Создаём счёт…</span></div>`;
+
+    const res = await fetch('/payment/create', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({plan_key: planKey, traffic_gb: 50, renew_subscription_id: parseInt(subId)})
+    });
+    const data = await res.json();
+    document.getElementById('payModalBody').innerHTML = `
+        <div class="pay-summary"><div class="pname">Продление: ${data.plan_name}</div><div class="pamount">${data.amount} ₽</div></div>
+        <a href="${data.payment_url}" target="_blank" class="pay-cta">Оплатить через ЮMoney</a>
+        <p class="pay-hint">Страница обновится автоматически после оплаты</p>`;
+
+    startPolling(data.label);
+}
+
+function startPolling(label) {
+    if (paymentPollInterval) clearInterval(paymentPollInterval);
+    const deadline = Date.now() + 5 * 60 * 1000;
+
+    paymentPollInterval = setInterval(async () => {
+        if (Date.now() > deadline) {
+            clearInterval(paymentPollInterval);
+            const body = document.getElementById('payModalBody');
+            if (body) body.innerHTML = `
+                <div style="text-align:center;padding:1.5rem 0;">
+                    <div style="font-size:2rem;margin-bottom:.8rem;">⏳</div>
+                    <p style="color:#fff;font-weight:600;">Время ожидания истекло</p>
+                    <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem;">
+                        Если вы уже оплатили — подписка активируется автоматически.<br>
+                        Обновите страницу через минуту.
+                    </p>
+                    <button onclick="location.reload()" class="btn btn-accent">Обновить страницу</button>
+                </div>`;
+            return;
+        }
+        const check = await fetch('/payment/status/' + label);
+        const status = await check.json();
+        if (status.paid) { clearInterval(paymentPollInterval); location.reload(); }
+    }, 8000);
 }
 </script>
 {% endblock %}

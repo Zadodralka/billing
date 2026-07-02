@@ -2,59 +2,53 @@
 {% block title %}Админ — Дашборд{% endblock %}
 
 {% block content %}
-<h4 class="fw-bold mb-4">⚙️ Административная панель</h4>
+<div class="topbar">
+    <div>
+        <h1>Административная панель</h1>
+        <div class="sub">Сводка по платформе</div>
+    </div>
+</div>
 
-<div class="row g-3 mb-4">
-    <div class="col-sm-4">
-        <div class="card">
-            <div class="card-body d-flex align-items-center gap-3">
-                <div style="font-size:2.5rem;">👥</div>
-                <div>
-                    <div class="display-6 fw-bold text-primary">{{ total_users }}</div>
-                    <div class="text-muted">Пользователей</div>
-                </div>
-            </div>
+<div class="row g-3 mb-4" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin:0 0 2rem;">
+    <div class="card stat-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div><div class="label">Пользователей</div><div class="value">{{ total_users }}</div></div>
+            <div class="icon-badge" style="background:var(--blue-soft);color:var(--blue);"><i class="bi bi-people"></i></div>
         </div>
     </div>
-    <div class="col-sm-4">
-        <div class="card">
-            <div class="card-body d-flex align-items-center gap-3">
-                <div style="font-size:2.5rem;">✅</div>
-                <div>
-                    <div class="display-6 fw-bold text-success">{{ active_subs }}</div>
-                    <div class="text-muted">Активных подписок</div>
-                </div>
-            </div>
+    <div class="card stat-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div><div class="label">Активных подписок</div><div class="value">{{ active_subs }}</div></div>
+            <div class="icon-badge" style="background:var(--accent-soft);color:var(--accent);"><i class="bi bi-broadcast"></i></div>
         </div>
     </div>
-    <div class="col-sm-4">
-        <div class="card">
-            <div class="card-body d-flex align-items-center gap-3">
-                <div style="font-size:2.5rem;">💰</div>
-                <div>
-                    <div class="display-6 fw-bold text-warning">{{ total_revenue }}</div>
-                    <div class="text-muted">Выручка, ₽</div>
+    <div class="card stat-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div><div class="label">Выручка</div><div class="value">{{ total_revenue }} ₽</div></div>
+            <div class="icon-badge" style="background:var(--gold-soft);color:var(--gold);"><i class="bi bi-cash-coin"></i></div>
+        </div>
+    </div>
+    <div class="card stat-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+                <div class="label">Remnawave</div>
+                <div class="value" style="font-size:1.1rem;">
+                    {% if rw_online %}<span style="color:var(--accent);"><i class="bi bi-check-circle"></i> Онлайн</span>
+                    {% else %}<span style="color:var(--danger);"><i class="bi bi-x-circle"></i> Недоступна</span>{% endif %}
                 </div>
             </div>
+            <div class="icon-badge" style="background:var(--blue-soft);color:var(--blue);"><i class="bi bi-hdd-network"></i></div>
         </div>
     </div>
 </div>
 
-<div class="row g-3">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <h6 class="fw-bold mb-3">Быстрые ссылки</h6>
-                <div class="list-group list-group-flush">
-                    <a href="/admin/users" class="list-group-item list-group-item-action">
-                        <i class="bi bi-people me-2"></i> Управление пользователями
-                    </a>
-                    <a href="/admin/subscriptions" class="list-group-item list-group-item-action">
-                        <i class="bi bi-list-check me-2"></i> Все подписки
-                    </a>
-                </div>
-            </div>
-        </div>
+<div class="card">
+    <div class="card-body">
+        <h3 style="color:#fff;font-weight:700;margin-bottom:1rem;font-size:1rem;">Быстрые ссылки</h3>
+        <a href="/admin/users" class="nav-link" style="margin-bottom:.2rem;"><i class="bi bi-people"></i> Управление пользователями</a>
+        <a href="/admin/subscriptions" class="nav-link" style="margin-bottom:.2rem;"><i class="bi bi-list-check"></i> Все подписки</a>
+        <a href="/admin/payments" class="nav-link" style="margin-bottom:.2rem;"><i class="bi bi-receipt"></i> Платежи</a>
+        <a href="/admin/remnawave" class="nav-link"><i class="bi bi-hdd-network"></i> Состояние Remnawave</a>
     </div>
 </div>
 {% endblock %}

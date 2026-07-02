@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Промокоды — Админ{% endblock %}
+
+{% block content %}
+<div class="topbar">
+    <div><h1>Промокоды</h1><div class="sub">{{ promos|length }} всего</div></div>
+    <button class="btn btn-accent" onclick="openModal('createPromoModal')"><i class="bi bi-plus-lg"></i> Создать</button>
+</div>
+
+<div id="errorBanner" style="display:none;background:var(--danger-soft);color:var(--danger);padding:.8rem 1rem;border-radius:10px;margin-bottom:1rem;font-size:.85rem;"></div>
+<div id="successBanner" style="display:none;background:var(--accent-soft);color:var(--accent);padding:.8rem 1rem;border-radius:10px;margin-bottom:1rem;font-size:.85rem;"></div>
+
+<div class="table-card">
+    <div class="table-wrap">
+    <table>
+        <thead><tr><th>Код</th><th>Скидка</th><th>Использований</th><th>Макс.</th><th>Истекает</th><th>Описание</th><th>Статус</th><th></th></tr></thead>
+        <tbody>
+        {% for p in promos %}
+        <tr id="promo-row-{{ p.id }}">
+            <td class="mono" style="font-weight:700;color:#fff;letter-spacing:.05em;">{{ p.code }}</td>
+            <td class="mono" style="color:var(--accent);">-{{ p.discount_percent }}%</td>
+            <td class="mono">{{ p.uses_count }}</td>
+            <td class="mono" style="color:var(--muted);">{{ p.max_uses or '∞' }}</td>
+            <td class="mono" style="color:var(--muted);font-size:.78rem;">{{ p.expires_at.strftime('%d.%m.%Y') if p.expires_at else '—' }}</td>
+            <td style="color:var(--muted);font-size:.8rem;">{{ p.description or '—' }}</td>
+            <td id="promo-status-{{ p.id }}">
+                {% if p.is_active %}<span class="badge badge-on">Активен</span>
+                {% else %}<span class="badge badge-neutral">Отключён</span>{% endif %}
+            </td>
+            <td>
+                <div style="display:flex;gap:.4rem;">
+                    <button class="btn btn-sm btn-outline-1 js-toggle-promo" data-id="{{ p.id }}" title="Вкл/Выкл">
+                        {% if p.is_active %}<i class="bi bi-pause-fill"></i>{% else %}<i class="bi bi-play-fill"></i>{% endif %}
+                    </button>
+                    <button class="btn btn-sm btn-danger-1 js-delete-promo" data-id="{{ p.id }}" data-code="{{ p.code }}">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:2rem;">Промокодов пока нет</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<div class="modal-overlay" id="createPromoModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Создать промокод</h3>
+            <button class="modal-close" onclick="closeModal('createPromoModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c">
+            <label class="form-label">Код (латиницей, можно цифры)</label>
+            <input type="text" id="newPromoCode" placeholder="UNLOCK20" style="text-transform:uppercase;margin-bottom:.9rem;" oninput="this.value=this.value.toUpperCase()">
+
+            <label class="form-label">Скидка (%)</label>
+            <input type="number" id="newPromoDiscount" min="1" max="100" value="20" style="margin-bottom:.9rem;">
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:.9rem;">
+                <div>
+                    <label class="form-label">Макс. использований (пусто = безлимит)</label>
+                    <input type="number" id="newPromoMaxUses" min="1" placeholder="100">
+                </div>
+                <div>
+                    <label class="form-label">Истекает (пусто = бессрочно)</label>
+                    <input type="date" id="newPromoExpires">
+                </div>
+            </div>
+
+            <label class="form-label">Описание (необязательно)</label>
+            <input type="text" id="newPromoDesc" placeholder="Промо для новых пользователей">
+        </div>
+        <div class="modal-foot">
+            <button type="button" class="btn btn-outline-1" onclick="closeModal('createPromoModal')">Отмена</button>
+            <button type="button" class="btn btn-accent" id="confirmCreatePromoBtn">Создать</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function showError(msg) { const b = document.getElementById('errorBanner'); b.textContent = msg; b.style.display='block'; setTimeout(()=>b.style.display='none',7000); }
+function showSuccess(msg) { const b = document.getElementById('successBanner'); b.textContent = msg; b.style.display='block'; setTimeout(()=>b.style.display='none',4000); }
+
+document.getElementById('confirmCreatePromoBtn').addEventListener('click', async function() {
+    const code = document.getElementById('newPromoCode').value.trim().toUpperCase();
+    const discount = document.getElementById('newPromoDiscount').value;
+    if (!code || !discount) { showError('Заполните код и скидку'); return; }
+    this.disabled = true;
+    const fd = new FormData();
+    fd.append('code', code);
+    fd.append('discount_percent', discount);
+    fd.append('max_uses', document.getElementById('newPromoMaxUses').value);
+    fd.append('expires_at', document.getElementById('newPromoExpires').value);
+    fd.append('description', document.getElementById('newPromoDesc').value);
+    const res = await fetch('/admin/promo/create', { method:'POST', body: fd });
+    const data = await res.json();
+    if (data.ok) { closeModal('createPromoModal'); showSuccess('Промокод создан'); setTimeout(()=>location.reload(), 800); }
+    else { showError('Ошибка: ' + (data.error || '?')); }
+    this.disabled = false;
+});
+
+document.addEventListener('click', async function(e) {
+    const toggle = e.target.closest('.js-toggle-promo');
+    if (toggle) {
+        toggle.disabled = true;
+        const res = await fetch('/admin/promo/' + toggle.dataset.id + '/toggle', {method:'POST'});
+        const data = await res.json();
+        if (data.ok) location.reload();
+        else { showError('Ошибка'); toggle.disabled=false; }
+        return;
+    }
+    const del = e.target.closest('.js-delete-promo');
+    if (del) {
+        if (!confirm('Удалить промокод ' + del.dataset.code + '?')) return;
+        del.disabled = true;
+        const res = await fetch('/admin/promo/' + del.dataset.id + '/delete', {method:'POST'});
+        const data = await res.json();
+        if (data.ok) { document.getElementById('promo-row-' + del.dataset.id).remove(); showSuccess('Удалён'); }
+        else { showError('Ошибка: ' + (data.error||'?')); del.disabled=false; }
+    }
+});
+</script>
+{% endblock %}

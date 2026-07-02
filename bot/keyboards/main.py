@@ -1,29 +1,29 @@
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
-from core.config import PLANS, settings
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from core.config import settings
 
 
-def main_menu() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="💳 Купить подписку"), KeyboardButton(text="📋 Мои подписки")],
-            [KeyboardButton(text="🔑 Мои конфиги"), KeyboardButton(text="🌐 Веб-кабинет")],
-            [KeyboardButton(text="💬 Поддержка")],
+def terms_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура принятия правил при первом запуске"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Принимаю правила", callback_data="accept_terms")],
+    ])
+
+
+def main_menu() -> InlineKeyboardMarkup:
+    """Главное меню бота"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="💳 Купить подписку", callback_data="menu:buy"),
+            InlineKeyboardButton(text="📋 Мои подписки", callback_data="menu:subs"),
         ],
-        resize_keyboard=True,
-    )
-
-
-def plans_keyboard() -> InlineKeyboardMarkup:
-    buttons = []
-    for key, plan in PLANS.items():
-        buttons.append([
-            InlineKeyboardButton(
-                text=f"{plan['name']} — {plan['price']} ₽",
-                callback_data=f"buy:{key}",
-            )
-        ])
-    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="cancel")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+        [
+            InlineKeyboardButton(text="🌐 Личный кабинет", url=settings.webapp_url),
+            InlineKeyboardButton(text="📖 Инструкции", url=f"{settings.webapp_url}/docs"),
+        ],
+        [
+            InlineKeyboardButton(text="💬 Поддержка", callback_data="support:menu"),
+        ],
+    ])
 
 
 def payment_keyboard(payment_url: str, label: str) -> InlineKeyboardMarkup:
@@ -34,7 +34,7 @@ def payment_keyboard(payment_url: str, label: str) -> InlineKeyboardMarkup:
     ])
 
 
-def webapp_keyboard() -> InlineKeyboardMarkup:
+def back_to_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🌐 Открыть личный кабинет", url=settings.webapp_url)],
+        [InlineKeyboardButton(text="← Главное меню", callback_data="menu:main")],
     ])

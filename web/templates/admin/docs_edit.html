@@ -1,0 +1,414 @@
+{% extends "base.html" %}
+{% block title %}{% if mode == 'create' %}Новая статья{% else %}Редактировать{% endif %} — Админ{% endblock %}
+
+{% block extra_head %}
+<!-- Markdown styles (для превью) -->
+<style>
+.editor-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    height: calc(100vh - 180px);
+    min-height: 500px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+@media (max-width: 900px) {
+    .editor-layout { grid-template-columns: 1fr; height: auto; }
+    .preview-pane { display: none; }
+    .preview-pane.show-mobile { display: flex; }
+    .editor-pane { display: flex; }
+    .editor-pane.hide-mobile { display: none; }
+}
+
+.editor-pane, .preview-pane {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.editor-pane { border-right: 1px solid var(--border); }
+
+.pane-header {
+    background: var(--panel-2);
+    border-bottom: 1px solid var(--border);
+    padding: .5rem .9rem;
+    font-size: .75rem;
+    font-weight: 600;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+/* Тулбар */
+.md-toolbar {
+    background: var(--panel-2);
+    border-bottom: 1px solid var(--border);
+    padding: .4rem .6rem;
+    display: flex;
+    gap: .2rem;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+.md-toolbar button {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    border-radius: 5px;
+    width: 30px;
+    height: 28px;
+    cursor: pointer;
+    font-size: .83rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background .1s, color .1s;
+    font-family: inherit;
+}
+.md-toolbar button:hover { background: var(--panel-3); color: var(--text); }
+.md-toolbar .sep { width: 1px; background: var(--border); margin: 2px 3px; align-self: stretch; }
+
+/* Textarea */
+#mdEditor {
+    flex: 1;
+    background: var(--panel);
+    border: none;
+    color: var(--text);
+    font-family: 'Courier New', Consolas, monospace;
+    font-size: .86rem;
+    line-height: 1.65;
+    padding: 1rem;
+    resize: none;
+    outline: none;
+    overflow-y: auto;
+    tab-size: 2;
+}
+#mdEditor::placeholder { color: #3a4254; }
+
+/* Превью */
+.preview-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.2rem 1.3rem;
+    background: var(--panel);
+}
+
+/* Markdown в превью (копия из docs_article.html) */
+.md-body { color: #cbd5e1; line-height: 1.75; font-size: .9rem; }
+.md-body h1,.md-body h2,.md-body h3,.md-body h4 { font-family:'Space Grotesk',sans-serif; color:#f1f5f9; font-weight:700; line-height:1.3; margin:1.5rem 0 .6rem; }
+.md-body h1 { font-size:1.35rem; padding-bottom:.4rem; border-bottom:1px solid var(--border); }
+.md-body h2 { font-size:1.15rem; padding-bottom:.35rem; border-bottom:1px solid var(--border); }
+.md-body h3 { font-size:1rem; }
+.md-body p { margin:0 0 .8rem; }
+.md-body strong { color:#f1f5f9; font-weight:600; }
+.md-body a { color:var(--accent); text-decoration:underline; }
+.md-body ul,.md-body ol { padding-left:1.5rem; margin:0 0 .8rem; }
+.md-body li { margin-bottom:.25rem; }
+.md-body li::marker { color:var(--accent); }
+.md-body code { background:#161b26; border:1px solid #2a3347; border-radius:4px; padding:.1em .4em; font-size:.85em; color:#7dd3fc; font-family:'Courier New',monospace; }
+.md-body pre { background:#0d1117; border:1px solid #232a38; border-radius:8px; padding:.9rem 1rem; overflow-x:auto; margin:0 0 1rem; }
+.md-body pre code { background:none; border:none; padding:0; color:#e2e8f0; font-size:.82rem; }
+.md-body blockquote { border-left:3px solid var(--accent); background:rgba(61,220,132,.05); margin:0 0 1rem; padding:.6rem .9rem; border-radius:0 6px 6px 0; }
+.md-body blockquote p { margin:0; color:#9aa5ba; }
+.md-body img { max-width:100%; border-radius:8px; border:1px solid var(--border); margin:.4rem 0 .9rem; display:block; }
+.md-body table { width:100%; border-collapse:collapse; margin:0 0 1rem; font-size:.85rem; display:block; overflow-x:auto; }
+.md-body th { background:#161b26; color:#f1f5f9; font-weight:600; padding:.5rem .8rem; border:1px solid #232a38; }
+.md-body td { padding:.45rem .8rem; border:1px solid #232a38; }
+.md-body hr { border:none; border-top:1px solid var(--border); margin:1.5rem 0; }
+
+/* Мобильные табы */
+.mobile-tabs { display:none; gap:.4rem; margin-bottom:.9rem; }
+@media(max-width:900px) { .mobile-tabs { display:flex; } }
+.mobile-tab { flex:1; text-align:center; padding:.5rem; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--muted); font-size:.83rem; font-weight:600; cursor:pointer; }
+.mobile-tab.active { background:var(--accent-soft); color:var(--accent); border-color:transparent; }
+
+/* Форма метаданных */
+.meta-form { display:grid; grid-template-columns:1fr 1fr; gap:.9rem; margin-bottom:1rem; }
+@media(max-width:600px) { .meta-form { grid-template-columns:1fr; } }
+
+/* Загрузка изображения */
+#uploadProgress { display:none; color:var(--accent); font-size:.78rem; margin-top:.25rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="topbar" style="margin-bottom:1rem;">
+    <div>
+        <h1>{% if mode == 'create' %}Новая статья{% else %}Редактировать{% endif %}</h1>
+    </div>
+    <div style="display:flex;gap:.6rem;">
+        <a href="/admin/docs" class="btn btn-outline-1"><i class="bi bi-arrow-left"></i> К списку</a>
+        <button class="btn btn-accent" id="saveBtn" onclick="saveArticle()">
+            <i class="bi bi-check2"></i> Сохранить
+        </button>
+    </div>
+</div>
+
+<div id="msgBanner" style="display:none;padding:.75rem 1rem;border-radius:10px;margin-bottom:.9rem;font-size:.85rem;"></div>
+
+<!-- Метаданные -->
+<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:1.1rem 1.2rem;margin-bottom:1rem;">
+    <div class="meta-form">
+        <div>
+            <label class="form-label">Заголовок статьи *</label>
+            <input type="text" id="fTitle" placeholder="Как подключиться к VPN на iPhone" value="{{ article.title if article else '' }}">
+        </div>
+        <div>
+            <label class="form-label">Краткое описание (необязательно)</label>
+            <input type="text" id="fExcerpt" placeholder="Пошаговая инструкция для iOS 16+" value="{{ article.excerpt or '' if article else '' }}">
+        </div>
+    </div>
+    <div style="display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;color:#9aa5ba;font-size:.86rem;">
+            <input type="checkbox" id="fPublished" {% if article and article.is_published %}checked{% endif %} style="width:auto;">
+            Опубликовать (видна пользователям)
+        </label>
+        <div style="display:flex;align-items:center;gap:.5rem;">
+            <label class="form-label" style="margin:0;white-space:nowrap;">Порядок:</label>
+            <input type="number" id="fOrder" value="{{ article.sort_order if article else 0 }}"
+                   style="width:70px;padding:.4rem .6rem;font-size:.85rem;">
+        </div>
+    </div>
+</div>
+
+<!-- Мобильные табы редактор/превью -->
+<div class="mobile-tabs">
+    <button class="mobile-tab active" onclick="showMobilePane('editor')">✏️ Редактор</button>
+    <button class="mobile-tab" onclick="showMobilePane('preview')">👁 Превью</button>
+</div>
+
+<!-- Основной редактор -->
+<div class="editor-layout">
+    <!-- Левая панель: Markdown -->
+    <div class="editor-pane" id="editorPane">
+        <div class="pane-header">
+            <span>📝 Markdown</span>
+            <span style="display:flex;align-items:center;gap:.5rem;">
+                <label style="cursor:pointer;font-size:.73rem;color:var(--muted);display:flex;align-items:center;gap:.3rem;">
+                    <input type="file" id="imgUploadInput" accept="image/*" style="display:none">
+                    <button class="btn btn-sm btn-outline-1" style="font-size:.73rem;padding:.25rem .6rem;" onclick="document.getElementById('imgUploadInput').click()">
+                        <i class="bi bi-image"></i> Добавить скриншот
+                    </button>
+                </label>
+                <span id="uploadProgress">Загрузка…</span>
+            </span>
+        </div>
+
+        <!-- Тулбар -->
+        <div class="md-toolbar">
+            <button onclick="insertMd('# ', '')" title="Заголовок H1"><b>H1</b></button>
+            <button onclick="insertMd('## ', '')" title="Заголовок H2"><b>H2</b></button>
+            <button onclick="insertMd('### ', '')" title="Заголовок H3"><b>H3</b></button>
+            <div class="sep"></div>
+            <button onclick="wrapMd('**', '**')" title="Жирный"><i class="bi bi-type-bold"></i></button>
+            <button onclick="wrapMd('*', '*')" title="Курсив"><i class="bi bi-type-italic"></i></button>
+            <button onclick="wrapMd('~~', '~~')" title="Зачёркнутый"><i class="bi bi-type-strikethrough"></i></button>
+            <div class="sep"></div>
+            <button onclick="insertMd('- ', '')" title="Список">≡</button>
+            <button onclick="insertMd('1. ', '')" title="Нумерованный список"><i class="bi bi-list-ol"></i></button>
+            <button onclick="insertMd('> ', '')" title="Цитата"><i class="bi bi-chat-quote"></i></button>
+            <div class="sep"></div>
+            <button onclick="wrapMd('`', '`')" title="Код"><i class="bi bi-code"></i></button>
+            <button onclick="insertMd('\n```\n', '\n```')" title="Блок кода"><i class="bi bi-code-square"></i></button>
+            <div class="sep"></div>
+            <button onclick="insertLink()" title="Ссылка"><i class="bi bi-link-45deg"></i></button>
+            <button onclick="insertMd('\n---\n', '')" title="Разделитель">—</button>
+        </div>
+
+        <textarea id="mdEditor"
+                  placeholder="Напишите инструкцию на Markdown...
+
+# Заголовок раздела
+Обычный текст с **жирным** и *курсивом*.
+
+## Пошаговая инструкция
+1. Первый шаг
+2. Второй шаг
+3. Третий шаг
+
+> 💡 Подсказка для пользователя
+
+```
+команда в терминале
+```"
+        >{{ article.content if article else '' }}</textarea>
+    </div>
+
+    <!-- Правая панель: Превью -->
+    <div class="preview-pane" id="previewPane">
+        <div class="pane-header"><span>👁 Превью</span></div>
+        <div class="preview-content">
+            <div class="md-body" id="previewBody"></div>
+        </div>
+    </div>
+</div>
+
+<div style="margin-top:.8rem;color:var(--muted);font-size:.75rem;display:flex;align-items:center;gap:.5rem;">
+    <i class="bi bi-info-circle"></i>
+    Поддерживается GitHub Flavored Markdown: заголовки, списки, код, таблицы, изображения.
+    <a href="https://docs.github.com/ru/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax" target="_blank" style="color:var(--accent);">Справка по синтаксису</a>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<script>
+const ARTICLE_ID = {{ article.id if article else 'null' }};
+const MODE = '{{ mode }}';
+
+marked.setOptions({ breaks: true, gfm: true });
+
+const editor = document.getElementById('mdEditor');
+const preview = document.getElementById('previewBody');
+
+// Живое превью
+function updatePreview() {
+    preview.innerHTML = marked.parse(editor.value || '');
+}
+editor.addEventListener('input', updatePreview);
+updatePreview();
+
+// Вставка Markdown (перед выделенным текстом / в конец строки)
+function insertMd(before, after = '') {
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const selected = editor.value.substring(start, end);
+    const lineStart = editor.value.lastIndexOf('\n', start - 1) + 1;
+
+    // Если курсор в начале строки или перед выделением — вставляем в начало строки
+    const replacement = before + (selected || 'текст') + after;
+    editor.setRangeText(replacement, start, end, 'select');
+    editor.focus();
+    updatePreview();
+}
+
+function wrapMd(open, close) {
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const selected = editor.value.substring(start, end) || 'текст';
+    editor.setRangeText(open + selected + close, start, end, 'select');
+    editor.focus();
+    updatePreview();
+}
+
+function insertLink() {
+    const url = prompt('Введите URL:');
+    if (!url) return;
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const text = editor.value.substring(start, end) || 'ссылка';
+    editor.setRangeText(`[${text}](${url})`, start, end, 'end');
+    editor.focus();
+    updatePreview();
+}
+
+// Загрузка изображения
+document.getElementById('imgUploadInput').addEventListener('change', async function() {
+    const file = this.files[0];
+    if (!file) return;
+    const progress = document.getElementById('uploadProgress');
+    progress.style.display = 'inline';
+
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await fetch('/admin/docs/upload-image', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.ok) {
+            const altText = file.name.replace(/\.[^.]+$/, '');
+            const mdImg = `\n![${altText}](${data.url})\n`;
+            const pos = editor.selectionStart;
+            editor.setRangeText(mdImg, pos, pos, 'end');
+            updatePreview();
+        } else {
+            alert('Ошибка загрузки: ' + (data.error || 'неизвестная'));
+        }
+    } catch (e) {
+        alert('Сетевая ошибка: ' + e.message);
+    }
+    progress.style.display = 'none';
+    this.value = '';
+});
+
+// Сохранение
+async function saveArticle() {
+    const title = document.getElementById('fTitle').value.trim();
+    if (!title) { showMsg('Укажите заголовок статьи', 'error'); return; }
+
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass"></i> Сохраняем…';
+
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('excerpt', document.getElementById('fExcerpt').value.trim());
+    formData.append('content', editor.value);
+    formData.append('is_published', document.getElementById('fPublished').checked ? 'true' : 'false');
+    formData.append('sort_order', document.getElementById('fOrder').value);
+
+    try {
+        let url, res;
+        if (MODE === 'create') {
+            url = '/admin/docs/create';
+        } else {
+            url = `/admin/docs/${ARTICLE_ID}/update`;
+        }
+        res = await fetch(url, { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.ok) {
+            showMsg('✅ Сохранено!', 'success');
+            if (MODE === 'create' && data.id) {
+                setTimeout(() => window.location.href = `/admin/docs/${data.id}/edit`, 1200);
+            }
+        } else {
+            showMsg('Ошибка: ' + (data.error || 'неизвестная'), 'error');
+        }
+    } catch (e) {
+        showMsg('Сетевая ошибка: ' + e.message, 'error');
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check2"></i> Сохранить';
+}
+
+// Ctrl+S для сохранения
+document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        saveArticle();
+    }
+});
+
+function showMsg(text, type) {
+    const b = document.getElementById('msgBanner');
+    b.textContent = text;
+    b.style.display = 'block';
+    b.style.background = type === 'error' ? 'var(--danger-soft)' : 'var(--accent-soft)';
+    b.style.color = type === 'error' ? 'var(--danger)' : 'var(--accent)';
+    b.style.border = type === 'error' ? '1px solid rgba(239,91,91,.25)' : '1px solid rgba(61,220,132,.25)';
+    setTimeout(() => b.style.display = 'none', 4000);
+}
+
+// Мобильные табы
+function showMobilePane(pane) {
+    const editorPane = document.getElementById('editorPane');
+    const previewPane = document.getElementById('previewPane');
+    document.querySelectorAll('.mobile-tab').forEach(t => t.classList.remove('active'));
+
+    if (pane === 'editor') {
+        editorPane.classList.remove('hide-mobile');
+        previewPane.classList.remove('show-mobile');
+        previewPane.classList.add('hide-mobile');
+        document.querySelectorAll('.mobile-tab')[0].classList.add('active');
+    } else {
+        editorPane.classList.add('hide-mobile');
+        previewPane.classList.remove('hide-mobile');
+        previewPane.classList.add('show-mobile');
+        document.querySelectorAll('.mobile-tab')[1].classList.add('active');
+        updatePreview();
+    }
+}
+</script>
+{% endblock %}

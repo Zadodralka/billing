@@ -15,6 +15,25 @@ from core.config import settings
 router = APIRouter(prefix="/auth")
 templates = Jinja2Templates(directory="web/templates")
 
+_bot_username_cache = {"value": None}
+
+
+async def get_bot_username() -> str | None:
+    if _bot_username_cache["value"]:
+        return _bot_username_cache["value"]
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(f"https://api.telegram.org/bot{settings.bot_token}/getMe")
+            data = resp.json()
+            if data.get("ok"):
+                username = data["result"]["username"]
+                _bot_username_cache["value"] = username
+                return username
+    except Exception:
+        pass
+    return None
+
 
 def get_session_user_id(request: Request) -> int | None:
     return request.session.get("user_id")
@@ -44,7 +63,15 @@ async def require_admin(request: Request, session: AsyncSession = Depends(get_db
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
+    bot_username = await get_bot_username()
+    # Сохраняем реферальный код в сессии для применения при регистрации
+    ref_code = request.query_params.get("ref")
+    if ref_code:
+        request.session["pending_ref"] = ref_code.strip().upper()
+    return templates.TemplateResponse(request, "login.html", {
+        "bot_username": bot_username,
+        "webapp_url": settings.webapp_url,
+    })
 
 
 @router.post("/login/email")
@@ -55,8 +82,8 @@ async def login_email(
 ):
     email = email.strip().lower()
     token = secrets.token_urlsafe(32)
+    bot_username = await get_bot_username()
 
-    # Найти или создать пользователя
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
     if not user:
@@ -64,41 +91,46 @@ async def login_email(
         session.add(user)
         await session.commit()
 
-    # Сохранить токен
     email_token = EmailToken(email=email, token=token)
     session.add(email_token)
     await session.commit()
 
-    # Отправить письмо
     try:
         await send_magic_link(email, token)
     except Exception as e:
-        raise HTTPException(500, f"Ошибка отправки email: {e}")
+        return templates.TemplateResponse(request, "login.html", {
+            "error": f"Ошибка отправки email: {e}",
+            "bot_username": bot_username,
+            "webapp_url": settings.webapp_url,
+        })
 
-    return templates.TemplateResponse("login.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "login.html", {
         "message": f"Письмо с ссылкой для входа отправлено на {email}",
+        "bot_username": bot_username,
+        "webapp_url": settings.webapp_url,
     })
 
 
 @router.get("/verify")
 async def verify_email(token: str, request: Request, session: AsyncSession = Depends(get_db)):
+    bot_username = await get_bot_username()
     result = await session.execute(
         select(EmailToken).where(EmailToken.token == token, EmailToken.used == False)
     )
     email_token = result.scalar_one_or_none()
 
     if not email_token:
-        return templates.TemplateResponse("login.html", {
-            "request": request,
+        return templates.TemplateResponse(request, "login.html", {
             "error": "Ссылка недействительна или уже использована.",
+            "bot_username": bot_username,
+            "webapp_url": settings.webapp_url,
         })
 
-    # Проверка срока (15 мин)
     if datetime.utcnow() - email_token.created_at > timedelta(minutes=15):
-        return templates.TemplateResponse("login.html", {
-            "request": request,
+        return templates.TemplateResponse(request, "login.html", {
             "error": "Ссылка истекла. Запросите новую.",
+            "bot_username": bot_username,
+            "webapp_url": settings.webapp_url,
         })
 
     email_token.used = True
@@ -116,11 +148,9 @@ async def verify_email(token: str, request: Request, session: AsyncSession = Dep
 
 @router.get("/telegram")
 async def telegram_auth(request: Request, session: AsyncSession = Depends(get_db)):
-    """Обработка Telegram Login Widget"""
     params = dict(request.query_params)
     received_hash = params.pop("hash", "")
 
-    # Проверка подписи
     data_check = "\n".join(f"{k}={v}" for k, v in sorted(params.items()))
     secret = hashlib.sha256(settings.bot_token.encode()).digest()
     expected = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
@@ -128,7 +158,6 @@ async def telegram_auth(request: Request, session: AsyncSession = Depends(get_db
     if not hmac.compare_digest(expected, received_hash):
         raise HTTPException(403, "Invalid Telegram signature")
 
-    # Проверка давности (5 минут)
     if abs(datetime.utcnow().timestamp() - int(params.get("auth_date", 0))) > 300:
         raise HTTPException(403, "Auth data expired")
 
@@ -137,10 +166,20 @@ async def telegram_auth(request: Request, session: AsyncSession = Depends(get_db
     user = result.scalar_one_or_none()
 
     if not user:
+        referred_by_id = None
+        pending_ref = request.session.get("pending_ref")
+        if pending_ref:
+            ref_result = await session.execute(select(User).where(User.referral_code == pending_ref))
+            ref_user = ref_result.scalar_one_or_none()
+            if ref_user and ref_user.telegram_id != tg_id:
+                referred_by_id = ref_user.id
+            request.session.pop("pending_ref", None)
+
         user = User(
             telegram_id=tg_id,
             telegram_username=params.get("username"),
             is_admin=tg_id in settings.admin_ids,
+            referred_by_id=referred_by_id,
         )
         session.add(user)
     else:

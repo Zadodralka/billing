@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Поддержка{% endblock %}
+
+{% block extra_head %}
+<style>
+    .ticket-row {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 1rem 1.2rem; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .12s;
+    }
+    .ticket-row:last-child { border-bottom: none; }
+    .ticket-row:hover { background: var(--panel-2); }
+    .ticket-subject { color: #fff; font-weight: 600; font-size: .92rem; margin-bottom: .25rem; }
+    .ticket-meta { color: var(--muted); font-size: .78rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>Поддержка</h1>
+        <div class="sub">Задайте вопрос — мы отвечаем в течение 1-2 часов</div>
+    </div>
+    <button class="btn btn-accent" onclick="openModal('newTicketModal')"><i class="bi bi-plus-lg"></i> Новый тикет</button>
+</div>
+
+{% if tickets %}
+<div class="table-card">
+    {% for t in tickets %}
+    <div class="ticket-row" onclick="location.href='/dashboard/support/{{ t.id }}'">
+        <div>
+            <div class="ticket-subject">{{ t.subject }}</div>
+            <div class="ticket-meta">Обновлён {{ t.updated_at.strftime('%d.%m.%Y %H:%M') }}</div>
+        </div>
+        <div>
+            {% if t.status.value == 'open' %}<span class="badge badge-mid">Ожидает ответа</span>
+            {% elif t.status.value == 'answered' %}<span class="badge badge-on">Есть ответ</span>
+            {% else %}<span class="badge badge-neutral">Закрыт</span>{% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card">
+    <div style="text-align:center;padding:3.5rem 1.5rem;">
+        <div style="font-size:2.6rem;margin-bottom:.8rem;">💬</div>
+        <h5 style="color:#fff;font-weight:700;margin-bottom:.3rem;">У вас пока нет обращений</h5>
+        <p style="color:var(--muted);">Создайте тикет, если возник вопрос или проблема</p>
+    </div>
+</div>
+{% endif %}
+
+<div class="modal-overlay" id="newTicketModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Новое обращение</h3>
+            <button class="modal-close" onclick="closeModal('newTicketModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c">
+            <label class="form-label">Тема</label>
+            <input type="text" id="newTicketSubject" placeholder="Кратко опишите проблему" style="margin-bottom:.9rem;">
+            <label class="form-label">Сообщение</label>
+            <textarea id="newTicketMessage" rows="5" placeholder="Опишите подробнее..." style="width:100%;background:var(--panel-2);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:.6rem .85rem;font-size:.9rem;font-family:inherit;resize:vertical;"></textarea>
+        </div>
+        <div class="modal-foot">
+            <button type="button" class="btn btn-outline-1" onclick="closeModal('newTicketModal')">Отмена</button>
+            <button type="button" class="btn btn-accent" id="confirmCreateTicketBtn">Отправить</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.getElementById('confirmCreateTicketBtn').addEventListener('click', async function() {
+    const subject = document.getElementById('newTicketSubject').value.trim();
+    const message = document.getElementById('newTicketMessage').value.trim();
+    if (!subject || !message) { alert('Заполните тему и сообщение'); return; }
+
+    this.disabled = true;
+    try {
+        const formData = new FormData();
+        formData.append('subject', subject);
+        formData.append('message', message);
+        const res = await fetch('/dashboard/support/create', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.ok) {
+            window.location.href = '/dashboard/support/' + data.ticket_id;
+        } else {
+            alert('Ошибка: ' + (data.error || 'неизвестная'));
+            this.disabled = false;
+        }
+    } catch (e) {
+        alert('Сетевая ошибка: ' + e.message);
+        this.disabled = false;
+    }
+});
+</script>
+{% endblock %}

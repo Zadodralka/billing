@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Поддержка — Админ{% endblock %}
+
+{% block extra_head %}
+<style>
+    .ticket-row {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 1rem 1.2rem; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .12s;
+    }
+    .ticket-row:last-child { border-bottom: none; }
+    .ticket-row:hover { background: var(--panel-2); }
+    .ticket-subject { color: #fff; font-weight: 600; font-size: .92rem; margin-bottom: .25rem; }
+    .ticket-meta { color: var(--muted); font-size: .78rem; }
+    .filter-tabs { display: flex; gap: .5rem; margin-bottom: 1.2rem; flex-wrap: wrap; }
+    .filter-tab {
+        background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+        border-radius: 8px; padding: .4rem .9rem; font-size: .83rem; cursor: pointer; text-decoration: none; font-weight: 500;
+    }
+    .filter-tab.active { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>Поддержка</h1>
+        <div class="sub">{% if open_count > 0 %}{{ open_count }} ожидает ответа{% else %}Все тикеты обработаны{% endif %}</div>
+    </div>
+</div>
+
+<div class="filter-tabs">
+    <a href="?status=all" class="filter-tab {% if current_status == 'all' %}active{% endif %}">Все</a>
+    <a href="?status=open" class="filter-tab {% if current_status == 'open' %}active{% endif %}">Ожидают ответа</a>
+    <a href="?status=answered" class="filter-tab {% if current_status == 'answered' %}active{% endif %}">Отвечено</a>
+    <a href="?status=closed" class="filter-tab {% if current_status == 'closed' %}active{% endif %}">Закрытые</a>
+</div>
+
+{% if tickets %}
+<div class="table-card">
+    {% for t in tickets %}
+    <div class="ticket-row" onclick="location.href='/admin/support/{{ t.id }}'">
+        <div>
+            <div class="ticket-subject">{{ t.subject }}</div>
+            <div class="ticket-meta">{{ t.user.display_name }} · обновлён {{ t.updated_at.strftime('%d.%m.%Y %H:%M') }}</div>
+        </div>
+        <div>
+            {% if t.status.value == 'open' %}<span class="badge badge-mid">Ожидает ответа</span>
+            {% elif t.status.value == 'answered' %}<span class="badge badge-on">Отвечено</span>
+            {% else %}<span class="badge badge-neutral">Закрыт</span>{% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card">
+    <div style="text-align:center;padding:3.5rem 1.5rem;">
+        <div style="font-size:2.6rem;margin-bottom:.8rem;">📭</div>
+        <h5 style="color:#fff;font-weight:700;">Тикетов нет</h5>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

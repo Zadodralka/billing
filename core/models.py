@@ -27,10 +27,15 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
+    terms_accepted: Mapped[bool] = mapped_column(Boolean, default=False)
+    balance: Mapped[int] = mapped_column(Integer, default=0)  # баланс в рублях
+    referral_code: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True, index=True)
+    referred_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    referral_bonus_paid: Mapped[bool] = mapped_column(Boolean, default=False)  # начислен ли бонус за реферала
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_seen: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    # Remnawave
+    # Remnawave (legacy, не используется как источник истины - см. Subscription.remnawave_sub_id)
     remnawave_uuid: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="user")
@@ -55,12 +60,13 @@ class Subscription(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     plan_key: Mapped[str] = mapped_column(String(10))  # 1m, 3m, 6m, 1y
+    traffic_gb: Mapped[int] = mapped_column(Integer, default=50)  # 0 = безлимит
     status: Mapped[SubscriptionStatus] = mapped_column(SAEnum(SubscriptionStatus), default=SubscriptionStatus.PENDING)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     starts_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    # Remnawave data
+    # Remnawave data - каждая подписка имеет СВОЙ независимый аккаунт
     remnawave_sub_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     config_link: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -79,11 +85,19 @@ class Payment(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     plan_key: Mapped[str] = mapped_column(String(10))
+    traffic_gb: Mapped[int] = mapped_column(Integer, default=50)  # 0 = безлимит
     amount: Mapped[int] = mapped_column(Integer)  # в рублях
     status: Mapped[PaymentStatus] = mapped_column(SAEnum(PaymentStatus), default=PaymentStatus.PENDING)
     label: Mapped[str] = mapped_column(String(64), unique=True, index=True)  # для ЮМани
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    renew_subscription_id: Mapped[int | None] = mapped_column(ForeignKey("subscriptions.id"), nullable=True)
+
+    # Скидки
+    original_amount: Mapped[int] = mapped_column(Integer, default=0)  # цена до скидок
+    promo_discount: Mapped[int] = mapped_column(Integer, default=0)   # скидка промокода (руб)
+    balance_spent: Mapped[int] = mapped_column(Integer, default=0)    # списано с баланса (руб)
+    promo_code_id: Mapped[int | None] = mapped_column(ForeignKey("promo_codes.id"), nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="payments")
 
@@ -96,3 +110,114 @@ class EmailToken(Base):
     token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     used: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class PlanSetting(Base):
+    """Редактируемые цены тарифов (хранятся в БД, можно менять прямо из админки)"""
+    __tablename__ = "plan_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plan_key: Mapped[str] = mapped_column(String(10), unique=True, index=True)  # 1m, 3m, 6m, 1y
+    name: Mapped[str] = mapped_column(String(64))
+    days: Mapped[int] = mapped_column(Integer)
+    price: Mapped[int] = mapped_column(Integer)
+    traffic_gb: Mapped[int] = mapped_column(Integer, default=50)  # 0 = безлимит по умолчанию
+    unlimited_extra: Mapped[int] = mapped_column(Integer, default=0)  # доплата за безлимит
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_featured: Mapped[bool] = mapped_column(Boolean, default=False)  # «Популярный выбор» — выделяется на витрине
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+
+class TicketStatus(str, enum.Enum):
+    OPEN = "open"          # новый или пользователь ответил - ждёт реакции админа
+    ANSWERED = "answered"  # админ ответил - ждёт реакции пользователя
+    CLOSED = "closed"
+
+
+class SupportTicket(Base):
+    __tablename__ = "support_tickets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    subject: Mapped[str] = mapped_column(String(200))
+    status: Mapped[TicketStatus] = mapped_column(SAEnum(TicketStatus), default=TicketStatus.OPEN, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship()
+    messages: Mapped[list["SupportMessage"]] = relationship(back_populates="ticket", order_by="SupportMessage.created_at")
+
+
+class SupportMessage(Base):
+    __tablename__ = "support_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ticket_id: Mapped[int] = mapped_column(ForeignKey("support_tickets.id"), index=True)
+    is_from_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    author_name: Mapped[str | None] = mapped_column(String(100), nullable=True)  # имя админа, если ответ от поддержки
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    ticket: Mapped["SupportTicket"] = relationship(back_populates="messages")
+
+
+class Article(Base):
+    """Статья/инструкция в формате Markdown"""
+    __tablename__ = "articles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(300))
+    slug: Mapped[str] = mapped_column(String(300), unique=True, index=True)
+    excerpt: Mapped[str | None] = mapped_column(String(500), nullable=True)  # краткое описание
+    content: Mapped[str] = mapped_column(Text, default="")  # Markdown
+    is_published: Mapped[bool] = mapped_column(Boolean, default=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ───────────── Баланс и реферальная система ─────────────
+
+class BalanceTransaction(Base):
+    """Лог всех операций с балансом пользователя"""
+    __tablename__ = "balance_transactions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    amount: Mapped[int] = mapped_column(Integer)  # положительный = зачисление, отрицательный = списание (руб)
+    type: Mapped[str] = mapped_column(String(30))  # referral_bonus, promo_bonus, payment_spend
+    description: Mapped[str] = mapped_column(String(300), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+# ───────────── Промокоды ─────────────
+
+class PromoCode(Base):
+    __tablename__ = "promo_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    discount_percent: Mapped[int] = mapped_column(Integer)  # 1-100
+    max_uses: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None = безлимит
+    uses_count: Mapped[int] = mapped_column(Integer, default=0)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    description: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    usages: Mapped[list["PromoCodeUsage"]] = relationship(back_populates="promo_code")
+
+
+class PromoCodeUsage(Base):
+    __tablename__ = "promo_code_usages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    promo_code_id: Mapped[int] = mapped_column(ForeignKey("promo_codes.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    payment_id: Mapped[int | None] = mapped_column(ForeignKey("payments.id"), nullable=True)
+    discount_amount: Mapped[int] = mapped_column(Integer)  # сколько рублей скидки было применено
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    promo_code: Mapped["PromoCode"] = relationship(back_populates="usages")

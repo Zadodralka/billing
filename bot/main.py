@@ -7,6 +7,7 @@ from core.database import init_db
 from bot.middlewares.db import DbSessionMiddleware
 from bot.middlewares.auth import AuthMiddleware
 from bot.handlers import start, subscriptions, payments
+from bot.handlers import support_user, support_admin
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,8 +24,11 @@ async def main():
     dp.update.middleware(DbSessionMiddleware())
     dp.update.middleware(AuthMiddleware())
 
-    # Routers
+    # Routers — порядок важен: admin раньше user,
+    # чтобы admin_ticket:* коллбэки не перехватывались ticket:* обработчиком
     dp.include_router(start.router)
+    dp.include_router(support_admin.router)
+    dp.include_router(support_user.router)
     dp.include_router(subscriptions.router)
     dp.include_router(payments.router)
 

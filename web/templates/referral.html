@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Реферальная программа{% endblock %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>Реферальная программа</h1>
+        <div class="sub">Приглашайте друзей и получайте рубли на баланс</div>
+    </div>
+</div>
+
+<!-- Как это работает -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1.5rem;">
+    <div class="card" style="padding:1.2rem;text-align:center;">
+        <div style="font-size:1.8rem;margin-bottom:.5rem;">🔗</div>
+        <div style="color:#fff;font-weight:700;font-size:.92rem;margin-bottom:.3rem;">Поделитесь ссылкой</div>
+        <div style="color:var(--muted);font-size:.78rem;">Отправьте реферальную ссылку другу</div>
+    </div>
+    <div class="card" style="padding:1.2rem;text-align:center;">
+        <div style="font-size:1.8rem;margin-bottom:.5rem;">💳</div>
+        <div style="color:#fff;font-weight:700;font-size:.92rem;margin-bottom:.3rem;">Друг покупает</div>
+        <div style="color:var(--muted);font-size:.78rem;">При первой покупке оба получают бонус</div>
+    </div>
+    <div class="card" style="padding:1.2rem;text-align:center;">
+        <div style="font-size:1.8rem;margin-bottom:.5rem;">💰</div>
+        <div style="color:#fff;font-weight:700;font-size:.92rem;margin-bottom:.3rem;">Вам <span style="color:var(--accent);">+{{ bonus_referrer }} ₽</span></div>
+        <div style="color:var(--muted);font-size:.78rem;">Другу <span style="color:var(--accent);">+{{ bonus_referred }} ₽</span> за первую покупку</div>
+    </div>
+</div>
+
+<!-- Статистика -->
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;">
+    <div class="card stat-card">
+        <div class="label">Баланс</div>
+        <div class="value" style="color:var(--accent);">{{ user.balance }} ₽</div>
+    </div>
+    <div class="card stat-card">
+        <div class="label">Приглашено</div>
+        <div class="value">{{ referrals_count }}</div>
+    </div>
+    <div class="card stat-card">
+        <div class="label">Оплатили</div>
+        <div class="value" style="color:var(--accent);">{{ paid_referrals }}</div>
+    </div>
+</div>
+
+<!-- Реферальные ссылки -->
+<h2 class="section-title">Ваши реферальные ссылки</h2>
+<div class="card" style="padding:1.4rem;margin-bottom:1.5rem;display:flex;flex-direction:column;gap:1.1rem;">
+    <!-- Ссылка на бота -->
+    <div>
+        <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.55rem;">
+            <i class="bi bi-telegram" style="color:#229ED9;font-size:1rem;"></i>
+            <span style="color:#9aa5ba;font-size:.82rem;font-weight:600;">Ссылка на Telegram-бота</span>
+        </div>
+        <div style="background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:.75rem 1rem;display:flex;align-items:center;gap:.8rem;">
+            <span id="refLinkBotText" style="flex:1;color:#e2e8f0;font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Courier New',monospace;">{{ ref_link_bot }}</span>
+            <button onclick="copyRef('refLinkBotText', this)"
+                style="background:rgba(61,220,132,.12);border:1px solid rgba(61,220,132,.25);color:var(--accent);border-radius:8px;padding:.45rem .9rem;cursor:pointer;font-size:.78rem;font-weight:600;font-family:inherit;white-space:nowrap;transition:background .12s;flex-shrink:0;">
+                <i class="bi bi-copy"></i> Копировать
+            </button>
+        </div>
+    </div>
+    <!-- Ссылка на сайт -->
+    <div>
+        <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.55rem;">
+            <i class="bi bi-globe" style="color:var(--accent);font-size:1rem;"></i>
+            <span style="color:#9aa5ba;font-size:.82rem;font-weight:600;">Ссылка на сайт</span>
+        </div>
+        <div style="background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:.75rem 1rem;display:flex;align-items:center;gap:.8rem;">
+            <span id="refLinkWebText" style="flex:1;color:#e2e8f0;font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Courier New',monospace;">{{ ref_link_web }}</span>
+            <button onclick="copyRef('refLinkWebText', this)"
+                style="background:rgba(61,220,132,.12);border:1px solid rgba(61,220,132,.25);color:var(--accent);border-radius:8px;padding:.45rem .9rem;cursor:pointer;font-size:.78rem;font-weight:600;font-family:inherit;white-space:nowrap;transition:background .12s;flex-shrink:0;">
+                <i class="bi bi-copy"></i> Копировать
+            </button>
+        </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:.5rem;color:var(--muted);font-size:.78rem;padding:.2rem 0;">
+        <i class="bi bi-key"></i> Ваш код: <code style="background:var(--panel-2);border:1px solid var(--border);border-radius:5px;padding:.1em .5em;color:var(--accent);font-size:.85em;letter-spacing:.08em;font-weight:700;">{{ ref_code }}</code>
+    </div>
+</div>
+
+<!-- История баланса -->
+{% if transactions %}
+<h2 class="section-title">История баланса</h2>
+<div class="table-card">
+    <div class="table-wrap">
+    <table>
+        <thead><tr><th>Дата</th><th>Операция</th><th>Сумма</th></tr></thead>
+        <tbody>
+            {% for tx in transactions %}
+            <tr>
+                <td class="mono" style="color:var(--muted);font-size:.78rem;">{{ tx.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td style="font-size:.85rem;">{{ tx.description }}</td>
+                <td class="mono" style="font-weight:600;{% if tx.amount > 0 %}color:var(--accent){% else %}color:#ef5b5b{% endif %};">
+                    {% if tx.amount > 0 %}+{% endif %}{{ tx.amount }} ₽
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function copyRef(id, btn) {
+    const text = document.getElementById(id).textContent;
+    navigator.clipboard.writeText(text);
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-check2"></i> Скопировано!';
+    btn.style.background = 'rgba(61,220,132,.25)';
+    setTimeout(() => {
+        btn.innerHTML = orig;
+        btn.style.background = 'rgba(61,220,132,.12)';
+    }, 2000);
+}
+</script>
+{% endblock %}

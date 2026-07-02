@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Инструкции — Админ{% endblock %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>Инструкции</h1>
+        <div class="sub">{{ articles|length }} статей</div>
+    </div>
+    <a href="/admin/docs/new" class="btn btn-accent"><i class="bi bi-plus-lg"></i> Новая статья</a>
+</div>
+
+<div id="errorBanner" style="display:none;background:var(--danger-soft);color:var(--danger);padding:.8rem 1rem;border-radius:10px;margin-bottom:1rem;font-size:.85rem;"></div>
+<div id="successBanner" style="display:none;background:var(--accent-soft);color:var(--accent);padding:.8rem 1rem;border-radius:10px;margin-bottom:1rem;font-size:.85rem;"></div>
+
+{% if articles %}
+<div class="table-card">
+    <div class="table-wrap">
+    <table>
+        <thead>
+            <tr><th>Порядок</th><th>Название</th><th>Статус</th><th>Обновлено</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for art in articles %}
+            <tr id="art-row-{{ art.id }}">
+                <td class="mono" style="color:var(--muted);font-size:.8rem;width:60px;">{{ art.sort_order }}</td>
+                <td>
+                    <div style="font-weight:600;color:#fff;">{{ art.title }}</div>
+                    {% if art.excerpt %}
+                    <div style="color:var(--muted);font-size:.78rem;margin-top:.15rem;">{{ art.excerpt[:80] }}{% if art.excerpt|length > 80 %}…{% endif %}</div>
+                    {% endif %}
+                </td>
+                <td id="art-status-{{ art.id }}">
+                    {% if art.is_published %}
+                    <span class="badge badge-on">Опубликована</span>
+                    {% else %}
+                    <span class="badge badge-neutral">Черновик</span>
+                    {% endif %}
+                </td>
+                <td class="mono" style="color:var(--muted);font-size:.78rem;">{{ art.updated_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td>
+                    <div style="display:flex;gap:.4rem;">
+                        <a href="/docs/{{ art.slug }}" target="_blank" class="btn btn-sm btn-outline-1" title="Просмотр">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                        <a href="/admin/docs/{{ art.id }}/edit" class="btn btn-sm btn-outline-1">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <button type="button" class="btn btn-sm btn-outline-1 js-toggle-btn"
+                                data-id="{{ art.id }}"
+                                title="{% if art.is_published %}Снять с публикации{% else %}Опубликовать{% endif %}">
+                            {% if art.is_published %}
+                            <i class="bi bi-eye-slash"></i>
+                            {% else %}
+                            <i class="bi bi-check2-circle"></i>
+                            {% endif %}
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger-1 js-delete-btn"
+                                data-id="{{ art.id }}" data-title="{{ art.title }}">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div style="text-align:center;padding:3.5rem 1.5rem;">
+        <div style="font-size:2.6rem;margin-bottom:.8rem;">📝</div>
+        <h5 style="color:#fff;font-weight:700;">Статей пока нет</h5>
+        <p style="color:var(--muted);margin:0 0 1.2rem;">Создайте первую инструкцию для пользователей</p>
+        <a href="/admin/docs/new" class="btn btn-accent">Создать статью</a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function showError(msg) {
+    const b = document.getElementById('errorBanner');
+    b.textContent = msg; b.style.display = 'block';
+    setTimeout(() => b.style.display = 'none', 7000);
+}
+function showSuccess(msg) {
+    const b = document.getElementById('successBanner');
+    b.textContent = msg; b.style.display = 'block';
+    setTimeout(() => b.style.display = 'none', 4000);
+}
+
+document.addEventListener('click', async function(e) {
+    const toggleBtn = e.target.closest('.js-toggle-btn');
+    if (toggleBtn) {
+        const id = toggleBtn.dataset.id;
+        toggleBtn.disabled = true;
+        const res = await fetch(`/admin/docs/${id}/toggle-publish`, { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+            const statusEl = document.getElementById('art-status-' + id);
+            if (data.is_published) {
+                statusEl.innerHTML = '<span class="badge badge-on">Опубликована</span>';
+                toggleBtn.innerHTML = '<i class="bi bi-eye-slash"></i>';
+                toggleBtn.title = 'Снять с публикации';
+            } else {
+                statusEl.innerHTML = '<span class="badge badge-neutral">Черновик</span>';
+                toggleBtn.innerHTML = '<i class="bi bi-check2-circle"></i>';
+                toggleBtn.title = 'Опубликовать';
+            }
+        } else {
+            showError('Ошибка: ' + (data.error || 'неизвестная'));
+        }
+        toggleBtn.disabled = false;
+        return;
+    }
+
+    const deleteBtn = e.target.closest('.js-delete-btn');
+    if (deleteBtn) {
+        if (!confirm(`Удалить статью "${deleteBtn.dataset.title}"?`)) return;
+        deleteBtn.disabled = true;
+        const res = await fetch(`/admin/docs/${deleteBtn.dataset.id}/delete`, { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+            document.getElementById('art-row-' + deleteBtn.dataset.id).remove();
+            showSuccess('Статья удалена');
+        } else {
+            showError('Не удалось удалить: ' + (data.error || 'ошибка'));
+            deleteBtn.disabled = false;
+        }
+    }
+});
+</script>
+{% endblock %}

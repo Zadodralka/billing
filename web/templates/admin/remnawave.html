@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Remnawave — Админ{% endblock %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>Состояние Remnawave</h1>
+        <div class="sub mono" style="font-size:.78rem;">{{ remnawave_url }}</div>
+    </div>
+</div>
+
+{% if error %}
+<div class="card mb-4">
+    <div class="card-body" style="color:var(--danger);">
+        <i class="bi bi-exclamation-triangle"></i> Не удалось подключиться к панели: <span class="mono">{{ error }}</span>
+    </div>
+</div>
+{% else %}
+
+<div class="row g-3 mb-4" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1rem;margin:0 0 1.5rem;">
+    <div class="card stat-card">
+        <div class="label">Всего юзеров</div>
+        <div class="value">{{ stats.total_users }}</div>
+    </div>
+    <div class="card stat-card">
+        <div class="label">Активных</div>
+        <div class="value" style="color:var(--accent);">{{ stats.active_users }}</div>
+    </div>
+    <div class="card stat-card">
+        <div class="label">Отключённых</div>
+        <div class="value" style="color:var(--danger);">{{ stats.disabled_users }}</div>
+    </div>
+    <div class="card stat-card">
+        <div class="label">Онлайн сейчас</div>
+        <div class="value" style="color:var(--blue);">{{ stats.online_now_count }}</div>
+    </div>
+    <div class="card stat-card">
+        <div class="label">Трафик (период)</div>
+        <div class="value" style="font-size:1.3rem;">
+            {% if stats.total_traffic_gb >= 1000 %}{{ (stats.total_traffic_gb / 1024) | round(2) }} TB
+            {% else %}{{ stats.total_traffic_gb }} GB{% endif %}
+        </div>
+    </div>
+    <div class="card stat-card">
+        <div class="label">Трафик (всего)</div>
+        <div class="value" style="font-size:1.3rem;">
+            {% if stats.total_lifetime_traffic_gb >= 1000 %}{{ (stats.total_lifetime_traffic_gb / 1024) | round(2) }} TB
+            {% else %}{{ stats.total_lifetime_traffic_gb }} GB{% endif %}
+        </div>
+    </div>
+</div>
+
+<h2 class="section-title">Пользователи панели ({{ stats.total_users }})</h2>
+<div class="table-card">
+    <div class="table-wrap">
+    <table>
+        <thead><tr><th>Username</th><th>Статус</th><th>Истекает</th><th>Трафик</th><th>Всего</th><th>Последний раз онлайн</th><th>UUID</th></tr></thead>
+        <tbody>
+            {% for u in rw_users %}
+            {% set uid = u.get('uuid', '') %}
+            {% set online_at = online_at_map.get(uid) %}
+            <tr>
+                <td class="mono" style="font-size:.83rem;">{{ u.get('username', '—') }}</td>
+                <td>
+                    {% if u.get('status') == 'ACTIVE' %}<span class="badge badge-on">Активен</span>
+                    {% else %}<span class="badge badge-off">{{ u.get('status', '—') }}</span>{% endif %}
+                </td>
+                <td class="mono" style="color:var(--muted);font-size:.78rem;">{{ u.get('expireAt', '—')[:10] if u.get('expireAt') else '—' }}</td>
+                <td class="mono" style="font-size:.8rem;">
+                    {% set t = traffic_map.get(uid, 0) %}
+                    {% if t >= 1000 %}{{ (t / 1024) | round(2) }} TB{% else %}{{ t | round(2) }} GB{% endif %}
+                </td>
+                <td class="mono" style="color:var(--muted);font-size:.8rem;">
+                    {% set lt = lifetime_traffic_map.get(uid, 0) %}
+                    {% if lt >= 1000 %}{{ (lt / 1024) | round(2) }} TB{% else %}{{ lt | round(2) }} GB{% endif %}
+                </td>
+                <td class="mono" style="color:var(--muted);font-size:.76rem;">
+                    {% if online_at %}{{ online_at[:16].replace('T', ' ') }}
+                    {% else %}<span style="color:var(--muted);">никогда</span>{% endif %}
+                </td>
+                <td class="mono" style="color:var(--muted);font-size:.74rem;">{{ uid[:13] }}…</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:2rem;">Пользователи не найдены</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

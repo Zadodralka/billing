@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}Тарифы — Админ{% endblock %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>Управление тарифами</h1>
+        <div class="sub">Цены применяются сразу, без перезапуска</div>
+    </div>
+    <button class="btn btn-accent" onclick="openModal('createPlanModal')"><i class="bi bi-plus-lg"></i> Новый тариф</button>
+</div>
+
+<div id="errorBanner" style="display:none;background:var(--danger-soft);color:var(--danger);padding:.8rem 1rem;border-radius:10px;margin-bottom:1rem;font-size:.85rem;"></div>
+<div id="successBanner" style="display:none;background:var(--accent-soft);color:var(--accent);padding:.8rem 1rem;border-radius:10px;margin-bottom:1rem;font-size:.85rem;"></div>
+
+<div class="table-card">
+    <div class="table-wrap">
+    <table>
+        <thead>
+            <tr><th>Ключ</th><th>Название</th><th>Срок</th><th>Цена</th><th>Трафик</th><th>Доплата за безлимит</th><th>Показывать</th><th></th></tr>
+        </thead>
+        <tbody id="plansBody">
+            {% for plan in plans %}
+            <tr id="plan-row-{{ plan.id }}">
+                <td class="mono" style="color:var(--muted);font-size:.8rem;">{{ plan.plan_key }}</td>
+                <td>{{ plan.name }}</td>
+                <td class="mono">{{ plan.days }} дн.</td>
+                <td class="mono" style="color:var(--accent);font-weight:600;">{{ plan.price }} ₽</td>
+                <td class="mono">{% if plan.traffic_gb == 0 %}Безлимит{% else %}{{ plan.traffic_gb }} GB{% endif %}</td>
+                <td class="mono" style="color:var(--muted);">{{ plan.unlimited_extra }} ₽</td>
+                <td>
+                    {% if plan.is_active %}<span class="badge badge-on">Активен</span>
+                    {% else %}<span class="badge badge-neutral">Скрыт</span>{% endif %}
+                </td>
+                <td>
+                    <div style="display:flex;gap:.4rem;">
+                        <button type="button" class="btn btn-sm btn-outline-1 js-edit-plan-btn"
+                            data-id="{{ plan.id }}"
+                            data-name="{{ plan.name }}"
+                            data-days="{{ plan.days }}"
+                            data-price="{{ plan.price }}"
+                            data-traffic="{{ plan.traffic_gb }}"
+                            data-extra="{{ plan.unlimited_extra }}"
+                            data-active="{{ 'true' if plan.is_active else 'false' }}"
+                            data-featured="{{ 'true' if plan.is_featured else 'false' }}">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger-1 js-delete-plan-btn" data-id="{{ plan.id }}" data-name="{{ plan.name }}">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:2rem;">Тарифов пока нет</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<!-- Edit plan modal -->
+<div class="modal-overlay" id="editPlanModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Редактировать тариф</h3>
+            <button type="button" class="modal-close" onclick="closeModal('editPlanModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c">
+            <label class="form-label">Название</label>
+            <input type="text" id="editPlanName" style="margin-bottom:.9rem;">
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:.9rem;">
+                <div>
+                    <label class="form-label">Срок (дней)</label>
+                    <input type="number" id="editPlanDays" min="1">
+                </div>
+                <div>
+                    <label class="form-label">Цена (₽)</label>
+                    <input type="number" id="editPlanPrice" min="0">
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:.9rem;">
+                <div>
+                    <label class="form-label">Трафик (GB, 0 = безлимит)</label>
+                    <input type="number" id="editPlanTraffic" min="0">
+                </div>
+                <div>
+                    <label class="form-label">Доплата за безлимит (₽)</label>
+                    <input type="number" id="editPlanExtra" min="0">
+                </div>
+            </div>
+
+            <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;color:#9aa5ba;font-size:.88rem;">
+                <input type="checkbox" id="editPlanActive" style="width:auto;">
+                Показывать тариф на сайте
+            </label>
+            <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;color:#9aa5ba;font-size:.88rem;margin-top:.5rem;">
+                <input type="checkbox" id="editPlanFeatured" style="width:auto;">
+                ⭐ Пометить как «Популярный выбор»
+            </label>
+        </div>
+        <div class="modal-foot">
+            <button type="button" class="btn btn-outline-1" onclick="closeModal('editPlanModal')">Отмена</button>
+            <button type="button" class="btn btn-accent" id="confirmEditPlanBtn">Сохранить</button>
+        </div>
+    </div>
+</div>
+
+<!-- Create plan modal -->
+<div class="modal-overlay" id="createPlanModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Новый тариф</h3>
+            <button type="button" class="modal-close" onclick="closeModal('createPlanModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c">
+            <label class="form-label">Ключ (латиницей, без пробелов)</label>
+            <input type="text" id="newPlanKey" placeholder="например 2m" style="margin-bottom:.9rem;">
+
+            <label class="form-label">Название</label>
+            <input type="text" id="newPlanName" placeholder="2 месяца" style="margin-bottom:.9rem;">
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:.9rem;">
+                <div>
+                    <label class="form-label">Срок (дней)</label>
+                    <input type="number" id="newPlanDays" min="1" value="60">
+                </div>
+                <div>
+                    <label class="form-label">Цена (₽)</label>
+                    <input type="number" id="newPlanPrice" min="0" value="250">
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;">
+                <div>
+                    <label class="form-label">Трафик (GB, 0 = безлимит)</label>
+                    <input type="number" id="newPlanTraffic" min="0" value="50">
+                </div>
+                <div>
+                    <label class="form-label">Доплата за безлимит (₽)</label>
+                    <input type="number" id="newPlanExtra" min="0" value="150">
+                </div>
+            </div>
+        </div>
+        <div class="modal-foot">
+            <button type="button" class="btn btn-outline-1" onclick="closeModal('createPlanModal')">Отмена</button>
+            <button type="button" class="btn btn-accent" id="confirmCreatePlanBtn">Создать</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function showError(msg) {
+    const b = document.getElementById('errorBanner');
+    b.textContent = msg; b.style.display = 'block';
+    setTimeout(() => b.style.display = 'none', 7000);
+}
+function showSuccess(msg) {
+    const b = document.getElementById('successBanner');
+    b.textContent = msg; b.style.display = 'block';
+    setTimeout(() => b.style.display = 'none', 4000);
+}
+
+let pendingEditPlanId = null;
+let pendingDeletePlanId = null;
+
+document.addEventListener('click', async function(e) {
+    const editBtn = e.target.closest('.js-edit-plan-btn');
+    if (editBtn) {
+        pendingEditPlanId = editBtn.dataset.id;
+        document.getElementById('editPlanName').value = editBtn.dataset.name;
+        document.getElementById('editPlanDays').value = editBtn.dataset.days;
+        document.getElementById('editPlanPrice').value = editBtn.dataset.price;
+        document.getElementById('editPlanTraffic').value = editBtn.dataset.traffic;
+        document.getElementById('editPlanExtra').value = editBtn.dataset.extra;
+        document.getElementById('editPlanActive').checked = editBtn.dataset.active === 'true';
+        document.getElementById('editPlanFeatured').checked = editBtn.dataset.featured === 'true';
+        openModal('editPlanModal');
+        return;
+    }
+
+    const deleteBtn = e.target.closest('.js-delete-plan-btn');
+    if (deleteBtn) {
+        if (!confirm('Удалить тариф "' + deleteBtn.dataset.name + '"? Уже купленные подписки не пострадают.')) return;
+        pendingDeletePlanId = deleteBtn.dataset.id;
+        try {
+            const res = await fetch('/admin/plans/' + pendingDeletePlanId + '/delete', { method: 'POST' });
+            const data = await res.json();
+            if (data.ok) {
+                document.getElementById('plan-row-' + pendingDeletePlanId).remove();
+                showSuccess('Тариф удалён');
+            } else {
+                showError('Не удалось удалить: ' + (data.error || 'ошибка'));
+            }
+        } catch (err) { showError('Сетевая ошибка: ' + err.message); }
+        return;
+    }
+
+    const confirmEdit = e.target.closest('#confirmEditPlanBtn');
+    if (confirmEdit) {
+        confirmEdit.disabled = true;
+        try {
+            const formData = new FormData();
+            formData.append('name', document.getElementById('editPlanName').value);
+            formData.append('days', document.getElementById('editPlanDays').value);
+            formData.append('price', document.getElementById('editPlanPrice').value);
+            formData.append('traffic_gb', document.getElementById('editPlanTraffic').value);
+            formData.append('unlimited_extra', document.getElementById('editPlanExtra').value);
+            formData.append('is_active', document.getElementById('editPlanActive').checked ? 'true' : 'false');
+            formData.append('is_featured', document.getElementById('editPlanFeatured').checked ? 'true' : 'false');
+
+            const res = await fetch('/admin/plans/' + pendingEditPlanId + '/update', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.ok) {
+                closeModal('editPlanModal');
+                showSuccess('Тариф обновлён');
+                setTimeout(() => location.reload(), 800);
+            } else {
+                showError('Не удалось сохранить: ' + (data.error || 'ошибка'));
+            }
+        } catch (err) { showError('Сетевая ошибка: ' + err.message); }
+        confirmEdit.disabled = false;
+        return;
+    }
+
+    const confirmCreate = e.target.closest('#confirmCreatePlanBtn');
+    if (confirmCreate) {
+        const key = document.getElementById('newPlanKey').value.trim();
+        const name = document.getElementById('newPlanName').value.trim();
+        if (!key || !name) { showError('Заполните ключ и название тарифа'); return; }
+
+        confirmCreate.disabled = true;
+        try {
+            const formData = new FormData();
+            formData.append('plan_key', key);
+            formData.append('name', name);
+            formData.append('days', document.getElementById('newPlanDays').value);
+            formData.append('price', document.getElementById('newPlanPrice').value);
+            formData.append('traffic_gb', document.getElementById('newPlanTraffic').value);
+            formData.append('unlimited_extra', document.getElementById('newPlanExtra').value);
+
+            const res = await fetch('/admin/plans/create', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.ok) {
+                closeModal('createPlanModal');
+                showSuccess('Тариф создан');
+                setTimeout(() => location.reload(), 800);
+            } else {
+                showError('Не удалось создать: ' + (data.error || 'ошибка'));
+            }
+        } catch (err) { showError('Сетевая ошибка: ' + err.message); }
+        confirmCreate.disabled = false;
+        return;
+    }
+});
+</script>
+{% endblock %}

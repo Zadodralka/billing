@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}{{ ticket.subject }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .thread-wrap { display: flex; flex-direction: column; height: calc(100vh - 200px); max-height: 700px; }
+    .thread-messages {
+        flex: 1; overflow-y: auto; padding: 1.2rem; background: var(--panel);
+        border: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0;
+        display: flex; flex-direction: column; gap: .9rem;
+    }
+    .msg { max-width: 75%; padding: .75rem 1rem; border-radius: 14px; font-size: .89rem; line-height: 1.45; }
+    .msg-user { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); }
+    .msg-admin { align-self: flex-end; background: var(--accent-soft); border: 1px solid rgba(61,220,132,.25); color: var(--text); }
+    .msg-meta { font-size: .7rem; color: var(--muted); margin-top: .4rem; }
+    .msg-author { font-weight: 600; color: var(--accent); font-size: .76rem; margin-bottom: .25rem; }
+
+    .thread-input-area {
+        border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--radius) var(--radius);
+        padding: 1rem; background: var(--panel-2); display: flex; gap: .7rem; align-items: flex-end;
+    }
+    .thread-input-area textarea {
+        flex: 1; background: var(--panel); border: 1px solid var(--border); color: var(--text);
+        border-radius: var(--radius-sm); padding: .65rem .85rem; font-size: .9rem; font-family: inherit;
+        resize: none; min-height: 44px; max-height: 140px;
+    }
+    .thread-input-area textarea:focus { outline: none; border-color: var(--accent); }
+    .thread-closed-banner {
+        text-align: center; padding: .8rem; color: var(--muted); font-size: .82rem;
+        background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>{{ ticket.subject }}</h1>
+        <div class="sub">
+            {% if is_admin_view %}От: {{ ticket.user.display_name }} · {% endif %}
+            {% if ticket.status.value == 'open' %}<span class="badge badge-mid">Ожидает ответа</span>
+            {% elif ticket.status.value == 'answered' %}<span class="badge badge-on">Отвечено</span>
+            {% else %}<span class="badge badge-neutral">Закрыт</span>{% endif %}
+        </div>
+    </div>
+    <div style="display:flex;gap:.6rem;">
+        <a href="{% if is_admin_view %}/admin/support{% else %}/dashboard/support{% endif %}" class="btn btn-outline-1">
+            <i class="bi bi-arrow-left"></i> К списку
+        </a>
+        {% if ticket.status.value != 'closed' %}
+        <button class="btn btn-outline-1" onclick="closeTicket()"><i class="bi bi-check2"></i> Закрыть</button>
+        {% elif is_admin_view %}
+        <button class="btn btn-outline-1" onclick="reopenTicket()"><i class="bi bi-arrow-counterclockwise"></i> Открыть снова</button>
+        {% endif %}
+    </div>
+</div>
+
+<div class="thread-wrap">
+    <div class="thread-messages" id="threadMessages">
+        {% for msg in ticket.messages %}
+        <div class="msg {% if msg.is_from_admin %}msg-admin{% else %}msg-user{% endif %}">
+            {% if msg.is_from_admin %}<div class="msg-author">{{ msg.author_name or 'Поддержка' }}</div>{% endif %}
+            {{ msg.text }}
+            <div class="msg-meta">{{ msg.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if ticket.status.value != 'closed' %}
+    <div class="thread-input-area">
+        <textarea id="replyText" placeholder="Напишите сообщение..." rows="1"></textarea>
+        <button class="btn btn-accent" id="sendReplyBtn"><i class="bi bi-send"></i></button>
+    </div>
+    {% else %}
+    <div class="thread-closed-banner">Тикет закрыт. {% if not is_admin_view %}Напишите сообщение, чтобы открыть его снова.{% endif %}</div>
+    {% if not is_admin_view %}
+    <div class="thread-input-area">
+        <textarea id="replyText" placeholder="Напишите сообщение, чтобы возобновить обращение..." rows="1"></textarea>
+        <button class="btn btn-accent" id="sendReplyBtn"><i class="bi bi-send"></i></button>
+    </div>
+    {% endif %}
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const ticketId = {{ ticket.id }};
+const isAdminView = {{ is_admin_view | tojson }};
+const replyUrl = isAdminView ? `/admin/support/${ticketId}/reply` : `/dashboard/support/${ticketId}/reply`;
+const closeUrl = isAdminView ? `/admin/support/${ticketId}/close` : `/dashboard/support/${ticketId}/close`;
+const reopenUrl = `/admin/support/${ticketId}/reopen`;
+
+// Автоскролл вниз при загрузке
+const messagesEl = document.getElementById('threadMessages');
+if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
+
+const sendBtn = document.getElementById('sendReplyBtn');
+if (sendBtn) {
+    sendBtn.addEventListener('click', async function() {
+        const textarea = document.getElementById('replyText');
+        const text = textarea.value.trim();
+        if (!text) return;
+
+        sendBtn.disabled = true;
+        try {
+            const formData = new FormData();
+            formData.append('message', text);
+            const res = await fetch(replyUrl, { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.ok) {
+                location.reload();
+            } else {
+                alert('Ошибка: ' + (data.error || 'неизвестная'));
+                sendBtn.disabled = false;
+            }
+        } catch (e) {
+            alert('Сетевая ошибка: ' + e.message);
+            sendBtn.disabled = false;
+        }
+    });
+
+    const textarea = document.getElementById('replyText');
+    textarea.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendBtn.click();
+        }
+    });
+}
+
+async function closeTicket() {
+    if (!confirm('Закрыть тикет?')) return;
+    const res = await fetch(closeUrl, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) location.reload();
+    else alert('Ошибка: ' + (data.error || 'неизвестная'));
+}
+
+async function reopenTicket() {
+    const res = await fetch(reopenUrl, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) location.reload();
+    else alert('Ошибка: ' + (data.error || 'неизвестная'));
+}
+</script>
+{% endblock %}

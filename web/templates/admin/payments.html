@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Платежи — Админ{% endblock %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>Платежи</h1>
+        <div class="sub">{{ total }} всего</div>
+    </div>
+    {% if pending_count > 0 %}
+    <button class="btn btn-danger-1" onclick="cleanupPending()">
+        <i class="bi bi-trash3"></i> Очистить зависшие ({{ pending_count }})
+    </button>
+    {% endif %}
+</div>
+
+<div id="errorBanner" style="display:none;background:var(--danger-soft);color:var(--danger);padding:.8rem 1rem;border-radius:10px;margin-bottom:1rem;font-size:.85rem;"></div>
+
+<div class="table-card">
+    <div class="table-wrap">
+    <table>
+        <thead><tr><th>ID</th><th>Пользователь</th><th>Тариф</th><th>Сумма</th><th>Статус</th><th>Дата</th><th></th></tr></thead>
+        <tbody id="paymentsBody">
+            {% for p in payments %}
+            <tr id="payment-row-{{ p.id }}">
+                <td class="mono" style="color:var(--muted);font-size:.8rem;">#{{ p.id }}</td>
+                <td>{{ p.user.display_name }}</td>
+                <td>{{ plans.get(p.plan_key, {}).get('name', p.plan_key) }}</td>
+                <td class="mono">{{ p.amount }} ₽</td>
+                <td>
+                    {% if p.status.value == 'success' %}<span class="badge badge-on">Оплачен</span>
+                    {% elif p.status.value == 'pending' %}<span class="badge badge-mid">Ожидание</span>
+                    {% else %}<span class="badge badge-neutral">Отменён</span>{% endif %}
+                </td>
+                <td class="mono" style="color:var(--muted);font-size:.78rem;">{{ p.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td>
+                    {% if p.status.value != 'success' %}
+                    <button class="btn btn-sm btn-danger-1" onclick="deletePayment({{ p.id }})"><i class="bi bi-trash"></i></button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+{% if pages > 1 %}
+<nav>
+    <ul class="pagination">
+        {% for p in range(1, pages+1) %}
+        <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="?page={{ p }}">{{ p }}</a></li>
+        {% endfor %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function showError(msg) {
+    const banner = document.getElementById('errorBanner');
+    banner.textContent = msg;
+    banner.style.display = 'block';
+    setTimeout(() => banner.style.display = 'none', 6000);
+}
+
+async function deletePayment(id) {
+    if (!confirm('Удалить этот платёж навсегда?')) return;
+    try {
+        const res = await fetch('/admin/payments/' + id + '/delete', { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+            document.getElementById('payment-row-' + id).remove();
+        } else {
+            showError('Не удалось удалить: ' + (data.error || 'неизвестная ошибка'));
+        }
+    } catch (e) {
+        showError('Сетевая ошибка: ' + e.message);
+    }
+}
+
+async function cleanupPending() {
+    if (!confirm('Удалить все платежи в статусе ожидание старше 1 часа?')) return;
+    await fetch('/admin/payments/cleanup', { method: 'POST' });
+    location.reload();
+}
+</script>
+{% endblock %}

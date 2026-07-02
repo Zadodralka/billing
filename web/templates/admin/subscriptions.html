@@ -2,58 +2,200 @@
 {% block title %}Подписки — Админ{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h4 class="fw-bold mb-0">📋 Подписки <span class="badge bg-secondary">{{ total }}</span></h4>
+<div class="topbar">
+    <div>
+        <h1>Подписки</h1>
+        <div class="sub">{{ total }} всего</div>
+    </div>
 </div>
 
-<div class="card">
-    <div class="table-responsive">
-        <table class="table table-hover mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>ID</th>
-                    <th>Пользователь</th>
-                    <th>Тариф</th>
-                    <th>Статус</th>
-                    <th>Начало</th>
-                    <th>Окончание</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for sub in subscriptions %}
-                <tr>
-                    <td class="text-muted small">#{{ sub.id }}</td>
-                    <td>{{ sub.user.display_name }}</td>
-                    <td>{{ plans.get(sub.plan_key, {}).get('name', sub.plan_key) }}</td>
-                    <td>
-                        {% if sub.is_active %}
-                        <span class="badge badge-active">Активна</span>
+<div id="errorBanner" style="display:none;background:var(--danger-soft);color:var(--danger);padding:.8rem 1rem;border-radius:10px;margin-bottom:1rem;font-size:.85rem;"></div>
+<div id="successBanner" style="display:none;background:var(--accent-soft);color:var(--accent);padding:.8rem 1rem;border-radius:10px;margin-bottom:1rem;font-size:.85rem;"></div>
+
+<div class="table-card">
+    <div class="table-wrap">
+    <table>
+        <thead><tr><th>ID</th><th>Пользователь</th><th>Тариф</th><th>Статус</th><th>Начало</th><th>Окончание</th><th>Действия</th></tr></thead>
+        <tbody id="subsBody">
+            {% for sub in subscriptions %}
+            <tr id="sub-row-{{ sub.id }}">
+                <td class="mono" style="color:var(--muted);font-size:.8rem;">#{{ sub.id }}</td>
+                <td>{{ sub.user.display_name }}</td>
+                <td>{{ plans.get(sub.plan_key, {}).get('name', sub.plan_key) }}</td>
+                <td id="sub-status-{{ sub.id }}">
+                    {% if sub.status.value == 'active' and sub.is_active %}<span class="badge badge-on">Активна</span>
+                    {% elif sub.status.value == 'cancelled' %}<span class="badge badge-off">Остановлена</span>
+                    {% else %}<span class="badge badge-neutral">{{ sub.status.value }}</span>{% endif %}
+                </td>
+                <td class="mono" style="color:var(--muted);font-size:.8rem;">{{ sub.starts_at.strftime('%d.%m.%Y') if sub.starts_at else '—' }}</td>
+                <td class="mono" style="color:var(--muted);font-size:.8rem;" id="sub-expires-{{ sub.id }}">{{ sub.expires_at.strftime('%d.%m.%Y') if sub.expires_at else '—' }}</td>
+                <td>
+                    <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
+                        <button type="button" class="btn btn-sm btn-outline-1 js-extend-btn" data-id="{{ sub.id }}" title="Продлить">
+                            <i class="bi bi-clock-history"></i>
+                        </button>
+                        {% if sub.status.value == 'cancelled' %}
+                        <button type="button" class="btn btn-sm btn-accent js-resume-btn" data-id="{{ sub.id }}">
+                            <i class="bi bi-play-fill"></i> Возобновить
+                        </button>
                         {% else %}
-                        <span class="badge badge-expired">{{ sub.status.value }}</span>
+                        <button type="button" class="btn btn-sm btn-outline-1 js-pause-btn" data-id="{{ sub.id }}">
+                            <i class="bi bi-pause-fill"></i> Остановить
+                        </button>
                         {% endif %}
-                    </td>
-                    <td class="text-muted small">
-                        {{ sub.starts_at.strftime('%d.%m.%Y') if sub.starts_at else '—' }}
-                    </td>
-                    <td class="text-muted small">
-                        {{ sub.expires_at.strftime('%d.%m.%Y') if sub.expires_at else '—' }}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                        <button type="button" class="btn btn-sm btn-danger-1 js-delete-sub-btn" data-id="{{ sub.id }}">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:2rem;">Подписок пока нет</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
     </div>
 </div>
 
 {% if pages > 1 %}
-<nav class="mt-3">
+<nav>
     <ul class="pagination">
         {% for p in range(1, pages+1) %}
-        <li class="page-item {% if p == page %}active{% endif %}">
-            <a class="page-link" href="?page={{ p }}">{{ p }}</a>
-        </li>
+        <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="?page={{ p }}">{{ p }}</a></li>
         {% endfor %}
     </ul>
 </nav>
 {% endif %}
+
+<div class="modal-overlay" id="extendModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Продлить подписку</h3>
+            <button type="button" class="modal-close" onclick="closeModal('extendModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c">
+            <label class="form-label">Количество дней</label>
+            <input type="number" id="extendDaysInput" value="30" min="1" max="3650">
+        </div>
+        <div class="modal-foot">
+            <button type="button" class="btn btn-outline-1" onclick="closeModal('extendModal')">Отмена</button>
+            <button type="button" class="btn btn-accent" id="confirmExtendBtn">Продлить</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="deleteSubModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Удалить подписку?</h3>
+            <button type="button" class="modal-close" onclick="closeModal('deleteSubModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c">
+            <p style="color:#9aa5ba;font-size:.9rem;">Запись о подписке будет удалена из базы. Доступ в Remnawave при этом не отзывается отдельно — для полной блокировки используйте «Остановить».</p>
+        </div>
+        <div class="modal-foot">
+            <button type="button" class="btn btn-outline-1" onclick="closeModal('deleteSubModal')">Отмена</button>
+            <button type="button" class="btn btn-danger-1" id="confirmDeleteSubBtn">Удалить</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function showError(msg) {
+    const b = document.getElementById('errorBanner');
+    b.textContent = msg; b.style.display = 'block';
+    setTimeout(() => b.style.display = 'none', 7000);
+}
+function showSuccess(msg) {
+    const b = document.getElementById('successBanner');
+    b.textContent = msg; b.style.display = 'block';
+    setTimeout(() => b.style.display = 'none', 4000);
+}
+
+let pendingExtendId = null;
+let pendingDeleteSubId = null;
+
+document.addEventListener('click', async function(e) {
+    const extendBtn = e.target.closest('.js-extend-btn');
+    if (extendBtn) {
+        pendingExtendId = extendBtn.dataset.id;
+        openModal('extendModal');
+        return;
+    }
+
+    const pauseBtn = e.target.closest('.js-pause-btn');
+    if (pauseBtn) {
+        const id = pauseBtn.dataset.id;
+        pauseBtn.disabled = true;
+        try {
+            const res = await fetch('/admin/subscriptions/' + id + '/pause', { method: 'POST' });
+            const data = await res.json();
+            if (data.ok) { location.reload(); }
+            else { showError('Не удалось остановить: ' + (data.error || 'ошибка')); pauseBtn.disabled = false; }
+        } catch (err) { showError('Сетевая ошибка: ' + err.message); pauseBtn.disabled = false; }
+        return;
+    }
+
+    const resumeBtn = e.target.closest('.js-resume-btn');
+    if (resumeBtn) {
+        const id = resumeBtn.dataset.id;
+        resumeBtn.disabled = true;
+        try {
+            const res = await fetch('/admin/subscriptions/' + id + '/resume', { method: 'POST' });
+            const data = await res.json();
+            if (data.ok) { location.reload(); }
+            else { showError('Не удалось возобновить: ' + (data.error || 'ошибка')); resumeBtn.disabled = false; }
+        } catch (err) { showError('Сетевая ошибка: ' + err.message); resumeBtn.disabled = false; }
+        return;
+    }
+
+    const deleteBtn = e.target.closest('.js-delete-sub-btn');
+    if (deleteBtn) {
+        pendingDeleteSubId = deleteBtn.dataset.id;
+        openModal('deleteSubModal');
+        return;
+    }
+
+    const confirmExtend = e.target.closest('#confirmExtendBtn');
+    if (confirmExtend) {
+        const days = parseInt(document.getElementById('extendDaysInput').value, 10);
+        if (!days || days < 1) { showError('Укажите корректное число дней'); return; }
+        confirmExtend.disabled = true;
+        try {
+            const formData = new FormData();
+            formData.append('days', days);
+            const res = await fetch('/admin/subscriptions/' + pendingExtendId + '/extend', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.ok) {
+                closeModal('extendModal');
+                showSuccess('Подписка продлена');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showError('Не удалось продлить: ' + (data.error || 'ошибка'));
+            }
+        } catch (err) { showError('Сетевая ошибка: ' + err.message); }
+        confirmExtend.disabled = false;
+        return;
+    }
+
+    const confirmDeleteSub = e.target.closest('#confirmDeleteSubBtn');
+    if (confirmDeleteSub) {
+        confirmDeleteSub.disabled = true;
+        try {
+            const res = await fetch('/admin/subscriptions/' + pendingDeleteSubId + '/delete', { method: 'POST' });
+            const data = await res.json();
+            if (data.ok) {
+                document.getElementById('sub-row-' + pendingDeleteSubId).remove();
+                closeModal('deleteSubModal');
+            } else {
+                showError('Не удалось удалить: ' + (data.error || 'ошибка'));
+            }
+        } catch (err) { showError('Сетевая ошибка: ' + err.message); }
+        confirmDeleteSub.disabled = false;
+        return;
+    }
+});
+</script>
 {% endblock %}

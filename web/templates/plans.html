@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+{% block title %}Тарифы{% endblock %}
+
+{% block extra_head %}
+<style>
+    .plans-grid {
+        display: grid; grid-template-columns: repeat(4, 1fr);
+        gap: 1.1rem; margin-bottom: 2rem; align-items: stretch;
+    }
+    @media (max-width: 900px) { .plans-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 480px) { .plans-grid { grid-template-columns: 1fr; } }
+    .plan-card {
+        background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+        display: flex; flex-direction: column; overflow: hidden; position: relative;
+        transition: border-color .15s, transform .15s; height: 100%;
+    }
+    .plan-card:hover { transform: translateY(-3px); border-color: #2c3445; }
+    .plan-card.featured { border-color: var(--accent); }
+    .plan-ribbon {
+        background: var(--accent); color: #06140c; text-align: center; padding: .4rem;
+        font-size: .68rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    }
+    .plan-body { padding: 1.6rem 1.3rem; display: flex; flex-direction: column; align-items: center; text-align: center; flex: 1; gap: .35rem; }
+    .plan-name { color: #9aa5ba; font-weight: 600; font-size: .88rem; }
+    .plan-price { font-family: 'Space Grotesk', sans-serif; font-size: 2.1rem; font-weight: 700; color: #fff; line-height: 1.1; margin: .3rem 0 .1rem; }
+    .plan-price span { font-size: 1.05rem; color: var(--muted); font-weight: 500; margin-left: .15rem; }
+    .plan-duration { color: var(--muted); font-size: .78rem; margin-bottom: 1rem; }
+
+    .traffic-toggle {
+        display: flex; background: var(--panel-2); border: 1px solid var(--border);
+        border-radius: 9px; padding: 3px; margin-bottom: 1.1rem; width: 100%;
+    }
+    .traffic-toggle button {
+        flex: 1; background: transparent; border: none; color: var(--muted);
+        font-size: .74rem; font-weight: 600; padding: .4rem .3rem; border-radius: 7px;
+        cursor: pointer; transition: all .12s; font-family: inherit;
+    }
+    .traffic-toggle button.active { background: var(--accent); color: #06140c; }
+
+    .plan-buy-btn { width: 100%; margin-top: auto; }
+
+    .pay-cta {
+        display: block; text-align: center; padding: .85rem; border-radius: var(--radius-sm);
+        background: var(--accent); color: #06140c; font-weight: 700; font-size: .95rem;
+        margin-bottom: .9rem; transition: background .12s;
+    }
+    .pay-cta:hover { background: #34c878; color: #06140c; }
+    .pay-summary { text-align: center; margin-bottom: 1.3rem; }
+    .pay-summary .pname { color: #fff; font-weight: 600; font-size: .95rem; }
+    .pay-summary .pamount { font-family: 'Space Grotesk', sans-serif; font-size: 1.8rem; font-weight: 700; color: var(--accent); margin-top: .25rem; }
+    .pay-hint { text-align: center; color: var(--muted); font-size: .78rem; margin: 0; }
+    .pay-loading { display: flex; flex-direction: column; align-items: center; gap: .8rem; padding: 1rem 0; }
+    .spinner { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--panel-3); border-top-color: var(--accent); animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>Тарифные планы</h1>
+        <div class="sub">Выберите подходящий период подписки</div>
+    </div>
+    {% if user.balance > 0 %}
+    <div style="background:var(--panel);border:1px solid rgba(61,220,132,.25);border-radius:10px;padding:.6rem 1rem;display:flex;align-items:center;gap:.6rem;">
+        <i class="bi bi-wallet2" style="color:var(--accent);"></i>
+        <span style="color:#fff;font-weight:600;">{{ user.balance }} ₽</span>
+        <span style="color:var(--muted);font-size:.8rem;">на балансе</span>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Промокод и баланс -->
+<div class="card" style="padding:1.1rem 1.2rem;margin-bottom:1.3rem;display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-start;">
+    <div style="flex:1;min-width:240px;">
+        <label class="form-label">🏷 Промокод</label>
+        <div style="display:flex;gap:.5rem;">
+            <input type="text" id="promoInput" placeholder="UNLOCK20" style="flex:1;text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()">
+            <button class="btn btn-outline-1" onclick="validatePromo()" style="white-space:nowrap;">Применить</button>
+        </div>
+        <div id="promoStatus" style="font-size:.78rem;margin-top:.35rem;height:1em;"></div>
+    </div>
+    {% if user.balance > 0 %}
+    <div style="flex:0 0 auto;padding-top:1.4rem;">
+        <label style="display:flex;align-items:center;gap:.55rem;cursor:pointer;color:#9aa5ba;font-size:.88rem;">
+            <input type="checkbox" id="useBalanceCheck" style="width:auto;" onchange="useBalance=this.checked">
+            Использовать баланс <strong style="color:var(--accent);">({{ user.balance }} ₽)</strong>
+        </label>
+    </div>
+    {% endif %}
+</div>
+
+<div class="plans-grid">
+    {% for key, plan in plans.items() %}
+    <div class="plan-card {% if plan.get('is_featured') %}featured{% endif %}">
+        {% if plan.get('is_featured') %}<div class="plan-ribbon">Популярный выбор</div>{% endif %}
+        <div class="plan-body">
+            <div class="plan-name">{{ plan['name'] }}</div>
+            <div style="position:relative;text-align:center;">
+                <div class="plan-price" id="price-{{ key }}">{{ plan['price'] }}<span>₽</span></div>
+                <div id="price-original-{{ key }}" style="display:none;color:var(--muted);font-size:.85rem;text-decoration:line-through;margin-top:-.3rem;"></div>
+            </div>
+            <div class="plan-duration">{{ plan['days'] }} дней доступа</div>
+
+            <div class="traffic-toggle" data-plan="{{ key }}" data-base-price="{{ plan['price'] }}" data-extra="{{ plan['unlimited_extra'] }}">
+                <button type="button" class="active" data-traffic="{{ plan['traffic_gb'] }}" onclick="selectTraffic(this, '{{ key }}')">{{ plan['traffic_gb'] }} GB</button>
+                <button type="button" data-traffic="0" onclick="selectTraffic(this, '{{ key }}')">Безлимит</button>
+            </div>
+
+            <button class="btn {% if plan.get('is_featured') %}btn-accent{% else %}btn-outline-1{% endif %} plan-buy-btn" onclick="buyPlan('{{ key }}')">
+                Купить
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="modal-overlay" id="payModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Оплата подписки</h3>
+            <button class="modal-close" onclick="closeModal('payModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c" id="payModalBody">
+            <div class="pay-loading">
+                <div class="spinner"></div>
+                <span style="color:var(--muted);font-size:.85rem;">Создаём счёт…</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let paymentPollInterval = null;
+const selectedTraffic = {};
+let promoDiscount = 0, promoCode = '', promoValidated = false, useBalance = false;
+const USER_BALANCE = {{ user.balance | default(0) }};
+
+function selectTraffic(btn, planKey) {
+    const toggle = btn.parentElement;
+    toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedTraffic[planKey] = parseInt(btn.dataset.traffic, 10);
+    const basePrice = parseInt(toggle.dataset.basePrice, 10);
+    const extra = parseInt(toggle.dataset.extra, 10);
+    const price = selectedTraffic[planKey] === 0 ? basePrice + extra : basePrice;
+    if (promoValidated && promoDiscount > 0) {
+        const disc = price - Math.floor(price * promoDiscount / 100);
+        document.getElementById('price-' + planKey).innerHTML = disc + '<span>₽</span>';
+        const origEl = document.getElementById('price-original-' + planKey);
+        if (origEl) { origEl.textContent = price + ' ₽'; origEl.style.display = 'block'; }
+    } else {
+        document.getElementById('price-' + planKey).innerHTML = price + '<span>₽</span>';
+        const origEl = document.getElementById('price-original-' + planKey);
+        if (origEl) origEl.style.display = 'none';
+    }
+}
+
+async function validatePromo() {
+    const code = document.getElementById('promoInput').value.trim().toUpperCase();
+    const statusEl = document.getElementById('promoStatus');
+    if (!code) return;
+    statusEl.textContent = 'Проверяем…'; statusEl.style.color = 'var(--muted)';
+    promoValidated = false; promoDiscount = 0;
+    const res = await fetch('/payment/validate-promo', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({promo_code: code}),
+    });
+    const data = await res.json();
+    if (data.valid) {
+        promoDiscount = data.discount_percent; promoCode = code; promoValidated = true;
+        statusEl.textContent = `✅ Скидка ${data.discount_percent}% применена!`;
+        statusEl.style.color = 'var(--accent)';
+        _updateCardPrices();
+    } else {
+        promoCode = ''; promoDiscount = 0;
+        statusEl.textContent = `❌ ${data.error}`;
+        statusEl.style.color = '#ef5b5b';
+        _clearCardPrices();
+    }
+}
+
+function _currentPrice(planKey) {
+    const toggle = document.querySelector(`.traffic-toggle[data-plan="${planKey}"]`);
+    if (!toggle) return 0;
+    const base = parseInt(toggle.dataset.basePrice, 10);
+    const extra = parseInt(toggle.dataset.extra, 10);
+    const traffic = selectedTraffic[planKey] !== undefined ? selectedTraffic[planKey] : 50;
+    return traffic === 0 ? base + extra : base;
+}
+
+function _updateCardPrices() {
+    document.querySelectorAll('.traffic-toggle').forEach(toggle => {
+        const k = toggle.dataset.plan;
+        const full = _currentPrice(k);
+        const disc = full - Math.floor(full * promoDiscount / 100);  // формула совпадает с бэкендом
+        const priceEl = document.getElementById('price-' + k);
+        const origEl = document.getElementById('price-original-' + k);
+        if (priceEl) priceEl.innerHTML = disc + '<span>₽</span>';
+        if (origEl) { origEl.textContent = full + ' ₽'; origEl.style.display = 'block'; }
+    });
+}
+
+function _clearCardPrices() {
+    document.querySelectorAll('.traffic-toggle').forEach(toggle => {
+        const k = toggle.dataset.plan;
+        const full = _currentPrice(k);
+        const priceEl = document.getElementById('price-' + k);
+        const origEl = document.getElementById('price-original-' + k);
+        if (priceEl) priceEl.innerHTML = full + '<span>₽</span>';
+        if (origEl) origEl.style.display = 'none';
+    });
+}
+
+async function buyPlan(planKey) {
+    // Берём выбранный трафик или дефолтный из плана (data-traffic кнопки по умолчанию)
+    let traffic;
+    if (selectedTraffic[planKey] !== undefined) {
+        traffic = selectedTraffic[planKey];
+    } else {
+        const defaultBtn = document.querySelector(`.traffic-toggle[data-plan="${planKey}"] button.active`);
+        traffic = defaultBtn ? parseInt(defaultBtn.dataset.traffic, 10) : 50;
+    }
+    openModal('payModal');
+    document.getElementById('payModalBody').innerHTML = `<div class="pay-loading"><div class="spinner"></div><span style="color:var(--muted);font-size:.85rem;">Создаём счёт…</span></div>`;
+    const res = await fetch('/payment/create', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({plan_key: planKey, traffic_gb: traffic, promo_code: promoValidated ? promoCode : '', use_balance: useBalance && USER_BALANCE > 0})
+    });
+    const data = await res.json();
+    if (data.free) {
+        document.getElementById('payModalBody').innerHTML = `<div style="text-align:center;padding:1.5rem 0;"><div style="font-size:2rem;margin-bottom:.8rem;">🎉</div><p style="color:#fff;font-weight:600;">Оплачено балансом!</p><p style="color:var(--muted);font-size:.85rem;">Активируем подписку…</p></div>`;
+        if (paymentPollInterval) clearInterval(paymentPollInterval);
+        startPolling(data.label);
+        return;
+    }
+    let discHtml = '';
+    if (data.promo_discount > 0) discHtml += `<div style="color:var(--accent);font-size:.8rem;margin:.2rem 0;">🏷 Промокод: -${data.promo_discount} ₽</div>`;
+    if (data.balance_spent > 0) discHtml += `<div style="color:var(--accent);font-size:.8rem;margin:.2rem 0;">💰 Баланс: -${data.balance_spent} ₽</div>`;
+    document.getElementById('payModalBody').innerHTML = `
+        <div class="pay-summary">
+            <div class="pname">${data.plan_name}</div>
+            ${data.original_amount !== data.amount ? `<div style="color:var(--muted);font-size:.8rem;text-decoration:line-through;">${data.original_amount} ₽</div>` : ''}
+            ${discHtml}
+            <div class="pamount">${data.amount} ₽</div>
+        </div>
+        <a href="${data.payment_url}" target="_blank" class="pay-cta">Оплатить через ЮMoney</a>
+        <p class="pay-hint">Окно обновится автоматически после оплаты</p>`;
+    startPolling(data.label);
+}
+
+function startPolling(label) {
+    if (paymentPollInterval) clearInterval(paymentPollInterval);
+    const deadline = Date.now() + 5 * 60 * 1000; // 5 минут
+
+    paymentPollInterval = setInterval(async () => {
+        // Истекло 5 минут — останавливаем
+        if (Date.now() > deadline) {
+            clearInterval(paymentPollInterval);
+            document.getElementById('payModalBody').innerHTML = `
+                <div style="text-align:center;padding:1.5rem 0;">
+                    <div style="font-size:2rem;margin-bottom:.8rem;">⏳</div>
+                    <p style="color:#fff;font-weight:600;">Время ожидания истекло</p>
+                    <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem;">
+                        Если вы уже оплатили — подписка активируется автоматически.<br>
+                        Проверьте личный кабинет через минуту.
+                    </p>
+                    <a href="/dashboard" class="btn btn-accent" style="display:inline-block;">Перейти в кабинет</a>
+                </div>`;
+            return;
+        }
+
+        const check = await fetch('/payment/status/' + label);
+        const status = await check.json();
+        if (status.paid) { clearInterval(paymentPollInterval); window.location.href = '/dashboard'; }
+    }, 8000); // каждые 8 секунд вместо 4
+}
+</script>
+{% endblock %}
