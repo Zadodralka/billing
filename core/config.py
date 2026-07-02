@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     # Security
     secret_key: str
     session_max_age: int = 86400
+    session_https_only: bool = True  # False только для локальной разработки без HTTPS
 
     # YooMoney
     yoomoney_receiver: str
@@ -47,6 +48,17 @@ class Settings(BaseSettings):
     plan_3m_unlimited_extra: int = 250
     plan_6m_unlimited_extra: int = 450
     plan_1y_unlimited_extra: int = 800
+
+    @field_validator("secret_key")
+    @classmethod
+    def validate_secret_key(cls, v):
+        if not v or len(v) < 32:
+            raise ValueError(
+                "SECRET_KEY должен быть не короче 32 символов (используется для подписи "
+                "веб-сессий). Сгенерируйте его командой: "
+                "python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+            )
+        return v
 
     @field_validator("admin_ids", mode="before")
     @classmethod

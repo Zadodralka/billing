@@ -4,9 +4,9 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: vpnbot
-      POSTGRES_USER: vpnbot
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB:-vpnbot}
+      POSTGRES_USER: ${POSTGRES_USER:-vpnbot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD в .env (тот же пароль должен быть в DATABASE_URL)}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

@@ -15,7 +15,7 @@ import logging
 from datetime import datetime, timedelta
 from sqlalchemy import select
 from core.database import AsyncSessionLocal, init_db
-from core.models import Subscription, SubscriptionStatus, User
+from core.models import Subscription, SubscriptionStatus, User, Payment, PaymentStatus
 from core.remnawave import remnawave
 from core.config import settings
 from aiogram import Bot
@@ -24,6 +24,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DELETE_AFTER_DAYS = 7  # сколько дней хранить заблокированный аккаунт перед полным удалением
+PENDING_PAYMENT_TIMEOUT_HOURS = 24  # через сколько часов гасить неоплаченный счёт и вернуть баланс
 
 
 async def disable_expired_subscriptions():
@@ -39,17 +40,22 @@ async def disable_expired_subscriptions():
         )
         expired = result.scalars().all()
 
+        disabled_count = 0
         for sub in expired:
-            sub.status = SubscriptionStatus.EXPIRED
-
+            # Статус EXPIRED выставляем только если реально отключили доступ в Remnawave
+            # (или отключать нечего) - иначе временный сбой API навсегда "потеряет" эту
+            # подписку из вида следующего прохода (он фильтрует только status == ACTIVE),
+            # и пользователь останется с рабочим VPN бесплатно.
             if sub.remnawave_sub_id:
                 try:
                     await remnawave.disable_user(sub.remnawave_sub_id)
                     logger.info(f"Disabled Remnawave access for expired subscription {sub.id}")
                 except Exception as e:
-                    logger.error(f"Failed to disable remnawave user for sub {sub.id} ({sub.remnawave_sub_id}): {e}")
-            else:
-                logger.warning(f"Subscription {sub.id} has no remnawave_sub_id, nothing to disable")
+                    logger.error(f"Failed to disable remnawave user for sub {sub.id} ({sub.remnawave_sub_id}): {e}, will retry next cycle")
+                    continue
+
+            sub.status = SubscriptionStatus.EXPIRED
+            disabled_count += 1
 
             # Уведомление в Telegram (если есть)
             result = await session.execute(select(User).where(User.id == sub.user_id))
@@ -68,9 +74,9 @@ async def disable_expired_subscriptions():
                 except Exception as e:
                     logger.warning(f"Failed to notify user {user.telegram_id}: {e}")
 
-        if expired:
+        if disabled_count:
             await session.commit()
-            logger.info(f"Disabled {len(expired)} expired subscription(s)")
+            logger.info(f"Disabled {disabled_count} expired subscription(s)")
 
 
 async def delete_old_expired_accounts():
@@ -102,6 +108,39 @@ async def delete_old_expired_accounts():
             logger.info(f"Permanently deleted {deleted_count} Remnawave account(s) (expired >{DELETE_AFTER_DAYS}d ago)")
 
 
+async def expire_stale_pending_payments():
+    """Гасит зависшие неоплаченные счета и возвращает списанный на них баланс"""
+    async with AsyncSessionLocal() as session:
+        cutoff = datetime.utcnow() - timedelta(hours=PENDING_PAYMENT_TIMEOUT_HOURS)
+        result = await session.execute(
+            select(Payment).where(
+                Payment.status == PaymentStatus.PENDING,
+                Payment.created_at <= cutoff,
+            )
+        )
+        stale = result.scalars().all()
+
+        from core.promo_referral import add_balance
+
+        count = 0
+        for payment in stale:
+            payment.status = PaymentStatus.FAILED
+            if payment.balance_spent > 0:
+                user_result = await session.execute(select(User).where(User.id == payment.user_id))
+                user = user_result.scalar_one_or_none()
+                if user:
+                    await add_balance(
+                        user, payment.balance_spent, "payment_refund",
+                        f"Возврат за неоплаченный счёт #{payment.id}", session,
+                    )
+                payment.balance_spent = 0
+            count += 1
+
+        if count:
+            await session.commit()
+            logger.info(f"Expired {count} stale pending payment(s), refunded balances")
+
+
 async def run_cycle():
     try:
         await disable_expired_subscriptions()
@@ -112,6 +151,11 @@ async def run_cycle():
         await delete_old_expired_accounts()
     except Exception as e:
         logger.error(f"delete_old_expired_accounts failed: {e}")
+
+    try:
+        await expire_stale_pending_payments()
+    except Exception as e:
+        logger.error(f"expire_stale_pending_payments failed: {e}")
 
 
 async def main():

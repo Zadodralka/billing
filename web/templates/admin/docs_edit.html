@@ -254,6 +254,7 @@
 
 {% block extra_scripts %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
 <script>
 const ARTICLE_ID = {{ article.id if article else 'null' }};
 const MODE = '{{ mode }}';
@@ -265,7 +266,7 @@ const preview = document.getElementById('previewBody');
 
 // Живое превью
 function updatePreview() {
-    preview.innerHTML = marked.parse(editor.value || '');
+    preview.innerHTML = DOMPurify.sanitize(marked.parse(editor.value || ''));
 }
 editor.addEventListener('input', updatePreview);
 updatePreview();

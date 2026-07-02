@@ -1,3 +1,4 @@
+from html import escape
 from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
@@ -16,6 +17,13 @@ from bot.keyboards.support import (
 router = Router()
 
 
+def _parse_id(callback_data: str, index: int) -> int | None:
+    try:
+        return int(callback_data.split(":")[index])
+    except (IndexError, ValueError):
+        return None
+
+
 def _is_admin(user: User) -> bool:
     return user.telegram_id in settings.admin_ids
 
@@ -24,15 +32,15 @@ def _format_ticket_for_admin(ticket: SupportTicket) -> str:
     status_map = {"open": "🔴 Ожидает ответа", "answered": "🟢 Отвечено", "closed": "⚫ Закрыт"}
     lines = [
         f"🎫 <b>Тикет #{ticket.id}</b>",
-        f"👤 {ticket.user.display_name}",
-        f"📋 {ticket.subject}",
+        f"👤 {escape(ticket.user.display_name)}",
+        f"📋 {escape(ticket.subject)}",
         f"Статус: {status_map.get(ticket.status.value, '?')}",
         "",
     ]
     for msg in (ticket.messages or [])[-5:]:
         who = "🛡 Поддержка" if msg.is_from_admin else "👤 Пользователь"
         lines.append(f"<b>{who}</b> <i>{msg.created_at.strftime('%d.%m %H:%M')}</i>")
-        lines.append(msg.text[:400] + ("…" if len(msg.text) > 400 else ""))
+        lines.append(escape(msg.text[:400]) + ("…" if len(msg.text) > 400 else ""))
         lines.append("")
     return "\n".join(lines).strip()
 
@@ -121,7 +129,10 @@ async def cb_admin_ticket_view(callback: CallbackQuery, user: User, session: Asy
         return
     await state.clear()
 
-    ticket_id = int(callback.data.split(":")[2])
+    ticket_id = _parse_id(callback.data, 2)
+    if ticket_id is None:
+        await callback.answer("Некорректный запрос", show_alert=True)
+        return
     result = await session.execute(
         select(SupportTicket)
         .options(selectinload(SupportTicket.messages), selectinload(SupportTicket.user))
@@ -147,7 +158,10 @@ async def cb_admin_close_ticket(callback: CallbackQuery, user: User, session: As
         await callback.answer("Нет доступа", show_alert=True)
         return
 
-    ticket_id = int(callback.data.split(":")[2])
+    ticket_id = _parse_id(callback.data, 2)
+    if ticket_id is None:
+        await callback.answer("Некорректный запрос", show_alert=True)
+        return
     result = await session.execute(select(SupportTicket).where(SupportTicket.id == ticket_id))
     ticket = result.scalar_one_or_none()
     if not ticket:
@@ -173,7 +187,10 @@ async def cb_admin_reply_start(callback: CallbackQuery, user: User, state: FSMCo
         await callback.answer("Нет доступа", show_alert=True)
         return
 
-    ticket_id = int(callback.data.split(":")[2])
+    ticket_id = _parse_id(callback.data, 2)
+    if ticket_id is None:
+        await callback.answer("Некорректный запрос", show_alert=True)
+        return
     await state.set_state(AdminReplyToTicket.waiting_reply)
     await state.update_data(ticket_id=ticket_id, original_message_id=callback.message.message_id)
 
@@ -196,6 +213,10 @@ async def process_admin_reply(message: Message, user: User, state: FSMContext, s
     data = await state.get_data()
     ticket_id = data.get("ticket_id")
     await state.clear()
+
+    if not message.text:
+        await message.answer("Пожалуйста, введите ответ текстом.")
+        return
 
     result = await session.execute(
         select(SupportTicket)
@@ -229,10 +250,11 @@ async def process_admin_reply(message: Message, user: User, state: FSMContext, s
             reply_text,
         )
 
+    display_name = escape(ticket.user.display_name) if ticket.user else "?"
     await message.answer(
         f"✅ <b>Ответ отправлен</b> на тикет #{ticket.id}\n"
-        f"👤 Пользователь: {ticket.user.display_name if ticket.user else '?'}\n\n"
-        f"<b>Ваш ответ:</b>\n{reply_text[:300]}{'…' if len(reply_text) > 300 else ''}",
+        f"👤 Пользователь: {display_name}\n\n"
+        f"<b>Ваш ответ:</b>\n{escape(reply_text[:300])}{'…' if len(reply_text) > 300 else ''}",
         parse_mode="HTML",
         reply_markup=admin_reply_sent_keyboard(ticket.id),
     )

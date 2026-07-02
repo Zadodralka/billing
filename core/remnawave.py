@@ -108,6 +108,11 @@ class RemnawaveClient:
         try:
             current_expire = datetime.fromisoformat(current_expire_raw.replace("Z", ""))
         except (ValueError, AttributeError):
+            logger.error(
+                f"extend_user: could not parse expireAt='{current_expire_raw}' for uuid={uuid}, "
+                f"falling back to now() as base - resulting Remnawave expiry may end up shorter "
+                f"than what's recorded in the app DB"
+            )
             current_expire = datetime.utcnow()
         if current_expire < datetime.utcnow():
             current_expire = datetime.utcnow()

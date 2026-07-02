@@ -1,3 +1,4 @@
+from html import escape
 from aiogram import Router, F
 from aiogram.filters import CommandStart
 from aiogram.types import Message, CallbackQuery
@@ -47,7 +48,7 @@ WELCOME_TEXT = """
 # ===== /start =====
 @router.message(CommandStart())
 async def cmd_start(message: Message, user: User, session: AsyncSession):
-    name = message.from_user.first_name or "друг"
+    name = escape(message.from_user.first_name or "друг")
 
     # Новый пользователь или не принял правила — показываем правила
     if not user.terms_accepted:
@@ -72,7 +73,7 @@ async def cb_accept_terms(callback: CallbackQuery, user: User, session: AsyncSes
     user.terms_accepted = True
     await session.commit()
 
-    name = callback.from_user.first_name or "друг"
+    name = escape(callback.from_user.first_name or "друг")
     await callback.message.edit_text(
         f"✅ <b>Правила приняты!</b>\n\n"
         f"👋 Добро пожаловать, {name}!\n\n"

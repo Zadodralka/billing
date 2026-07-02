@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta
 import logging
@@ -123,7 +124,11 @@ async def edit_user(
         raise HTTPException(404, "Пользователь не найден")
     user.email = email.strip() or None
     user.is_admin = is_admin == "true"
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(400, "Этот email уже используется другим пользователем")
     return RedirectResponse("/admin/users", status_code=302)
 
 

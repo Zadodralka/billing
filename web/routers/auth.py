@@ -1,6 +1,7 @@
 import secrets
 import hashlib
 import hmac
+import logging
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Request, Depends, HTTPException, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -12,10 +13,37 @@ from core.models import User, EmailToken
 from core.email import send_magic_link
 from core.config import settings
 
+logger = logging.getLogger("auth")
+
 router = APIRouter(prefix="/auth")
 templates = Jinja2Templates(directory="web/templates")
 
 _bot_username_cache = {"value": None}
+_redis_client = None
+LOGIN_EMAIL_RATE_LIMIT = 3
+LOGIN_EMAIL_RATE_WINDOW_SECONDS = 900  # 15 минут
+
+
+def get_redis():
+    global _redis_client
+    if _redis_client is None:
+        import redis.asyncio as aioredis
+        _redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
+    return _redis_client
+
+
+async def _check_login_email_rate_limit(email: str) -> bool:
+    """True если лимит не превышен. При недоступности Redis - не блокируем (fail-open)."""
+    try:
+        r = get_redis()
+        key = f"ratelimit:login_email:{email}"
+        attempts = await r.incr(key)
+        if attempts == 1:
+            await r.expire(key, LOGIN_EMAIL_RATE_WINDOW_SECONDS)
+        return attempts <= LOGIN_EMAIL_RATE_LIMIT
+    except Exception as e:
+        logger.warning(f"Rate limit check failed (allowing request): {e}")
+        return True
 
 
 async def get_bot_username() -> str | None:
@@ -51,6 +79,9 @@ async def require_user(request: Request, session: AsyncSession = Depends(get_db)
     user = await get_current_user(request, session)
     if not user:
         raise HTTPException(status_code=302, headers={"Location": "/auth/login"})
+    if user.is_banned:
+        request.session.clear()
+        raise HTTPException(status_code=403, detail="Доступ заблокирован")
     return user
 
 
@@ -81,8 +112,16 @@ async def login_email(
     session: AsyncSession = Depends(get_db),
 ):
     email = email.strip().lower()
-    token = secrets.token_urlsafe(32)
     bot_username = await get_bot_username()
+
+    if not await _check_login_email_rate_limit(email):
+        return templates.TemplateResponse(request, "login.html", {
+            "error": "Слишком много запросов для этого email. Попробуйте позже.",
+            "bot_username": bot_username,
+            "webapp_url": settings.webapp_url,
+        }, status_code=429)
+
+    token = secrets.token_urlsafe(32)
 
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
@@ -185,6 +224,7 @@ async def telegram_auth(request: Request, session: AsyncSession = Depends(get_db
     else:
         user.telegram_username = params.get("username")
         user.last_seen = datetime.utcnow()
+        user.is_admin = tg_id in settings.admin_ids
 
     await session.commit()
     await session.refresh(user)
