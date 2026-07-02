@@ -6,7 +6,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from core.config import settings
 from core.database import init_db, AsyncSessionLocal
 from core.plans import seed_plans_if_empty
-from web.routers import auth, dashboard, admin, payments, support, admin_support, admin_promo, referral, docs, admin_docs
+from web.routers import auth, dashboard, admin, payments, support, admin_support, admin_promo, referral, docs, admin_docs, gift
 
 app = FastAPI(title="Unlock VPN", docs_url=None, redoc_url=None)
 
@@ -54,6 +54,7 @@ app.include_router(admin_promo.router)
 app.include_router(referral.router)
 app.include_router(docs.router)
 app.include_router(admin_docs.router)
+app.include_router(gift.router)
 
 
 @app.get("/")

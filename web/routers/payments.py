@@ -66,18 +66,27 @@ async def yoomoney_webhook(request: Request, session: AsyncSession = Depends(get
     if user.telegram_id:
         try:
             bot = Bot(token=settings.bot_token)
-            from core.plans import get_plan
-            plan = await get_plan(session, payment.plan_key) or {}
-            expires = subscription.expires_at.strftime("%d.%m.%Y")
-            await bot.send_message(
-                user.telegram_id,
-                f"✅ <b>Оплата получена!</b>\n\n"
-                f"📦 Тариф: {plan.get('name', payment.plan_key)}\n"
-                f"📅 Активна до: {expires}\n\n"
-                f"🔑 Ваш конфиг:\n<code>{config_link}</code>\n\n"
-                f"Или откройте раздел <b>🔑 Мои конфиги</b> в боте.",
-                parse_mode="HTML",
-            )
+            if payment.is_gift:
+                await bot.send_message(
+                    user.telegram_id,
+                    f"✅ <b>Оплата получена!</b>\n\n"
+                    f"🎁 Подарок оформлен и отправлен на email "
+                    f"<code>{payment.gift_recipient_email}</code>.",
+                    parse_mode="HTML",
+                )
+            else:
+                from core.plans import get_plan
+                plan = await get_plan(session, payment.plan_key) or {}
+                expires = subscription.expires_at.strftime("%d.%m.%Y")
+                await bot.send_message(
+                    user.telegram_id,
+                    f"✅ <b>Оплата получена!</b>\n\n"
+                    f"📦 Тариф: {plan.get('name', payment.plan_key)}\n"
+                    f"📅 Активна до: {expires}\n\n"
+                    f"🔑 Ваш конфиг:\n<code>{config_link}</code>\n\n"
+                    f"Или откройте раздел <b>🔑 Мои конфиги</b> в боте.",
+                    parse_mode="HTML",
+                )
             await bot.session.close()
         except Exception as e:
             logger.warning(f"Failed to notify user {user.telegram_id}: {e}")

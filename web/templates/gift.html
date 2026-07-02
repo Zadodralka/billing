@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Подарить подписку{% endblock %}
+
+{% block extra_head %}
+<style>
+    .plans-grid {
+        display: grid; grid-template-columns: repeat(4, 1fr);
+        gap: 1.1rem; margin-bottom: 2rem; align-items: stretch;
+    }
+    @media (max-width: 900px) { .plans-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 480px) { .plans-grid { grid-template-columns: 1fr; } }
+    .plan-card {
+        background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+        display: flex; flex-direction: column; overflow: hidden; position: relative;
+        transition: border-color .15s, transform .15s; height: 100%;
+    }
+    .plan-card:hover { transform: translateY(-3px); border-color: #2c3445; }
+    .plan-card.featured { border-color: var(--accent); }
+    .plan-ribbon {
+        background: var(--accent); color: #06140c; text-align: center; padding: .4rem;
+        font-size: .68rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    }
+    .plan-body { padding: 1.6rem 1.3rem; display: flex; flex-direction: column; align-items: center; text-align: center; flex: 1; gap: .35rem; }
+    .plan-name { color: #9aa5ba; font-weight: 600; font-size: .88rem; }
+    .plan-price { font-family: 'Space Grotesk', sans-serif; font-size: 2.1rem; font-weight: 700; color: #fff; line-height: 1.1; margin: .3rem 0 .1rem; }
+    .plan-price span { font-size: 1.05rem; color: var(--muted); font-weight: 500; margin-left: .15rem; }
+    .plan-duration { color: var(--muted); font-size: .78rem; margin-bottom: 1.1rem; }
+    .plan-buy-btn { width: 100%; margin-top: auto; }
+
+    .pay-cta {
+        display: block; text-align: center; padding: .85rem; border-radius: var(--radius-sm);
+        background: var(--accent); color: #06140c; font-weight: 700; font-size: .95rem;
+        margin-bottom: .9rem; transition: background .12s;
+    }
+    .pay-cta:hover { background: #34c878; color: #06140c; }
+    .pay-summary { text-align: center; margin-bottom: 1.3rem; }
+    .pay-summary .pname { color: #fff; font-weight: 600; font-size: .95rem; }
+    .pay-summary .pamount { font-family: 'Space Grotesk', sans-serif; font-size: 1.8rem; font-weight: 700; color: var(--accent); margin-top: .25rem; }
+    .pay-hint { text-align: center; color: var(--muted); font-size: .78rem; margin: 0; }
+    .pay-loading { display: flex; flex-direction: column; align-items: center; gap: .8rem; padding: 1rem 0; }
+    .spinner { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--panel-3); border-top-color: var(--accent); animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>🎁 Подарить подписку</h1>
+        <div class="sub">Выберите тариф — получатель получит письмо с кодом активации на свой email</div>
+    </div>
+</div>
+
+<div class="card" style="padding:1.1rem 1.2rem;margin-bottom:1.3rem;">
+    <label class="form-label">Email получателя</label>
+    <input type="email" id="recipientEmail" placeholder="friend@example.com" style="max-width:420px;">
+    <div id="emailStatus" style="font-size:.78rem;margin-top:.4rem;color:var(--muted);">
+        Понадобится, чтобы отправить получателю подарочный код
+    </div>
+</div>
+
+<div class="plans-grid">
+    {% for key, plan in plans.items() %}
+    <div class="plan-card {% if plan.get('is_featured') %}featured{% endif %}">
+        {% if plan.get('is_featured') %}<div class="plan-ribbon">Популярный выбор</div>{% endif %}
+        <div class="plan-body">
+            <div class="plan-name">{{ plan['name'] }}</div>
+            <div class="plan-price">{{ plan['price'] }}<span>₽</span></div>
+            <div class="plan-duration">{{ plan['days'] }} дней доступа</div>
+            <button class="btn {% if plan.get('is_featured') %}btn-accent{% else %}btn-outline-1{% endif %} plan-buy-btn" onclick="giftPlan('{{ key }}')">
+                Подарить
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="modal-overlay" id="giftPayModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Оформление подарка</h3>
+            <button class="modal-close" onclick="closeModal('giftPayModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c" id="giftPayModalBody">
+            <div class="pay-loading">
+                <div class="spinner"></div>
+                <span style="color:var(--muted);font-size:.85rem;">Создаём счёт…</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let giftPollInterval = null;
+
+function isValidEmail(v) {
+    return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);
+}
+
+async function giftPlan(planKey) {
+    const emailInput = document.getElementById('recipientEmail');
+    const email = emailInput.value.trim().toLowerCase();
+    const statusEl = document.getElementById('emailStatus');
+    if (!isValidEmail(email)) {
+        statusEl.textContent = '❌ Введите корректный email получателя';
+        statusEl.style.color = '#ef5b5b';
+        emailInput.focus();
+        return;
+    }
+    statusEl.textContent = 'Понадобится, чтобы отправить получателю подарочный код';
+    statusEl.style.color = 'var(--muted)';
+
+    openModal('giftPayModal');
+    document.getElementById('giftPayModalBody').innerHTML = `<div class="pay-loading"><div class="spinner"></div><span style="color:var(--muted);font-size:.85rem;">Создаём счёт…</span></div>`;
+
+    const res = await fetch('/gift/create', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({plan_key: planKey, recipient_email: email})
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        document.getElementById('giftPayModalBody').innerHTML = `<div style="text-align:center;padding:1.5rem 0;color:var(--danger);">${err.detail || 'Не удалось создать платёж'}</div>`;
+        return;
+    }
+    const data = await res.json();
+
+    if (data.free) {
+        showGiftSent(data.recipient_email);
+        return;
+    }
+
+    document.getElementById('giftPayModalBody').innerHTML = `
+        <div class="pay-summary">
+            <div class="pname">${data.plan_name} · в подарок для ${data.recipient_email}</div>
+            <div class="pamount">${data.amount} ₽</div>
+        </div>
+        <a href="${data.payment_url}" target="_blank" class="pay-cta">Оплатить через ЮMoney</a>
+        <p class="pay-hint">Окно обновится автоматически после оплаты</p>`;
+    startGiftPolling(data.label, data.recipient_email);
+}
+
+function showGiftSent(email) {
+    if (giftPollInterval) clearInterval(giftPollInterval);
+    document.getElementById('giftPayModalBody').innerHTML = `
+        <div style="text-align:center;padding:1.5rem 0;">
+            <div style="font-size:2.2rem;margin-bottom:.8rem;">🎉</div>
+            <p style="color:#fff;font-weight:600;">Подарок оформлен!</p>
+            <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem;">Письмо с кодом активации отправлено на <strong style="color:#e2e8f0;">${email}</strong>.</p>
+            <a href="/dashboard" class="btn btn-accent" style="display:inline-block;">Перейти в кабинет</a>
+        </div>`;
+}
+
+function startGiftPolling(label, email) {
+    if (giftPollInterval) clearInterval(giftPollInterval);
+    const deadline = Date.now() + 5 * 60 * 1000;
+
+    giftPollInterval = setInterval(async () => {
+        if (Date.now() > deadline) {
+            clearInterval(giftPollInterval);
+            document.getElementById('giftPayModalBody').innerHTML = `
+                <div style="text-align:center;padding:1.5rem 0;">
+                    <div style="font-size:2rem;margin-bottom:.8rem;">⏳</div>
+                    <p style="color:#fff;font-weight:600;">Время ожидания истекло</p>
+                    <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem;">
+                        Если вы уже оплатили — письмо получателю придёт автоматически в течение нескольких минут.
+                    </p>
+                    <a href="/dashboard" class="btn btn-accent" style="display:inline-block;">Перейти в кабинет</a>
+                </div>`;
+            return;
+        }
+        const check = await fetch('/gift/status/' + label);
+        const status = await check.json();
+        if (status.paid) { clearInterval(giftPollInterval); showGiftSent(email); }
+    }, 8000);
+}
+</script>
+{% endblock %}
