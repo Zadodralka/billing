@@ -57,7 +57,7 @@ async def create_ticket(
     except Exception as e:
         await session.rollback()
         logger.error(f"create_ticket failed: {e}")
-        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+        return JSONResponse({"ok": False, "error": "Внутренняя ошибка сервера"}, status_code=500)
 
 
 @router.get("/{ticket_id}", response_class=HTMLResponse)
@@ -112,7 +112,7 @@ async def reply_to_ticket(
     except Exception as e:
         await session.rollback()
         logger.error(f"reply_to_ticket failed: {e}")
-        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+        return JSONResponse({"ok": False, "error": "Внутренняя ошибка сервера"}, status_code=500)
 
 
 @router.post("/{ticket_id}/close")

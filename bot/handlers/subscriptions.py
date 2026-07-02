@@ -2,7 +2,7 @@ from aiogram import Router, F
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.models import User
-from core.config import PLANS
+from core.plans import get_all_plans
 import qrcode
 import io
 
@@ -23,9 +23,10 @@ async def cmd_subscriptions(message: Message, user: User, session: AsyncSession)
         )
         return
 
+    plans = await get_all_plans(session)
     text = "📋 <b>Ваши активные подписки:</b>\n\n"
     for sub in active:
-        plan = PLANS.get(sub.plan_key, {})
+        plan = plans.get(sub.plan_key, {})
         expires = sub.expires_at.strftime("%d.%m.%Y") if sub.expires_at else "—"
         text += f"✅ {plan.get('name', sub.plan_key)} — до {expires}\n"
 
@@ -41,6 +42,7 @@ async def cmd_configs(message: Message, user: User, session: AsyncSession):
         await message.answer("❌ У вас нет активных конфигов. Купите подписку!")
         return
 
+    plans = await get_all_plans(session)
     for sub in active:
         try:
             qr = qrcode.QRCode(box_size=10, border=2)
@@ -52,7 +54,7 @@ async def cmd_configs(message: Message, user: User, session: AsyncSession):
             buf.seek(0)
 
             from aiogram.types import BufferedInputFile
-            plan = PLANS.get(sub.plan_key, {})
+            plan = plans.get(sub.plan_key, {})
             expires = sub.expires_at.strftime("%d.%m.%Y") if sub.expires_at else "—"
             await message.answer_photo(
                 BufferedInputFile(buf.read(), filename="vpn_qr.png"),

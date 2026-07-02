@@ -1,3 +1,4 @@
+from html import escape
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
@@ -18,13 +19,20 @@ router = Router()
 MAX_MESSAGES_PREVIEW = 5  # сколько последних сообщений показываем в просмотре тикета
 
 
+def _parse_id(callback_data: str, index: int) -> int | None:
+    try:
+        return int(callback_data.split(":")[index])
+    except (IndexError, ValueError):
+        return None
+
+
 def _format_ticket_thread(ticket: SupportTicket) -> str:
     """Форматирует последние сообщения тикета для отображения в боте"""
     status_map = {"open": "🔴 Ожидает ответа", "answered": "🟢 Отвечено", "closed": "⚫ Закрыт"}
     status_text = status_map.get(ticket.status.value, ticket.status.value)
 
     lines = [
-        f"📋 <b>{ticket.subject}</b>",
+        f"📋 <b>{escape(ticket.subject)}</b>",
         f"Статус: {status_text}",
         "",
     ]
@@ -40,7 +48,8 @@ def _format_ticket_thread(ticket: SupportTicket) -> str:
             who = "🛡 <b>Поддержка</b>" if msg.is_from_admin else "👤 <b>Вы</b>"
             time_str = msg.created_at.strftime("%d.%m %H:%M")
             lines.append(f"{who} <i>{time_str}</i>")
-            lines.append(msg.text[:500] + ("…" if len(msg.text) > 500 else ""))
+            text = escape(msg.text[:500]) + ("…" if len(msg.text) > 500 else "")
+            lines.append(text)
             lines.append("")
 
     return "\n".join(lines).strip()
@@ -94,7 +103,10 @@ async def cb_support_list(callback: CallbackQuery, user: User, session: AsyncSes
 @router.callback_query(F.data.startswith("ticket:view:"))
 async def cb_ticket_view(callback: CallbackQuery, user: User, session: AsyncSession, state: FSMContext):
     await state.clear()
-    ticket_id = int(callback.data.split(":")[2])
+    ticket_id = _parse_id(callback.data, 2)
+    if ticket_id is None:
+        await callback.answer("Некорректный запрос", show_alert=True)
+        return
 
     result = await session.execute(
         select(SupportTicket)
@@ -117,7 +129,10 @@ async def cb_ticket_view(callback: CallbackQuery, user: User, session: AsyncSess
 # ===== Закрыть тикет =====
 @router.callback_query(F.data.startswith("ticket:close:"))
 async def cb_ticket_close(callback: CallbackQuery, user: User, session: AsyncSession):
-    ticket_id = int(callback.data.split(":")[2])
+    ticket_id = _parse_id(callback.data, 2)
+    if ticket_id is None:
+        await callback.answer("Некорректный запрос", show_alert=True)
+        return
     result = await session.execute(
         select(SupportTicket).where(SupportTicket.id == ticket_id, SupportTicket.user_id == user.id)
     )
@@ -149,6 +164,10 @@ async def cb_support_create(callback: CallbackQuery, state: FSMContext):
 
 @router.message(CreateTicket.waiting_subject)
 async def process_ticket_subject(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Пожалуйста, введите тему текстом.", reply_markup=cancel_keyboard("support:menu"))
+        return
+
     subject = message.text.strip()[:200]
     if not subject:
         await message.answer("Пожалуйста, введите тему.", reply_markup=cancel_keyboard("support:menu"))
@@ -157,7 +176,7 @@ async def process_ticket_subject(message: Message, state: FSMContext):
     await state.update_data(subject=subject)
     await state.set_state(CreateTicket.waiting_message)
     await message.answer(
-        f"📝 Тема: <b>{subject}</b>\n\nТеперь опишите вашу проблему подробнее:",
+        f"📝 Тема: <b>{escape(subject)}</b>\n\nТеперь опишите вашу проблему подробнее:",
         parse_mode="HTML",
         reply_markup=cancel_keyboard("support:menu"),
     )
@@ -166,6 +185,10 @@ async def process_ticket_subject(message: Message, state: FSMContext):
 # ===== Создание тикета — шаг 2: сообщение =====
 @router.message(CreateTicket.waiting_message)
 async def process_ticket_message(message: Message, user: User, state: FSMContext, session: AsyncSession):
+    if not message.text:
+        await message.answer("Пожалуйста, введите сообщение текстом.", reply_markup=cancel_keyboard("support:menu"))
+        return
+
     text = message.text.strip()
     if not text:
         await message.answer("Пожалуйста, введите сообщение.", reply_markup=cancel_keyboard("support:menu"))
@@ -187,7 +210,7 @@ async def process_ticket_message(message: Message, user: User, state: FSMContext
 
     await message.answer(
         f"✅ <b>Обращение создано!</b>\n\n"
-        f"📋 Тема: {subject}\n"
+        f"📋 Тема: {escape(subject)}\n"
         f"🆔 Номер: #{ticket.id}\n\n"
         "Мы ответим в течение 1-2 часов. Вы получите уведомление здесь.",
         parse_mode="HTML",
@@ -198,7 +221,10 @@ async def process_ticket_message(message: Message, user: User, state: FSMContext
 # ===== Ответ на тикет — шаг 1 =====
 @router.callback_query(F.data.startswith("ticket:reply:"))
 async def cb_ticket_reply(callback: CallbackQuery, state: FSMContext):
-    ticket_id = int(callback.data.split(":")[2])
+    ticket_id = _parse_id(callback.data, 2)
+    if ticket_id is None:
+        await callback.answer("Некорректный запрос", show_alert=True)
+        return
     await state.set_state(ReplyToTicket.waiting_reply)
     await state.update_data(ticket_id=ticket_id)
     await callback.message.edit_text(
@@ -210,6 +236,10 @@ async def cb_ticket_reply(callback: CallbackQuery, state: FSMContext):
 
 @router.message(ReplyToTicket.waiting_reply)
 async def process_user_reply(message: Message, user: User, state: FSMContext, session: AsyncSession):
+    if not message.text:
+        await message.answer("Пожалуйста, введите ответ текстом.")
+        return
+
     data = await state.get_data()
     ticket_id = data.get("ticket_id")
     await state.clear()

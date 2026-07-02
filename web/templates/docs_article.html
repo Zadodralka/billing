@@ -183,12 +183,15 @@
 
 {% block extra_scripts %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Передаём через tojson чтобы Jinja2 не экранировал > в &gt; и не ломал цитаты Markdown
     const source = {{ article.content | tojson }};
     marked.setOptions({ breaks: true, gfm: true });
-    document.getElementById('mdContent').innerHTML = marked.parse(source);
+    // DOMPurify - защита от XSS: content редактируется в админке, но лишний рубеж
+    // защиты не помешает (например если админ-аккаунт когда-либо будет скомпрометирован).
+    document.getElementById('mdContent').innerHTML = DOMPurify.sanitize(marked.parse(source));
 });
 </script>
 {% endblock %}

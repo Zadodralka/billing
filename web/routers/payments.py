@@ -28,10 +28,28 @@ async def yoomoney_webhook(request: Request, session: AsyncSession = Depends(get
     if not label:
         return Response(status_code=200)
 
-    result = await session.execute(select(Payment).where(Payment.label == label))
+    # SELECT ... FOR UPDATE: блокирует строку платежа до commit'а в activate_subscription,
+    # так что параллельный повторный webhook (YooMoney ретраит доставку) дождётся коммита
+    # и увидит уже актуальный status == SUCCESS вместо повторной активации.
+    result = await session.execute(
+        select(Payment).where(Payment.label == label).with_for_update()
+    )
     payment = result.scalar_one_or_none()
 
     if not payment or payment.status == PaymentStatus.SUCCESS:
+        return Response(status_code=200)
+
+    try:
+        received_amount = float(data.get("amount", "0"))
+    except (TypeError, ValueError):
+        received_amount = 0.0
+
+    # Небольшой допуск на округление; если пришло меньше ожидаемого - не активируем.
+    if received_amount < payment.amount - 0.01:
+        logger.error(
+            f"Payment {payment.id} (label={label}): received amount {received_amount} "
+            f"is less than expected {payment.amount}. Notification ignored."
+        )
         return Response(status_code=200)
 
     result = await session.execute(select(User).where(User.id == payment.user_id))
@@ -93,9 +111,11 @@ async def create_payment_web(request: Request, session: AsyncSession = Depends(g
     from core.promo_referral import validate_promo_code, spend_balance
     user = await require_user(request, session)
 
-    # Перезагружаем пользователя с балансом
+    # Перезагружаем пользователя с балансом, блокируя строку - без этого два
+    # параллельных запроса (двойной клик / две вкладки) могут прочитать один и тот же
+    # остаток и оба списать баланс (lost update).
     from sqlalchemy import select as sa_select
-    result = await session.execute(sa_select(User).where(User.id == user.id))
+    result = await session.execute(sa_select(User).where(User.id == user.id).with_for_update())
     user = result.scalar_one()
 
     data = await request.json()
@@ -107,7 +127,7 @@ async def create_payment_web(request: Request, session: AsyncSession = Depends(g
 
     from core.plans import get_plan
     plan = await get_plan(session, plan_key)
-    if not plan:
+    if not plan or not plan.get("is_active", True):
         raise HTTPException(400, "Invalid plan")
 
     if renew_subscription_id:
@@ -139,7 +159,7 @@ async def create_payment_web(request: Request, session: AsyncSession = Depends(g
     if use_balance and user.balance > 0:
         balance_spent = min(user.balance, amount_after_promo)
 
-    final_amount = max(1, amount_after_promo - balance_spent)  # минимум 1 руб для ЮМани
+    final_amount = max(0, amount_after_promo - balance_spent)
 
     label = yoomoney.generate_label()
     payment = Payment(
@@ -163,8 +183,15 @@ async def create_payment_web(request: Request, session: AsyncSession = Depends(g
 
     await session.commit()
 
-    # Если итоговая сумма 0 — активируем без перехода на ЮМани
+    # Если итоговая сумма 0 — оплата полностью покрыта балансом/промокодом,
+    # активируем подписку сразу, без перехода на ЮМани.
     if final_amount <= 0:
+        from bot.handlers.payments import activate_subscription
+        try:
+            await activate_subscription(user, payment, session)
+        except Exception as e:
+            logger.error(f"Free activation failed for payment {payment.id}: {e}")
+            raise HTTPException(500, "Не удалось активировать подписку")
         return JSONResponse({
             "payment_url": None,
             "label": label,
@@ -208,17 +235,33 @@ async def cancel_payment(payment_id: int, request: Request, session: AsyncSessio
         return JSONResponse({"ok": False, "error": "Не авторизован"}, status_code=401)
 
     try:
-        result = await session.execute(select(Payment).where(Payment.id == payment_id))
+        result = await session.execute(
+            select(Payment).where(Payment.id == payment_id).with_for_update()
+        )
         payment = result.scalar_one_or_none()
         if not payment or payment.user_id != user.id:
             return JSONResponse({"ok": False, "error": "Платёж не найден"}, status_code=404)
         if payment.status == PaymentStatus.SUCCESS:
             return JSONResponse({"ok": False, "error": "Нельзя отменить уже оплаченный платёж"}, status_code=400)
+        if payment.status == PaymentStatus.FAILED:
+            return JSONResponse({"ok": True})  # уже отменён, идемпотентно
 
         payment.status = PaymentStatus.FAILED
+
+        # Возвращаем баланс, списанный при создании этого платежа
+        if payment.balance_spent > 0:
+            from core.promo_referral import add_balance
+            result = await session.execute(select(User).where(User.id == user.id).with_for_update())
+            fresh_user = result.scalar_one()
+            await add_balance(
+                fresh_user, payment.balance_spent, "payment_refund",
+                f"Возврат за отменённый платёж #{payment.id}", session,
+            )
+            payment.balance_spent = 0
+
         await session.commit()
         return JSONResponse({"ok": True})
     except Exception as e:
         await session.rollback()
         logger.error(f"Failed to cancel payment {payment_id}: {e}")
-        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+        return JSONResponse({"ok": False, "error": "Внутренняя ошибка сервера"}, status_code=500)

@@ -1,7 +1,7 @@
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update
 from datetime import datetime, timedelta
 import secrets
 from core.models import User, Subscription, Payment, PaymentStatus, SubscriptionStatus
@@ -36,8 +36,8 @@ async def cmd_buy(message: Message, user: User, session: AsyncSession):
 async def cb_buy_plan(callback: CallbackQuery, user: User, session: AsyncSession):
     plan_key = callback.data.split(":")[1]
     plan = await get_plan(session, plan_key)
-    if not plan:
-        await callback.answer("Неверный тариф")
+    if not plan or not plan.get("is_active", True):
+        await callback.answer("Тариф недоступен")
         return
 
     label = yoomoney.generate_label()
@@ -187,34 +187,55 @@ async def activate_subscription(user: User, payment: Payment, session: AsyncSess
 
 
 async def _apply_promo_usage(payment: Payment, session: AsyncSession):
-    """Отмечает факт использования промокода в статистике"""
+    """Отмечает факт использования промокода в статистике.
+    Инкремент uses_count делается атомарным UPDATE с условием по max_uses, чтобы
+    конкурентные оплаты, прошедшие валидацию одновременно, не превысили лимит."""
+    import logging
+    logger = logging.getLogger("bot.payments")
     try:
         from core.models import PromoCode, PromoCodeUsage
         promo_result = await session.execute(
             select(PromoCode).where(PromoCode.id == payment.promo_code_id)
         )
         promo = promo_result.scalar_one_or_none()
-        if promo:
-            usage = PromoCodeUsage(
-                promo_code_id=promo.id,
-                user_id=payment.user_id,
-                payment_id=payment.id,
-                discount_amount=payment.promo_discount,
+        if not promo:
+            return
+
+        result = await session.execute(
+            update(PromoCode)
+            .where(
+                PromoCode.id == promo.id,
+                (PromoCode.max_uses.is_(None)) | (PromoCode.uses_count < PromoCode.max_uses),
             )
-            promo.uses_count += 1
-            session.add(usage)
-            await session.commit()
+            .values(uses_count=PromoCode.uses_count + 1)
+        )
+        if result.rowcount == 0:
+            logger.warning(
+                f"Promo code {promo.id} max_uses reached by concurrent payments; "
+                f"payment {payment.id} discount already granted, usage not counted"
+            )
+
+        usage = PromoCodeUsage(
+            promo_code_id=promo.id,
+            user_id=payment.user_id,
+            payment_id=payment.id,
+            discount_amount=payment.promo_discount,
+        )
+        session.add(usage)
+        await session.commit()
     except Exception as e:
-        import logging
-        logging.getLogger("bot.payments").warning(f"_apply_promo_usage failed: {e}")
+        await session.rollback()
+        logger.warning(f"_apply_promo_usage failed: {e}")
 
 
 async def _process_referral(user: User, payment: Payment, session: AsyncSession):
     """Начисляет реферальные бонусы при первой покупке"""
+    import logging
+    logger = logging.getLogger("bot.payments")
     try:
         from core.promo_referral import process_referral_bonus
         await process_referral_bonus(user, payment, session)
         await session.commit()
     except Exception as e:
-        import logging
-        logging.getLogger("bot.payments").warning(f"_process_referral failed: {e}")
+        await session.rollback()
+        logger.warning(f"_process_referral failed: {e}")
