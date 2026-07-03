@@ -35,7 +35,8 @@ class User(Base):
     terms_accepted: Mapped[bool] = mapped_column(Boolean, default=False)
     balance: Mapped[int] = mapped_column(Integer, default=0)  # баланс в рублях
     referral_code: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True, index=True)
-    referred_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    # SET NULL, не CASCADE: удаление реферера не должно удалять пользователей, которых он привёл
+    referred_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     referral_bonus_paid: Mapped[bool] = mapped_column(Boolean, default=False)  # начислен ли бонус за реферала
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_seen: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -63,7 +64,7 @@ class Subscription(Base):
     __tablename__ = "subscriptions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     plan_key: Mapped[str] = mapped_column(String(10))  # 1m, 3m, 6m, 1y
     traffic_gb: Mapped[int] = mapped_column(Integer, default=50)  # 0 = безлимит
     status: Mapped[SubscriptionStatus] = mapped_column(SAEnum(SubscriptionStatus), default=SubscriptionStatus.PENDING)
@@ -88,7 +89,7 @@ class Payment(Base):
     __tablename__ = "payments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     plan_key: Mapped[str] = mapped_column(String(10))
     traffic_gb: Mapped[int] = mapped_column(Integer, default=50)  # 0 = безлимит
     amount: Mapped[int] = mapped_column(Integer)  # в рублях
@@ -96,13 +97,13 @@ class Payment(Base):
     label: Mapped[str] = mapped_column(String(64), unique=True, index=True)  # для ЮМани
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    renew_subscription_id: Mapped[int | None] = mapped_column(ForeignKey("subscriptions.id"), nullable=True)
+    renew_subscription_id: Mapped[int | None] = mapped_column(ForeignKey("subscriptions.id", ondelete="SET NULL"), nullable=True)
 
     # Скидки
     original_amount: Mapped[int] = mapped_column(Integer, default=0)  # цена до скидок
     promo_discount: Mapped[int] = mapped_column(Integer, default=0)   # скидка промокода (руб)
     balance_spent: Mapped[int] = mapped_column(Integer, default=0)    # списано с баланса (руб)
-    promo_code_id: Mapped[int | None] = mapped_column(ForeignKey("promo_codes.id"), nullable=True)
+    promo_code_id: Mapped[int | None] = mapped_column(ForeignKey("promo_codes.id", ondelete="SET NULL"), nullable=True)
 
     # Подарок: если задано - при активации создаётся не подписка покупателю,
     # а GiftCode, отправляемый на email получателя
@@ -150,7 +151,7 @@ class SupportTicket(Base):
     __tablename__ = "support_tickets"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     subject: Mapped[str] = mapped_column(String(200))
     status: Mapped[TicketStatus] = mapped_column(SAEnum(TicketStatus), default=TicketStatus.OPEN, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -164,7 +165,7 @@ class SupportMessage(Base):
     __tablename__ = "support_messages"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    ticket_id: Mapped[int] = mapped_column(ForeignKey("support_tickets.id"), index=True)
+    ticket_id: Mapped[int] = mapped_column(ForeignKey("support_tickets.id", ondelete="CASCADE"), index=True)
     is_from_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     author_name: Mapped[str | None] = mapped_column(String(100), nullable=True)  # имя админа, если ответ от поддержки
     text: Mapped[str] = mapped_column(Text)
@@ -195,7 +196,7 @@ class BalanceTransaction(Base):
     __tablename__ = "balance_transactions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     amount: Mapped[int] = mapped_column(Integer)  # положительный = зачисление, отрицательный = списание (руб)
     type: Mapped[str] = mapped_column(String(30))  # referral_bonus, promo_bonus, payment_spend
     description: Mapped[str] = mapped_column(String(300), default="")
@@ -224,9 +225,9 @@ class PromoCodeUsage(Base):
     __tablename__ = "promo_code_usages"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    promo_code_id: Mapped[int] = mapped_column(ForeignKey("promo_codes.id"), index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    payment_id: Mapped[int | None] = mapped_column(ForeignKey("payments.id"), nullable=True)
+    promo_code_id: Mapped[int] = mapped_column(ForeignKey("promo_codes.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    payment_id: Mapped[int | None] = mapped_column(ForeignKey("payments.id", ondelete="SET NULL"), nullable=True)
     discount_amount: Mapped[int] = mapped_column(Integer)  # сколько рублей скидки было применено
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
