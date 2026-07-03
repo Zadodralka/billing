@@ -248,8 +248,14 @@ class GiftCode(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
-    payment_id: Mapped[int] = mapped_column(ForeignKey("payments.id"))
-    buyer_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    # payment_id: CASCADE - если платёж-первоисточник удаляют (админ полностью зачищает
+    # покупателя), запись-подарок вместе с ним теряет смысл; сама Subscription получателя
+    # (если код уже погашен) при этом не трогается - у неё нет FK на gift_codes.
+    payment_id: Mapped[int] = mapped_column(ForeignKey("payments.id", ondelete="CASCADE"))
+    # buyer_user_id/redeemed_by_user_id/subscription_id: SET NULL - удаление покупателя,
+    # получателя или его подписки не должно быть заблокировано ссылкой из gift_codes,
+    # достаточно потерять эту часть аудита, а не мешать штатному удалению в админке.
+    buyer_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     recipient_email: Mapped[str] = mapped_column(String(255), index=True)
 
     plan_key: Mapped[str] = mapped_column(String(10))
@@ -262,7 +268,7 @@ class GiftCode(Base):
     status: Mapped[str] = mapped_column(String(20), default=GiftCodeStatus.ISSUED.value, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     redeemed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    redeemed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
-    subscription_id: Mapped[int | None] = mapped_column(ForeignKey("subscriptions.id"), nullable=True)
+    redeemed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    subscription_id: Mapped[int | None] = mapped_column(ForeignKey("subscriptions.id", ondelete="SET NULL"), nullable=True)
 
     buyer: Mapped["User"] = relationship(foreign_keys=[buyer_user_id])
