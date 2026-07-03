@@ -47,26 +47,32 @@ WELCOME_TEXT = """
 
 
 # ===== Вход/привязка через бота (диплинк t.me/<bot>?start=tglogin_XXXX) =====
-async def _confirm_login_token(token: str, message: Message):
+async def _confirm_login_token(token: str, tg_user, reply_target: Message):
     """Подтверждает токен входа/привязки в Redis и отвечает пользователю. Вызывается либо сразу
-    (если правила уже приняты раньше), либо после нажатия "Принимаю правила" для этого токена."""
-    tg_user = message.from_user
+    (если правила уже приняты раньше), либо после нажатия "Принимаю правила" для этого токена.
+
+    tg_user - именно aiogram-объект человека, которого подтверждаем (message.from_user для
+    обычного /start, но callback.from_user для колбэка с кнопки!). Если бы функция сама брала
+    reply_target.from_user - для колбэков это было бы сообщение, которое ОТПРАВИЛ БОТ, и
+    from_user там - сам бот, а не человек, нажавший кнопку. Именно так был баг: после принятия
+    правил в кабинет входил аккаунт бота вместо аккаунта пользователя.
+    reply_target - Message, на который отвечаем через .answer() (не обязательно от tg_user)."""
     data = await confirm_token(token, tg_user.id, tg_user.username, tg_user.first_name)
 
     if not data:
-        await message.answer(
+        await reply_target.answer(
             "⚠️ Эта ссылка для входа уже недействительна (устарела или уже использована).\n"
             "Вернитесь на сайт и запросите новую."
         )
         return
 
     if data.get("purpose") == "link":
-        await message.answer(
+        await reply_target.answer(
             "✅ <b>Telegram подтверждён!</b>\n\nВернитесь в браузер — привязка завершится автоматически.",
             parse_mode="HTML",
         )
     else:
-        await message.answer(
+        await reply_target.answer(
             "✅ <b>Вход подтверждён!</b>\n\nВернитесь в браузер — вы будете авторизованы автоматически.",
             parse_mode="HTML",
         )
@@ -89,7 +95,7 @@ async def _handle_login_deeplink(payload: str, message: Message, user: User, ses
         )
         return True
 
-    await _confirm_login_token(token, message)
+    await _confirm_login_token(token, message.from_user, message)
     return True
 
 
@@ -143,7 +149,7 @@ async def cb_accept_terms_login(callback: CallbackQuery, user: User, session: As
     await session.commit()
 
     await callback.message.edit_text("✅ <b>Правила приняты!</b>", parse_mode="HTML")
-    await _confirm_login_token(token, callback.message)
+    await _confirm_login_token(token, callback.from_user, callback.message)
     await callback.answer()
 
 
