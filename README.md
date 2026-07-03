@@ -1,76 +1,209 @@
-# VPN Bot — Remnawave + YooMoney
+# Unlock VPN — Telegram-бот + веб-кабинет для продажи VPN-подписок
 
-Полноценный проект для продажи VPN-подписок через Telegram-бота с веб-кабинетом.
+Полноценный сервис продажи VPN-доступа: Telegram-бот и веб-кабинет с единой базой
+пользователей, приём оплаты через ЮMoney, автоматическая выдача конфигов через
+Remnawave, баланс/промокоды/рефералка, подарочные подписки и админ-панель для
+управления всем этим без доступа к серверу.
 
 ## Стек
-- **Backend**: Python 3.11+, FastAPI, aiogram 3
-- **БД**: PostgreSQL + SQLAlchemy (async) + Alembic
-- **Оплата**: ЮМани (YooMoney)
-- **VPN-панель**: Remnawave API
-- **Веб**: Jinja2 + Bootstrap 5
-- **Авторизация**: Email (magic link) + Telegram Login Widget
 
-## Структура
+- **Backend**: Python 3.11, FastAPI, aiogram 3
+- **БД**: PostgreSQL + SQLAlchemy (async, asyncpg)
+- **Очереди/сессии бота**: Redis (FSM-хранилище aiogram)
+- **Оплата**: ЮMoney (HTTP-уведомления + проверка подписи и суммы)
+- **VPN-панель**: Remnawave API
+- **Веб**: Jinja2, без фреймворков на фронте (ванильный JS)
+- **Почта**: SMTP (magic-link вход, подарочные коды)
+- **Авторизация в кабинете**: Telegram Login Widget или email по ссылке (без пароля)
+- **Планировщик**: APScheduler — отключение истёкших подписок, чистка старых аккаунтов,
+  возврат баланса за зависшие неоплаченные счета
+
+## Функционал
+
+### Telegram-бот (клиент)
+- `/start`, принятие правил, приветствие
+- Покупка подписки: выбор тарифа, трафик (фиксированный объём или безлимит)
+- Оплата через ЮMoney прямо в чате
+- «Мои подписки» и «Мои конфиги» — конфиг VPN и QR-код для быстрого подключения
+- Промокоды и реферальная программа (бонус рефереру и приглашённому на баланс)
+- Тикеты поддержки — переписка с администратором прямо в боте
+- Глобальный обработчик ошибок — бот не «зависает» молча при сбое
+
+### Веб-кабинет (клиент)
+- Вход по Telegram Login Widget или по email (magic-link, без пароля)
+- Личный кабинет: активные/приостановленные подписки, прогресс срока действия, история платежей
+- Покупка и продление тарифов: промокоды, оплата с баланса (полностью или частично),
+  YooMoney для остатка
+- 🎁 **Подарочные подписки** — купить тариф в подарок по email. Получателю приходит
+  письмо с кодом активации; при переходе по ссылке он сразу авторизуется и активирует
+  подписку на своём аккаунте (отдельного письма для входа не требуется). Срок подписки
+  считается с момента активации, а не покупки
+- Реферальная программа — своя ссылка, статистика приглашённых, бонусы на баланс
+- Тикеты поддержки с историей переписки
+- База знаний — инструкции по подключению в виде markdown-статей
+- Мобильная адаптация: отдельная раскладка меню, увеличенные тач-таргеты, PWA-иконка
+  («Добавить на экран Домой»)
+
+### Админ-панель
+- Дашборд со сводной статистикой
+- **Пользователи** — поиск, бан/разбан, ручное начисление баланса, права администратора,
+  привязка email, удаление аккаунта
+- **Подписки** — полный список, ручное продление/отключение/удаление, привязка к
+  Remnawave-аккаунту
+- **Платежи** — история, ручная отмена незавершённых платежей с возвратом баланса
+- **Тарифы** — редактирование названия/цены/срока/трафика прямо из интерфейса,
+  включение/выключение тарифа, отметка «Популярный выбор»
+- **Промокоды** — создание, ограничение по числу использований и сроку действия,
+  статистика применений
+- **Поддержка** — ответы на тикеты клиентов
+- **Инструкции** — редактор markdown-статей с живым превью (санитизация через DOMPurify)
+- **Remnawave** — состояние VPN-панели
+
+### Безопасность
+- Проверка подписи и точной суммы (`withdraw_amount`) в уведомлениях ЮMoney — без этого
+  комиссия платёжной системы ломала бы сверку сумм
+- Защита от повторной обработки одного платежа (row-level lock на время активации)
+- Атомарные операции с балансом и лимитом использований промокода (без гонок при
+  параллельных оплатах)
+- CSRF-защита (проверка Origin/Referer + SameSite-cookie), Secure-cookie в проде
+- Rate limit на запрос magic-link писем
+- Бан пользователя блокирует доступ и в боте, и в кабинете
+- Экранирование пользовательского ввода в HTML-сообщениях бота
+
+## Структура проекта
+
 ```
-vpn-bot/
+vpn_shop_bot/
 ├── bot/
-│   ├── __init__.py
-│   ├── main.py              # Запуск бота
+│   ├── main.py                  # запуск бота, глобальный обработчик ошибок
 │   ├── handlers/
-│   │   ├── start.py
-│   │   ├── subscriptions.py
-│   │   └── payments.py
+│   │   ├── start.py             # /start, правила
+│   │   ├── subscriptions.py     # мои подписки/конфиги
+│   │   ├── payments.py          # покупка, активация подписки/подарка
+│   │   ├── support_user.py      # тикеты со стороны клиента
+│   │   └── support_admin.py     # тикеты со стороны администратора
 │   ├── keyboards/
-│   │   └── main.py
-│   └── middlewares/
-│       └── auth.py
+│   └── middlewares/              # авторизация пользователя, БД-сессия
 ├── web/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI приложение
+│   ├── main.py                  # FastAPI-приложение, CSRF-мидлварь
 │   ├── routers/
-│   │   ├── auth.py          # Email + Telegram auth
-│   │   ├── dashboard.py     # Кабинет пользователя
-│   │   ├── admin.py         # Админ-панель
-│   │   └── payments.py      # Вебхук ЮМани
-│   └── templates/
-│       ├── base.html
-│       ├── login.html
-│       ├── dashboard.html
-│       └── admin/
-│           ├── users.html
-│           └── subscriptions.html
+│   │   ├── auth.py              # вход (email/Telegram), require_user/require_admin
+│   │   ├── dashboard.py         # кабинет клиента, тарифы
+│   │   ├── gift.py              # покупка и погашение подарочных подписок
+│   │   ├── payments.py          # вебхук ЮMoney, создание/отмена платежей
+│   │   ├── referral.py          # реферальная программа
+│   │   ├── support.py           # тикеты клиента
+│   │   ├── docs.py              # база знаний (публичная часть)
+│   │   └── admin*.py            # админ-панель (users/subscriptions/payments/
+│   │                             #   plans/promo/support/docs/remnawave)
+│   ├── templates/
+│   │   ├── base.html            # общий layout (сайдбар, мобильное меню)
+│   │   ├── _plan_card.html       # общая карточка тарифа (макрос)
+│   │   ├── _plan_card_style.html
+│   │   ├── dashboard.html, plans.html, gift.html, gift_redeem.html, ...
+│   │   └── admin/                # шаблоны админ-панели
+│   └── static/
 ├── core/
-│   ├── config.py            # Настройки (.env)
-│   ├── database.py          # SQLAlchemy async
-│   ├── models.py            # ORM модели
-│   ├── remnawave.py         # Клиент Remnawave API
-│   └── yoomoney.py          # Клиент ЮМани
-├── migrations/              # Alembic
+│   ├── config.py                 # настройки из .env (pydantic-settings)
+│   ├── version.py                 # читает /VERSION, доступно в шаблонах как app_version
+│   ├── database.py                # SQLAlchemy async engine/session
+│   ├── models.py                  # ORM-модели (User, Subscription, Payment, GiftCode, ...)
+│   ├── plans.py                   # тарифы (хранятся в БД, редактируются из админки)
+│   ├── promo_referral.py          # промокоды, баланс, реферальные бонусы
+│   ├── remnawave.py                # клиент Remnawave API
+│   ├── yoomoney.py                 # клиент ЮMoney
+│   └── email.py                    # отправка писем (magic-link, подарки)
+├── scheduler.py                    # APScheduler: истёкшие подписки, зависшие платежи
+├── migrations/
+│   └── applied/                    # ручные SQL-миграции для обновления БД (см. ниже)
+├── VERSION                          # версия системы (правится вручную)
 ├── .env.example
 ├── docker-compose.yml
 ├── Dockerfile
 └── requirements.txt
 ```
 
-## Быстрый старт
+## Установка
 
-1. Скопируй `.env.example` → `.env` и заполни переменные
-2. `docker-compose up -d`
-3. `docker-compose exec app alembic upgrade head`
+### Требования
 
-## Переменные окружения
+- Docker и Docker Compose
+- Telegram-бот — токен из [@BotFather](https://t.me/BotFather)
+- Панель [Remnawave](https://remna.st/) с API-токеном
+- Кошелёк ЮMoney с включёнными HTTP-уведомлениями об оплате
+- SMTP-аккаунт для отправки писем (вход по email, подарочные коды)
 
-| Переменная | Описание |
-|---|---|
-| `BOT_TOKEN` | Токен Telegram-бота |
-| `DATABASE_URL` | PostgreSQL DSN |
-| `SECRET_KEY` | Секрет для JWT/сессий |
-| `YOOMONEY_RECEIVER` | Номер кошелька ЮМани |
-| `YOOMONEY_SECRET` | Секрет уведомлений ЮМани |
-| `REMNAWAVE_URL` | URL панели Remnawave |
-| `REMNAWAVE_TOKEN` | API токен Remnawave |
-| `SMTP_HOST` | SMTP для email |
-| `SMTP_USER` | Email отправителя |
-| `SMTP_PASS` | Пароль SMTP |
-| `WEBAPP_URL` | Публичный URL веб-кабинета |
-| `ADMIN_IDS` | Telegram ID админов (через запятую) |
+### Шаги
+
+1. Склонируйте репозиторий и перейдите в него:
+   ```bash
+   git clone https://github.com/Korstane/vpn_shop_bot.git
+   cd vpn_shop_bot
+   ```
+
+2. Создайте `.env` из примера и заполните переменные (таблица ниже):
+   ```bash
+   cp .env.example .env
+   ```
+
+3. Сгенерируйте `SECRET_KEY` (не короче 32 символов, иначе приложение откажется стартовать):
+   ```bash
+   python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+   ```
+
+4. Задайте `POSTGRES_PASSWORD` в `.env` — тот же пароль должен быть частью `DATABASE_URL`
+   (`postgresql+asyncpg://vpnbot:ПАРОЛЬ@db:5432/vpnbot`).
+
+5. Запустите:
+   ```bash
+   docker compose up -d --build
+   ```
+   При первом старте таблицы в БД создаются автоматически (SQLAlchemy `create_all`) —
+   вручную ничего накатывать не нужно.
+
+6. Настройте вебхук ЮMoney на `https://ВАШ_ДОМЕН/payment/webhook/yoomoney`
+   в настройках уведомлений кошелька.
+
+### Обновление действующей установки
+
+При `git pull` нового кода **пересоберите и перезапустите** контейнеры — `web`/`bot`
+запущены без hot-reload, простого `git pull` недостаточно:
+```bash
+git pull
+docker compose up -d --build
+```
+
+Если в обновлении появились новые файлы в `migrations/applied/*.sql` — накатите их
+на боевую БД вручную (это не Alembic-миграции, а обычные SQL-скрипты с
+`IF NOT EXISTS`/`IF EXISTS`, безопасно перезапускать):
+```bash
+psql "$DATABASE_URL" -f migrations/applied/имя_миграции.sql
+```
+
+### Переменные окружения
+
+| Переменная | Обязательна | Описание |
+|---|---|---|
+| `BOT_TOKEN` | да | Токен Telegram-бота |
+| `ADMIN_IDS` | да | Telegram ID администраторов через запятую |
+| `POSTGRES_PASSWORD` | да | Пароль Postgres в docker-compose — должен совпадать с паролем в `DATABASE_URL` |
+| `DATABASE_URL` | да | PostgreSQL DSN, напр. `postgresql+asyncpg://vpnbot:пароль@db:5432/vpnbot` |
+| `REDIS_URL` | да | Адрес Redis, напр. `redis://redis:6379/0` |
+| `SECRET_KEY` | да | Секрет для подписи веб-сессий (≥32 символов) |
+| `SESSION_HTTPS_ONLY` | нет (default `True`) | `False` только для локальной разработки без HTTPS |
+| `SESSION_MAX_AGE` | нет | Время жизни веб-сессии в секундах |
+| `YOOMONEY_RECEIVER` | да | Номер кошелька ЮMoney |
+| `YOOMONEY_SECRET` | да | Секрет HTTP-уведомлений ЮMoney |
+| `REMNAWAVE_URL` | да | URL панели Remnawave |
+| `REMNAWAVE_TOKEN` | да | API-токен Remnawave |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | да | Данные SMTP для отправки писем |
+| `WEBAPP_URL` | да | Публичный URL веб-кабинета (используется в ссылках писем, вебхуке) |
+| `PLAN_1M_PRICE`, `PLAN_3M_PRICE`, `PLAN_6M_PRICE`, `PLAN_1Y_PRICE` | нет | Стартовые цены тарифов — далее редактируются из админки |
+| `PLAN_*_UNLIMITED_EXTRA` | нет | Доплата за безлимитный трафик к каждому тарифу |
+| `REFERRAL_BONUS_REFERRER` / `REFERRAL_BONUS_REFERRED` | нет | Реферальные бонусы в рублях (по умолчанию 100/50) |
+
+### Версия системы
+
+Файл `VERSION` в корне репозитория — правьте вручную при значимых изменениях,
+чтобы не путаться, какой билд сейчас в проде. Видна в подвале сайдбара
+администраторам в веб-кабинете.
