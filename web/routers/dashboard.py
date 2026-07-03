@@ -1,15 +1,22 @@
-from fastapi import APIRouter, Request, Depends
-from fastapi.responses import HTMLResponse
+import re
+import secrets
+import logging
+from fastapi import APIRouter, Request, Depends, HTTPException, Form
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta
 from core.database import get_db
-from core.models import User, Subscription, Payment, SubscriptionStatus
+from core.models import User, Subscription, Payment, SubscriptionStatus, EmailToken
 from core.plans import get_active_plans, get_all_plans
 from core.version import APP_VERSION
-from web.routers.auth import require_user
+from core.telegram_login import create_token as create_tg_login_token, get_token_data as get_tg_login_data, consume_token as consume_tg_login_token
+from web.routers.auth import require_user, get_bot_username, _check_login_email_rate_limit
+
+logger = logging.getLogger(__name__)
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 router = APIRouter(prefix="/dashboard")
 templates = Jinja2Templates(directory="web/templates")
@@ -60,3 +67,74 @@ async def plans_page(request: Request, user: User = Depends(require_user), sessi
         "user": user,
         "plans": plans,
     })
+
+
+# ───────────── Привязка Telegram/email к текущему аккаунту ─────────────
+
+@router.post("/link-telegram/start")
+async def link_telegram_start(user: User = Depends(require_user)):
+    if user.telegram_id:
+        raise HTTPException(400, "Telegram уже привязан к этому аккаунту")
+    bot_username = await get_bot_username()
+    if not bot_username:
+        raise HTTPException(503, "Бот временно недоступен, попробуйте позже")
+    token = await create_tg_login_token(purpose="link", user_id=user.id)
+    return {"deep_link": f"https://t.me/{bot_username}?start=tglogin_{token}"}
+
+
+@router.get("/link-telegram/status/{token}")
+async def link_telegram_status(token: str, user: User = Depends(require_user), session: AsyncSession = Depends(get_db)):
+    data = await get_tg_login_data(token)
+    if not data:
+        return {"status": "expired"}
+    if data.get("status") != "confirmed":
+        return {"status": "pending"}
+    if data.get("user_id") != user.id:
+        # Токен создавался для другой сессии - не должно происходить в норме, но не доверяем чужому подтверждению
+        return {"status": "error", "error": "Токен принадлежит другой сессии"}
+
+    tg_id = data["telegram_id"]
+    existing = await session.execute(select(User).where(User.telegram_id == tg_id))
+    existing_user = existing.scalar_one_or_none()
+    if existing_user and existing_user.id != user.id:
+        await consume_tg_login_token(token)
+        return {"status": "error", "error": "Этот Telegram уже привязан к другому аккаунту. Обратитесь в поддержку."}
+
+    result = await session.execute(select(User).where(User.id == user.id))
+    fresh_user = result.scalar_one()
+    fresh_user.telegram_id = tg_id
+    fresh_user.telegram_username = data.get("username")
+    await session.commit()
+    await consume_tg_login_token(token)
+    return {"status": "confirmed"}
+
+
+@router.post("/link-email")
+async def link_email(user: User = Depends(require_user), email: str = Form(...), session: AsyncSession = Depends(get_db)):
+    if user.email:
+        raise HTTPException(400, "Email уже привязан к этому аккаунту")
+
+    email = email.strip().lower()
+    if not EMAIL_RE.match(email):
+        raise HTTPException(400, "Введите корректный email")
+
+    existing = await session.execute(select(User).where(User.email == email))
+    if existing.scalar_one_or_none():
+        raise HTTPException(400, "Этот email уже привязан к другому аккаунту")
+
+    if not await _check_login_email_rate_limit(email):
+        raise HTTPException(429, "Слишком много запросов для этого email. Попробуйте позже.")
+
+    token = secrets.token_urlsafe(32)
+    email_token = EmailToken(email=email, token=token, purpose="link", link_user_id=user.id)
+    session.add(email_token)
+    await session.commit()
+
+    from core.email import send_magic_link
+    try:
+        await send_magic_link(email, token)
+    except Exception as e:
+        logger.error(f"link_email: failed to send confirmation to {email}: {e}")
+        raise HTTPException(500, "Не удалось отправить письмо, попробуйте позже")
+
+    return JSONResponse({"ok": True, "message": f"Письмо с подтверждением отправлено на {email}"})

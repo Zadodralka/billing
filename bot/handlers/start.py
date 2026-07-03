@@ -1,11 +1,12 @@
 from html import escape
 from aiogram import Router, F
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, CommandObject
 from aiogram.types import Message, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from core.models import User
 from core.config import settings
+from core.telegram_login import confirm_token
 from bot.keyboards.main import terms_keyboard, main_menu, back_to_menu
 
 router = Router()
@@ -45,9 +46,42 @@ WELCOME_TEXT = """
 """.strip()
 
 
+# ===== Вход/привязка через бота (диплинк t.me/<bot>?start=tglogin_XXXX) =====
+async def _handle_login_deeplink(payload: str, message: Message) -> bool:
+    """Возвращает True, если payload был токеном входа/привязки и уже обработан."""
+    if not payload.startswith("tglogin_"):
+        return False
+
+    token = payload[len("tglogin_"):]
+    tg_user = message.from_user
+    data = await confirm_token(token, tg_user.id, tg_user.username, tg_user.first_name)
+
+    if not data:
+        await message.answer(
+            "⚠️ Эта ссылка для входа уже недействительна (устарела или уже использована).\n"
+            "Вернитесь на сайт и запросите новую."
+        )
+        return True
+
+    if data.get("purpose") == "link":
+        await message.answer(
+            "✅ <b>Telegram подтверждён!</b>\n\nВернитесь в браузер — привязка завершится автоматически.",
+            parse_mode="HTML",
+        )
+    else:
+        await message.answer(
+            "✅ <b>Вход подтверждён!</b>\n\nВернитесь в браузер — вы будете авторизованы автоматически.",
+            parse_mode="HTML",
+        )
+    return True
+
+
 # ===== /start =====
 @router.message(CommandStart())
-async def cmd_start(message: Message, user: User, session: AsyncSession):
+async def cmd_start(message: Message, command: CommandObject, user: User, session: AsyncSession):
+    if command.args and await _handle_login_deeplink(command.args, message):
+        return
+
     name = escape(message.from_user.first_name or "друг")
 
     # Новый пользователь или не принял правила — показываем правила
