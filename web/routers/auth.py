@@ -13,6 +13,7 @@ from core.models import User, EmailToken
 from core.email import send_magic_link
 from core.config import settings
 from core.version import APP_VERSION
+from core.telegram_login import create_token as create_tg_login_token, get_token_data as get_tg_login_data, consume_token as consume_tg_login_token
 
 logger = logging.getLogger("auth")
 
@@ -175,6 +176,37 @@ async def verify_email(token: str, request: Request, session: AsyncSession = Dep
         })
 
     email_token.used = True
+
+    if email_token.purpose == "link":
+        # Привязка email к уже существующему (обычно Telegram-) аккаунту, а не обычный вход
+        target_result = await session.execute(select(User).where(User.id == email_token.link_user_id))
+        target_user = target_result.scalar_one_or_none()
+        if not target_user:
+            await session.commit()
+            return templates.TemplateResponse(request, "login.html", {
+                "error": "Аккаунт для привязки email не найден.",
+                "bot_username": bot_username,
+                "webapp_url": settings.webapp_url,
+            })
+
+        conflict = await session.execute(
+            select(User).where(User.email == email_token.email, User.id != target_user.id)
+        )
+        if conflict.scalar_one_or_none():
+            await session.commit()
+            return templates.TemplateResponse(request, "login.html", {
+                "error": "Этот email уже привязан к другому аккаунту.",
+                "bot_username": bot_username,
+                "webapp_url": settings.webapp_url,
+            })
+
+        target_user.email = email_token.email
+        target_user.last_seen = datetime.utcnow()
+        await session.commit()
+
+        request.session["user_id"] = target_user.id
+        return RedirectResponse("/dashboard?linked=email")
+
     result = await session.execute(select(User).where(User.email == email_token.email))
     user = result.scalar_one_or_none()
     if not user:
@@ -185,6 +217,40 @@ async def verify_email(token: str, request: Request, session: AsyncSession = Dep
 
     request.session["user_id"] = user.id
     return RedirectResponse("/dashboard")
+
+
+async def _find_or_create_telegram_user(
+    tg_id: int, username: str | None, request: Request, session: AsyncSession
+) -> User:
+    """Общая логика для входа через JS-виджет и через диплинк в бота: находит пользователя
+    по telegram_id, применяет отложенный реферальный код (pending_ref) при первой регистрации,
+    синхронизирует is_admin с ADMIN_IDS.
+
+    Реферальный код применяется не только при создании новой записи, но и если она уже
+    существует, но ещё без referred_by_id: при входе через бот-диплинк пользователь сначала
+    пишет боту /start, и AuthMiddleware бота успевает молча создать голую запись User ещё
+    до того, как веб дойдёт до этой функции - иначе pending_ref из сессии браузера потерялся бы."""
+    result = await session.execute(select(User).where(User.telegram_id == tg_id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        user = User(telegram_id=tg_id, telegram_username=username, is_admin=tg_id in settings.admin_ids)
+        session.add(user)
+    else:
+        user.telegram_username = username
+        user.last_seen = datetime.utcnow()
+        user.is_admin = tg_id in settings.admin_ids
+
+    pending_ref = request.session.pop("pending_ref", None)
+    if pending_ref and not user.referred_by_id:
+        ref_result = await session.execute(select(User).where(User.referral_code == pending_ref))
+        ref_user = ref_result.scalar_one_or_none()
+        if ref_user and ref_user.telegram_id != tg_id:
+            user.referred_by_id = ref_user.id
+
+    await session.commit()
+    await session.refresh(user)
+    return user
 
 
 @router.get("/telegram")
@@ -203,36 +269,35 @@ async def telegram_auth(request: Request, session: AsyncSession = Depends(get_db
         raise HTTPException(403, "Auth data expired")
 
     tg_id = int(params["id"])
-    result = await session.execute(select(User).where(User.telegram_id == tg_id))
-    user = result.scalar_one_or_none()
-
-    if not user:
-        referred_by_id = None
-        pending_ref = request.session.get("pending_ref")
-        if pending_ref:
-            ref_result = await session.execute(select(User).where(User.referral_code == pending_ref))
-            ref_user = ref_result.scalar_one_or_none()
-            if ref_user and ref_user.telegram_id != tg_id:
-                referred_by_id = ref_user.id
-            request.session.pop("pending_ref", None)
-
-        user = User(
-            telegram_id=tg_id,
-            telegram_username=params.get("username"),
-            is_admin=tg_id in settings.admin_ids,
-            referred_by_id=referred_by_id,
-        )
-        session.add(user)
-    else:
-        user.telegram_username = params.get("username")
-        user.last_seen = datetime.utcnow()
-        user.is_admin = tg_id in settings.admin_ids
-
-    await session.commit()
-    await session.refresh(user)
+    user = await _find_or_create_telegram_user(tg_id, params.get("username"), request, session)
 
     request.session["user_id"] = user.id
     return RedirectResponse("/dashboard")
+
+
+@router.post("/telegram-login/start")
+async def telegram_login_start():
+    """Вход через бота вместо JS-виджета: не спрашивает номер телефона, т.к. авторизация
+    целиком проходит через уже залогиненный Telegram-клиент пользователя (см. core/telegram_login.py)."""
+    bot_username = await get_bot_username()
+    if not bot_username:
+        raise HTTPException(503, "Бот временно недоступен, попробуйте позже")
+    token = await create_tg_login_token(purpose="login")
+    return {"deep_link": f"https://t.me/{bot_username}?start=tglogin_{token}"}
+
+
+@router.get("/telegram-login/status/{token}")
+async def telegram_login_status(token: str, request: Request, session: AsyncSession = Depends(get_db)):
+    data = await get_tg_login_data(token)
+    if not data:
+        return {"status": "expired"}
+    if data.get("status") != "confirmed":
+        return {"status": "pending"}
+
+    user = await _find_or_create_telegram_user(data["telegram_id"], data.get("username"), request, session)
+    await consume_tg_login_token(token)
+    request.session["user_id"] = user.id
+    return {"status": "confirmed", "redirect": "/dashboard"}
 
 
 @router.get("/logout")

@@ -57,6 +57,13 @@
         }
         button:hover { background: #34c878; }
         .hint { text-align: center; color: var(--muted); font-size: .76rem; margin-top: .7rem; }
+        .btn-outline {
+            background: transparent; border: 1px solid var(--border); color: var(--text);
+            display: flex; align-items: center; justify-content: center; gap: .5rem;
+        }
+        .btn-outline:hover { background: var(--panel-2); }
+        .btn-outline:disabled { opacity: .6; cursor: not-allowed; }
+        #tgBotLoginStatus { text-align: center; font-size: .78rem; color: var(--muted); margin-top: .6rem; min-height: 1.1em; }
     </style>
 </head>
 <body>
@@ -70,7 +77,6 @@
 
     {% if bot_username %}
     <div id="telegram-login-wrap"></div>
-    <div class="divider">или</div>
     <script>
         (function() {
             var s = document.createElement('script');
@@ -84,6 +90,13 @@
             document.getElementById('telegram-login-wrap').appendChild(s);
         })();
     </script>
+
+    <button type="button" class="btn-outline" id="tgBotLoginBtn" onclick="startTelegramBotLogin()">
+        Войти через Telegram-бота (без номера телефона)
+    </button>
+    <div id="tgBotLoginStatus"></div>
+
+    <div class="divider">или</div>
     {% endif %}
 
     <form method="POST" action="/auth/login/email">
@@ -93,5 +106,52 @@
         <p class="hint">Мы пришлём письмо с кнопкой входа — без пароля</p>
     </form>
 </div>
+<script>
+let tgLoginPollInterval = null;
+
+async function startTelegramBotLogin() {
+    const btn = document.getElementById('tgBotLoginBtn');
+    const statusEl = document.getElementById('tgBotLoginStatus');
+    btn.disabled = true;
+    statusEl.textContent = 'Открываем Telegram…';
+
+    let data;
+    try {
+        const res = await fetch('/auth/telegram-login/start', { method: 'POST' });
+        if (!res.ok) throw new Error();
+        data = await res.json();
+    } catch (e) {
+        statusEl.textContent = 'Не удалось начать вход, попробуйте позже';
+        btn.disabled = false;
+        return;
+    }
+
+    window.open(data.deep_link, '_blank');
+    const token = data.deep_link.split('start=tglogin_')[1];
+    statusEl.textContent = 'Подтвердите вход в открывшемся чате с ботом…';
+
+    if (tgLoginPollInterval) clearInterval(tgLoginPollInterval);
+    const deadline = Date.now() + 9 * 60 * 1000;
+    tgLoginPollInterval = setInterval(async () => {
+        if (Date.now() > deadline) {
+            clearInterval(tgLoginPollInterval);
+            statusEl.textContent = 'Время ожидания истекло, попробуйте снова';
+            btn.disabled = false;
+            return;
+        }
+        const check = await fetch('/auth/telegram-login/status/' + token);
+        const status = await check.json();
+        if (status.status === 'confirmed') {
+            clearInterval(tgLoginPollInterval);
+            statusEl.textContent = '✅ Вход подтверждён, переходим…';
+            window.location.href = status.redirect || '/dashboard';
+        } else if (status.status === 'expired') {
+            clearInterval(tgLoginPollInterval);
+            statusEl.textContent = 'Ссылка истекла, попробуйте снова';
+            btn.disabled = false;
+        }
+    }, 2000);
+}
+</script>
 </body>
 </html>

@@ -158,6 +158,51 @@
     <a href="/dashboard/plans" class="btn btn-accent"><i class="bi bi-plus-lg"></i> Купить подписку</a>
 </div>
 
+{% if not user.email or not user.telegram_id %}
+<div class="card" style="padding:1.1rem 1.3rem;margin-bottom:1.5rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.8rem;">
+        <div>
+            <div style="color:#fff;font-weight:700;font-size:.92rem;margin-bottom:.2rem;">Способы входа</div>
+            <div style="color:var(--muted);font-size:.82rem;">Привяжите оба способа, чтобы заходить и по почте, и через Telegram</div>
+        </div>
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
+            {% if user.telegram_id %}
+                <span class="badge badge-on"><i class="bi bi-telegram"></i> Telegram привязан</span>
+            {% else %}
+                <button type="button" class="btn btn-outline-1 btn-sm" id="linkTelegramBtn" onclick="startLinkTelegram()">
+                    <i class="bi bi-telegram"></i> Привязать Telegram
+                </button>
+            {% endif %}
+            {% if user.email %}
+                <span class="badge badge-on"><i class="bi bi-envelope"></i> {{ user.email }}</span>
+            {% else %}
+                <button type="button" class="btn btn-outline-1 btn-sm" onclick="openModal('linkEmailModal')">
+                    <i class="bi bi-envelope"></i> Привязать email
+                </button>
+            {% endif %}
+        </div>
+    </div>
+    <div id="linkTelegramStatus" style="font-size:.8rem;margin-top:.6rem;"></div>
+</div>
+
+<div class="modal-overlay" id="linkEmailModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Привязать email</h3>
+            <button type="button" class="modal-close" onclick="closeModal('linkEmailModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c">
+            <label class="form-label">Email адрес</label>
+            <input type="email" id="linkEmailInput" placeholder="your@email.com" style="margin-bottom:.8rem;">
+            <div id="linkEmailStatus" style="font-size:.82rem;min-height:1.2em;margin-bottom:.6rem;"></div>
+            <button type="button" class="btn btn-accent" style="width:100%;" onclick="submitLinkEmail()">
+                Отправить письмо для подтверждения
+            </button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% set all_visible_subs = active_subs + paused_subs %}
 
 {% if all_visible_subs %}
@@ -434,6 +479,89 @@ function startPolling(label) {
         const status = await check.json();
         if (status.paid) { clearInterval(paymentPollInterval); location.reload(); }
     }, 8000);
+}
+
+let linkTgPollInterval = null;
+
+async function startLinkTelegram() {
+    const btn = document.getElementById('linkTelegramBtn');
+    const statusEl = document.getElementById('linkTelegramStatus');
+    btn.disabled = true;
+    statusEl.textContent = 'Открываем Telegram…';
+    statusEl.style.color = 'var(--muted)';
+
+    let data;
+    try {
+        const res = await fetch('/dashboard/link-telegram/start', { method: 'POST' });
+        data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Не удалось начать привязку');
+    } catch (e) {
+        statusEl.textContent = '❌ ' + e.message;
+        statusEl.style.color = '#ef5b5b';
+        btn.disabled = false;
+        return;
+    }
+
+    window.open(data.deep_link, '_blank');
+    const token = data.deep_link.split('start=tglogin_')[1];
+    statusEl.textContent = 'Подтвердите в открывшемся чате с ботом…';
+
+    if (linkTgPollInterval) clearInterval(linkTgPollInterval);
+    const deadline = Date.now() + 9 * 60 * 1000;
+    linkTgPollInterval = setInterval(async () => {
+        if (Date.now() > deadline) {
+            clearInterval(linkTgPollInterval);
+            statusEl.textContent = 'Время ожидания истекло, попробуйте снова';
+            btn.disabled = false;
+            return;
+        }
+        const check = await fetch('/dashboard/link-telegram/status/' + token);
+        const status = await check.json();
+        if (status.status === 'confirmed') {
+            clearInterval(linkTgPollInterval);
+            statusEl.textContent = '✅ Telegram привязан!';
+            statusEl.style.color = 'var(--accent)';
+            setTimeout(() => location.reload(), 900);
+        } else if (status.status === 'expired') {
+            clearInterval(linkTgPollInterval);
+            statusEl.textContent = 'Ссылка истекла, попробуйте снова';
+            btn.disabled = false;
+        } else if (status.status === 'error') {
+            clearInterval(linkTgPollInterval);
+            statusEl.textContent = '❌ ' + status.error;
+            statusEl.style.color = '#ef5b5b';
+            btn.disabled = false;
+        }
+    }, 2000);
+}
+
+async function submitLinkEmail() {
+    const input = document.getElementById('linkEmailInput');
+    const statusEl = document.getElementById('linkEmailStatus');
+    const email = input.value.trim();
+    if (!email) {
+        statusEl.textContent = 'Введите email';
+        statusEl.style.color = '#ef5b5b';
+        return;
+    }
+    statusEl.textContent = 'Отправляем…';
+    statusEl.style.color = 'var(--muted)';
+    try {
+        const formData = new FormData();
+        formData.append('email', email);
+        const res = await fetch('/dashboard/link-email', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+            statusEl.textContent = '✅ ' + data.message;
+            statusEl.style.color = 'var(--accent)';
+        } else {
+            statusEl.textContent = '❌ ' + (data.detail || 'Не удалось отправить письмо');
+            statusEl.style.color = '#ef5b5b';
+        }
+    } catch (e) {
+        statusEl.textContent = '❌ Сетевая ошибка';
+        statusEl.style.color = '#ef5b5b';
+    }
 }
 
 document.addEventListener('click', async function(e) {

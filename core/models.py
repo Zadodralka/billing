@@ -122,6 +122,12 @@ class EmailToken(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     used: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # purpose="login" (по умолчанию) - обычный вход по magic-link, ищет/создаёт пользователя по email.
+    # purpose="link" - привязка email к уже существующему аккаунту (link_user_id), используется когда
+    # пользователь заходил раньше только через Telegram и хочет добавить вход по почте.
+    purpose: Mapped[str] = mapped_column(String(20), default="login")
+    link_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+
 
 class PlanSetting(Base):
     """Редактируемые цены тарифов (хранятся в БД, можно менять прямо из админки)"""
