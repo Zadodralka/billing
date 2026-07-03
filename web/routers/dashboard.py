@@ -8,10 +8,12 @@ from datetime import datetime, timedelta
 from core.database import get_db
 from core.models import User, Subscription, Payment, SubscriptionStatus
 from core.plans import get_active_plans, get_all_plans
+from core.version import APP_VERSION
 from web.routers.auth import require_user
 
 router = APIRouter(prefix="/dashboard")
 templates = Jinja2Templates(directory="web/templates")
+templates.env.globals["app_version"] = APP_VERSION
 
 
 @router.get("", response_class=HTMLResponse)

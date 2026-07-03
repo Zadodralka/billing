@@ -10,12 +10,14 @@ from core.database import get_db
 from core.models import User, Payment, PaymentStatus, GiftCode, GiftCodeStatus
 from core.plans import get_active_plans, get_plan
 from core.yoomoney import yoomoney
+from core.version import APP_VERSION
 from web.routers.auth import require_user, get_current_user
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/gift")
 templates = Jinja2Templates(directory="web/templates")
+templates.env.globals["app_version"] = APP_VERSION
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 

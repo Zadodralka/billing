@@ -1,0 +1,12 @@
+{
+  "name": "Unlock VPN",
+  "short_name": "Unlock VPN",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0a0e14",
+  "theme_color": "#0a0e14",
+  "icons": [
+    { "src": "/static/img/logo.jpg", "sizes": "192x192", "type": "image/jpeg" },
+    { "src": "/static/img/logo.jpg", "sizes": "512x512", "type": "image/jpeg" }
+  ]
+}

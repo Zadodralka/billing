@@ -8,12 +8,14 @@ from core.database import get_db
 from core.models import User, Payment, PaymentStatus
 from core.yoomoney import yoomoney
 from core.config import settings
+from core.version import APP_VERSION
 from aiogram import Bot
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/payment")
 templates = Jinja2Templates(directory="web/templates")
+templates.env.globals["app_version"] = APP_VERSION
 
 
 @router.post("/webhook/yoomoney")

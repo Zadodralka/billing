@@ -12,6 +12,7 @@ import secrets
 from core.database import get_db
 from core.models import User, Subscription, Payment, SubscriptionStatus, PaymentStatus, PlanSetting
 from core.remnawave import remnawave
+from core.version import APP_VERSION
 from web.routers.auth import require_admin
 
 logger = logging.getLogger("admin")
@@ -19,6 +20,7 @@ logging.basicConfig(level=logging.INFO)
 
 router = APIRouter(prefix="/admin")
 templates = Jinja2Templates(directory="web/templates")
+templates.env.globals["app_version"] = APP_VERSION
 
 
 @router.get("", response_class=HTMLResponse)
