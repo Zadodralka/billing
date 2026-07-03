@@ -12,11 +12,13 @@ from core.database import get_db
 from core.models import User, EmailToken
 from core.email import send_magic_link
 from core.config import settings
+from core.version import APP_VERSION
 
 logger = logging.getLogger("auth")
 
 router = APIRouter(prefix="/auth")
 templates = Jinja2Templates(directory="web/templates")
+templates.env.globals["app_version"] = APP_VERSION
 
 _bot_username_cache = {"value": None}
 _redis_client = None

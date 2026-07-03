@@ -1,0 +1,40 @@
+{# Общая карточка тарифа - используется на /dashboard/plans и /gift, чтобы не дублировать
+   разметку и стили в двух местах. show_traffic скрывает переключатель трафика для подарков
+   (там всегда трафик по умолчанию тарифа - выбор трафика получателем не запрашивается). #}
+{% macro plan_card(key, plan, ref_plan, show_traffic, button_label, button_onclick) %}
+{% set monthly_equiv = (plan['price'] / (plan['days'] / 30)) %}
+{% set ref_monthly = (ref_plan['price'] / (ref_plan['days'] / 30)) if ref_plan and ref_plan['days'] else 0 %}
+{% set savings = ((1 - monthly_equiv / ref_monthly) * 100) | round | int if ref_monthly > 0 else 0 %}
+<div class="plan-card {% if plan.get('is_featured') %}featured{% endif %}">
+    {% if plan.get('is_featured') %}<div class="plan-ribbon"><i class="bi bi-star-fill"></i> Популярный выбор</div>{% endif %}
+    <div class="plan-body">
+        <div class="plan-name">{{ plan['name'] }}</div>
+        <div style="position:relative;text-align:center;">
+            <div class="plan-price" id="price-{{ key }}">{{ plan['price'] }}<span>₽</span></div>
+            <div id="price-original-{{ key }}" style="display:none;color:var(--muted);font-size:.85rem;text-decoration:line-through;margin-top:-.3rem;"></div>
+        </div>
+        {% if plan['days'] >= 60 %}
+        <div class="plan-permonth">≈{{ monthly_equiv | round | int }} ₽/мес</div>
+        {% endif %}
+        <div class="plan-duration">{{ plan['days'] }} дней доступа</div>
+        {% if savings > 0 %}
+        <div class="plan-savings"><i class="bi bi-graph-down-arrow"></i> Экономия {{ savings }}%</div>
+        {% endif %}
+
+        {% if show_traffic %}
+        <div class="traffic-toggle" data-plan="{{ key }}" data-base-price="{{ plan['price'] }}" data-extra="{{ plan['unlimited_extra'] }}">
+            <button type="button" class="active" data-traffic="{{ plan['traffic_gb'] }}" onclick="selectTraffic(this, '{{ key }}')">{{ plan['traffic_gb'] }} GB</button>
+            <button type="button" data-traffic="0" onclick="selectTraffic(this, '{{ key }}')">Безлимит</button>
+        </div>
+        {% else %}
+        <div class="plan-traffic-static">
+            <i class="bi bi-wifi"></i> {% if plan['traffic_gb'] == 0 %}Безлимит трафика{% else %}{{ plan['traffic_gb'] }} GB трафика{% endif %}
+        </div>
+        {% endif %}
+
+        <button class="btn {% if plan.get('is_featured') %}btn-accent{% else %}btn-outline-1{% endif %} plan-buy-btn" onclick="{{ button_onclick }}">
+            {{ button_label }}
+        </button>
+    </div>
+</div>
+{% endmacro %}

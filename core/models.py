@@ -18,6 +18,11 @@ class PaymentStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class GiftCodeStatus(str, enum.Enum):
+    ISSUED = "issued"      # оплачен, ждёт погашения получателем
+    REDEEMED = "redeemed"  # получатель уже активировал подписку по коду
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -98,6 +103,11 @@ class Payment(Base):
     promo_discount: Mapped[int] = mapped_column(Integer, default=0)   # скидка промокода (руб)
     balance_spent: Mapped[int] = mapped_column(Integer, default=0)    # списано с баланса (руб)
     promo_code_id: Mapped[int | None] = mapped_column(ForeignKey("promo_codes.id"), nullable=True)
+
+    # Подарок: если задано - при активации создаётся не подписка покупателю,
+    # а GiftCode, отправляемый на email получателя
+    is_gift: Mapped[bool] = mapped_column(Boolean, default=False)
+    gift_recipient_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="payments")
 
@@ -221,3 +231,44 @@ class PromoCodeUsage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     promo_code: Mapped["PromoCode"] = relationship(back_populates="usages")
+
+
+# ───────────── Подарочные подписки ─────────────
+
+class GiftCode(Base):
+    """
+    Код подарочной подписки. Создаётся при успешной оплате Payment(is_gift=True) -
+    план/трафик/срок снимаются на момент покупки (снимок, а не ссылка на PlanSetting),
+    чтобы последующее изменение или удаление тарифа в админке не сломало уже купленный
+    подарок. Погашается получателем по коду на /gift/redeem/{code} - код не привязан
+    к конкретному email получателя, обладание кодом достаточно для активации
+    (как у обычной подарочной карты).
+    """
+    __tablename__ = "gift_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    # payment_id: CASCADE - если платёж-первоисточник удаляют (админ полностью зачищает
+    # покупателя), запись-подарок вместе с ним теряет смысл; сама Subscription получателя
+    # (если код уже погашен) при этом не трогается - у неё нет FK на gift_codes.
+    payment_id: Mapped[int] = mapped_column(ForeignKey("payments.id", ondelete="CASCADE"))
+    # buyer_user_id/redeemed_by_user_id/subscription_id: SET NULL - удаление покупателя,
+    # получателя или его подписки не должно быть заблокировано ссылкой из gift_codes,
+    # достаточно потерять эту часть аудита, а не мешать штатному удалению в админке.
+    buyer_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    recipient_email: Mapped[str] = mapped_column(String(255), index=True)
+
+    plan_key: Mapped[str] = mapped_column(String(10))
+    plan_name: Mapped[str] = mapped_column(String(64))
+    days: Mapped[int] = mapped_column(Integer)
+    traffic_gb: Mapped[int] = mapped_column(Integer, default=50)
+
+    # Строка, а не SAEnum: избегаем истории с TicketStatus (рассинхрон нативного
+    # Postgres ENUM и модели) - GiftCodeStatus сам по себе str, сравнения работают как есть.
+    status: Mapped[str] = mapped_column(String(20), default=GiftCodeStatus.ISSUED.value, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    redeemed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    redeemed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    subscription_id: Mapped[int | None] = mapped_column(ForeignKey("subscriptions.id", ondelete="SET NULL"), nullable=True)
+
+    buyer: Mapped["User"] = relationship(foreign_keys=[buyer_user_id])

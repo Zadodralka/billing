@@ -1,16 +1,19 @@
+import string
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from datetime import datetime, timedelta
 import secrets
-from core.models import User, Subscription, Payment, PaymentStatus, SubscriptionStatus
+from core.models import User, Subscription, Payment, PaymentStatus, SubscriptionStatus, GiftCode, GiftCodeStatus
 from core.plans import get_active_plans, get_plan
 from core.yoomoney import yoomoney
 from core.remnawave import remnawave
 from bot.keyboards.main import payment_keyboard
 
 router = Router()
+
+GIFT_CODE_CHARS = string.ascii_uppercase + string.digits
 
 
 @router.message(F.text == "💳 Купить подписку")
@@ -100,10 +103,15 @@ async def cb_cancel(callback: CallbackQuery):
 
 async def activate_subscription(user: User, payment: Payment, session: AsyncSession):
     """Активация подписки после успешной оплаты (вызывается из вебхука).
+    Если payment.is_gift - деньги покупателя, но подписка никому из существующих
+    пользователей не создаётся: вместо этого выпускается GiftCode на email получателя.
     Если payment.renew_subscription_id задан - продлевает существующую подписку
     (тот же VPN-аккаунт, новая дата истечения). Иначе создаёт новую независимую подписку."""
     import logging
     logger = logging.getLogger("bot.payments")
+
+    if payment.is_gift:
+        return await _activate_gift(user, payment, session)
 
     plan = await get_plan(session, payment.plan_key)
     if not plan:
@@ -149,31 +157,10 @@ async def activate_subscription(user: User, payment: Payment, session: AsyncSess
         return sub, sub.config_link or ""
 
     # ===== Покупка новой независимой подписки =====
-    username = f"user_{user.id}_{secrets.token_hex(4)}"
-    rw_user = await remnawave.create_user(
-        username,
-        plan["days"],
-        traffic_limit_gb=traffic_gb,
-        telegram_id=user.telegram_id,
-        email=user.email,
-    )
-    remnawave_uuid = rw_user["uuid"]
-    config_data = rw_user if rw_user.get("subscriptionUrl") else await remnawave.get_user_config(remnawave_uuid)
-    config_link = config_data.get("subscriptionUrl") or config_data.get("link", "")
+    subscription, config_link = await create_new_vpn_subscription(user, payment.plan_key, plan["days"], traffic_gb, session)
 
-    subscription = Subscription(
-        user_id=user.id,
-        plan_key=payment.plan_key,
-        traffic_gb=traffic_gb,
-        status=SubscriptionStatus.ACTIVE,
-        starts_at=now,
-        expires_at=now + timedelta(days=plan["days"]),
-        remnawave_sub_id=remnawave_uuid,
-        config_link=config_link,
-    )
     payment.status = PaymentStatus.SUCCESS
     payment.paid_at = now
-    session.add(subscription)
     await session.commit()
 
     # Применяем промокод (отмечаем использование)
@@ -184,6 +171,100 @@ async def activate_subscription(user: User, payment: Payment, session: AsyncSess
     await _process_referral(user, payment, session)
 
     return subscription, config_link
+
+
+async def create_new_vpn_subscription(user: User, plan_key: str, days: int, traffic_gb: int, session: AsyncSession):
+    """
+    Создаёт новый независимый VPN-аккаунт в Remnawave и Subscription-запись для user.
+    Вынесено из activate_subscription() отдельной функцией, т.к. переиспользуется также
+    при погашении подарочного кода (там нет Payment - оплата уже прошла раньше, при покупке
+    подарка), где нужно ровно то же самое создание аккаунта без Payment-специфичной логики.
+    """
+    username = f"user_{user.id}_{secrets.token_hex(4)}"
+    rw_user = await remnawave.create_user(
+        username,
+        days,
+        traffic_limit_gb=traffic_gb,
+        telegram_id=user.telegram_id,
+        email=user.email,
+    )
+    remnawave_uuid = rw_user["uuid"]
+    config_data = rw_user if rw_user.get("subscriptionUrl") else await remnawave.get_user_config(remnawave_uuid)
+    config_link = config_data.get("subscriptionUrl") or config_data.get("link", "")
+
+    subscription = Subscription(
+        user_id=user.id,
+        plan_key=plan_key,
+        traffic_gb=traffic_gb,
+        status=SubscriptionStatus.ACTIVE,
+        starts_at=datetime.utcnow(),
+        expires_at=datetime.utcnow() + timedelta(days=days),
+        remnawave_sub_id=remnawave_uuid,
+        config_link=config_link,
+    )
+    session.add(subscription)
+    await session.commit()
+    return subscription, config_link
+
+
+def _generate_gift_code() -> str:
+    group = lambda: "".join(secrets.choice(GIFT_CODE_CHARS) for _ in range(4))
+    return f"{group()}-{group()}-{group()}"
+
+
+async def _activate_gift(user: User, payment: Payment, session: AsyncSession):
+    """Оформляет купленный подарок: выпускает GiftCode и отправляет письмо получателю.
+    Подписка покупателю не создаётся - её получит тот, кто погасит код на /gift/redeem."""
+    import logging
+    logger = logging.getLogger("bot.payments")
+
+    plan = await get_plan(session, payment.plan_key)
+    if not plan:
+        raise Exception(f"Тариф '{payment.plan_key}' не найден (был удалён после оплаты?)")
+
+    now = datetime.utcnow()
+    traffic_gb = payment.traffic_gb if payment.traffic_gb is not None else plan.get("traffic_gb", 50)
+
+    # Уникальность кода: коллизия почти невозможна (36^12 вариантов), но проверяем на всякий случай
+    for _ in range(5):
+        code = _generate_gift_code()
+        exists = await session.execute(select(GiftCode).where(GiftCode.code == code))
+        if not exists.scalar_one_or_none():
+            break
+    else:
+        raise Exception("Не удалось сгенерировать уникальный код подарка")
+
+    gift = GiftCode(
+        code=code,
+        payment_id=payment.id,
+        buyer_user_id=user.id,
+        recipient_email=payment.gift_recipient_email,
+        plan_key=payment.plan_key,
+        plan_name=plan["name"],
+        days=plan["days"],
+        traffic_gb=traffic_gb,
+        status=GiftCodeStatus.ISSUED.value,
+    )
+    session.add(gift)
+
+    payment.status = PaymentStatus.SUCCESS
+    payment.paid_at = now
+    await session.commit()
+
+    if payment.promo_code_id:
+        await _apply_promo_usage(payment, session)
+    await _process_referral(user, payment, session)
+
+    try:
+        from core.email import send_gift_email
+        await send_gift_email(payment.gift_recipient_email, code, plan["name"], plan["days"])
+    except Exception as e:
+        logger.error(
+            f"Failed to send gift email for payment {payment.id} (code={code}) "
+            f"to {payment.gift_recipient_email}: {e}. Code is valid and can be resent/shared manually."
+        )
+
+    return None, None
 
 
 async def _apply_promo_usage(payment: Payment, session: AsyncSession):

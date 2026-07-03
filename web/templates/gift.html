@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Подарить подписку{% endblock %}
+
+{% block extra_head %}
+{% include "_plan_card_style.html" %}
+{% endblock %}
+
+{% block content %}
+{% from "_plan_card.html" import plan_card %}
+<div class="topbar">
+    <div>
+        <h1>🎁 Подарить подписку</h1>
+        <div class="sub">Выберите тариф — получатель получит письмо с кодом активации на свой email</div>
+    </div>
+</div>
+
+<div class="card" style="padding:1.1rem 1.2rem;margin-bottom:1.3rem;">
+    <label class="form-label">Email получателя</label>
+    <input type="email" id="recipientEmail" placeholder="friend@example.com" style="max-width:420px;">
+    <div id="emailStatus" style="font-size:.78rem;margin-top:.4rem;color:var(--muted);">
+        Понадобится, чтобы отправить получателю подарочный код
+    </div>
+</div>
+
+{% set ref_plan = plans.values() | list | sort(attribute='days') | first %}
+<div class="plans-grid">
+    {% for key, plan in plans.items() %}
+        {{ plan_card(key, plan, ref_plan, false, 'Подарить', "giftPlan('" ~ key ~ "')") }}
+    {% endfor %}
+</div>
+
+<div class="modal-overlay" id="giftPayModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Оформление подарка</h3>
+            <button class="modal-close" onclick="closeModal('giftPayModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c" id="giftPayModalBody">
+            <div class="pay-loading">
+                <div class="spinner"></div>
+                <span style="color:var(--muted);font-size:.85rem;">Создаём счёт…</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let giftPollInterval = null;
+
+function isValidEmail(v) {
+    return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);
+}
+
+async function giftPlan(planKey) {
+    const emailInput = document.getElementById('recipientEmail');
+    const email = emailInput.value.trim().toLowerCase();
+    const statusEl = document.getElementById('emailStatus');
+    if (!isValidEmail(email)) {
+        statusEl.textContent = '❌ Введите корректный email получателя';
+        statusEl.style.color = '#ef5b5b';
+        emailInput.focus();
+        return;
+    }
+    statusEl.textContent = 'Понадобится, чтобы отправить получателю подарочный код';
+    statusEl.style.color = 'var(--muted)';
+
+    openModal('giftPayModal');
+    document.getElementById('giftPayModalBody').innerHTML = `<div class="pay-loading"><div class="spinner"></div><span style="color:var(--muted);font-size:.85rem;">Создаём счёт…</span></div>`;
+
+    const res = await fetch('/gift/create', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({plan_key: planKey, recipient_email: email})
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        document.getElementById('giftPayModalBody').innerHTML = `<div style="text-align:center;padding:1.5rem 0;color:var(--danger);">${err.detail || 'Не удалось создать платёж'}</div>`;
+        return;
+    }
+    const data = await res.json();
+
+    if (data.free) {
+        showGiftSent(data.recipient_email);
+        return;
+    }
+
+    document.getElementById('giftPayModalBody').innerHTML = `
+        <div class="pay-summary">
+            <div class="pname">${data.plan_name} · в подарок для ${data.recipient_email}</div>
+            <div class="pamount">${data.amount} ₽</div>
+        </div>
+        <a href="${data.payment_url}" target="_blank" class="pay-cta">Оплатить через ЮMoney</a>
+        <p class="pay-hint">Окно обновится автоматически после оплаты</p>`;
+    startGiftPolling(data.label, data.recipient_email);
+}
+
+function showGiftSent(email) {
+    if (giftPollInterval) clearInterval(giftPollInterval);
+    document.getElementById('giftPayModalBody').innerHTML = `
+        <div style="text-align:center;padding:1.5rem 0;">
+            <div style="font-size:2.2rem;margin-bottom:.8rem;">🎉</div>
+            <p style="color:#fff;font-weight:600;">Подарок оформлен!</p>
+            <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem;">Письмо с кодом активации отправлено на <strong style="color:#e2e8f0;">${email}</strong>.</p>
+            <a href="/dashboard" class="btn btn-accent" style="display:inline-block;">Перейти в кабинет</a>
+        </div>`;
+}
+
+function startGiftPolling(label, email) {
+    if (giftPollInterval) clearInterval(giftPollInterval);
+    const deadline = Date.now() + 5 * 60 * 1000;
+
+    giftPollInterval = setInterval(async () => {
+        if (Date.now() > deadline) {
+            clearInterval(giftPollInterval);
+            document.getElementById('giftPayModalBody').innerHTML = `
+                <div style="text-align:center;padding:1.5rem 0;">
+                    <div style="font-size:2rem;margin-bottom:.8rem;">⏳</div>
+                    <p style="color:#fff;font-weight:600;">Время ожидания истекло</p>
+                    <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem;">
+                        Если вы уже оплатили — письмо получателю придёт автоматически в течение нескольких минут.
+                    </p>
+                    <a href="/dashboard" class="btn btn-accent" style="display:inline-block;">Перейти в кабинет</a>
+                </div>`;
+            return;
+        }
+        const check = await fetch('/gift/status/' + label);
+        const status = await check.json();
+        if (status.paid) { clearInterval(giftPollInterval); showGiftSent(email); }
+    }, 8000);
+}
+</script>
+{% endblock %}

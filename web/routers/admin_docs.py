@@ -10,11 +10,13 @@ import logging
 import traceback
 from core.database import get_db
 from core.models import Article
+from core.version import APP_VERSION
 from web.routers.auth import require_admin, User
 
 logger = logging.getLogger("admin.docs")
 router = APIRouter(prefix="/admin/docs")
 templates = Jinja2Templates(directory="web/templates")
+templates.env.globals["app_version"] = APP_VERSION
 
 UPLOAD_DIR = "web/static/uploads/docs"
 ALLOWED_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}

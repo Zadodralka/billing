@@ -8,12 +8,14 @@ import logging
 from core.database import get_db
 from core.models import User, SupportTicket, SupportMessage, TicketStatus
 from core.support_notify import notify_admins_new_message
+from core.version import APP_VERSION
 from web.routers.auth import require_user
 
 logger = logging.getLogger("support")
 
 router = APIRouter(prefix="/dashboard/support")
 templates = Jinja2Templates(directory="web/templates")
+templates.env.globals["app_version"] = APP_VERSION
 
 
 @router.get("", response_class=HTMLResponse)

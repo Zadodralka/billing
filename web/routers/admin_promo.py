@@ -8,11 +8,13 @@ from datetime import datetime
 import logging, traceback
 from core.database import get_db
 from core.models import PromoCode, PromoCodeUsage
+from core.version import APP_VERSION
 from web.routers.auth import require_admin, User
 
 logger = logging.getLogger("admin.promo")
 router = APIRouter(prefix="/admin/promo")
 templates = Jinja2Templates(directory="web/templates")
+templates.env.globals["app_version"] = APP_VERSION
 
 
 @router.get("", response_class=HTMLResponse)

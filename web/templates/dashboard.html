@@ -80,7 +80,13 @@
 
 /* ── Кнопки в подвале карточки ── */
 .sub-card-footer { padding: .9rem 1.3rem; border-top: 1px solid var(--border); display: flex; gap: .6rem; }
-.sub-card-footer .btn { flex: 1; font-size: .82rem; padding: .55rem; }
+.sub-card-footer .btn { flex: 1; font-size: .82rem; padding: .7rem .55rem; }
+
+@media (max-width: 480px) {
+    /* На узких телефонах фиксированный minmax(300px) может вылезать за экран - даём сетке схлопнуться в одну колонку */
+    .subs-grid { grid-template-columns: 1fr; }
+    .sub-card-footer { flex-direction: column; }
+}
 
 /* ── Модалка конфига ── */
 .config-row { display: flex; gap: .5rem; }
