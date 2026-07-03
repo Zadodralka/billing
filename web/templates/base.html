@@ -92,13 +92,28 @@
         .btn-sm { padding: .36rem .75rem; font-size: .78rem; border-radius: 8px; }
         .btn-block { width: 100%; }
 
-        .form-control, .form-select, select, input[type=text], input[type=email] {
+        .form-control, .form-select, select, input[type=text], input[type=email], input[type=number] {
             background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
             border-radius: var(--radius-sm); font-size: .9rem; padding: .6rem .85rem; width: 100%; font-family: inherit;
         }
         .form-control:focus, select:focus, input:focus { outline: none; background: var(--panel-2); color: var(--text); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
         ::placeholder { color: var(--muted); }
         .form-label { font-size: .82rem; font-weight: 600; color: #9aa5ba; margin-bottom: .4rem; display: block; }
+
+        /* Тумблер-переключатель (вместо обычных чекбоксов в формах) */
+        .toggle-switch { position: relative; display: inline-block; width: 42px; height: 24px; flex-shrink: 0; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider {
+            position: absolute; inset: 0; background: var(--panel-3); border: 1px solid var(--border);
+            border-radius: 999px; cursor: pointer; transition: background .15s, border-color .15s;
+        }
+        .toggle-slider::before {
+            content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 2px;
+            background: #cbd3e0; border-radius: 50%; transition: transform .15s, background .15s;
+        }
+        .toggle-switch input:checked + .toggle-slider { background: var(--accent); border-color: var(--accent); }
+        .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); background: #06140c; }
+        .toggle-row { display: flex; align-items: center; gap: .65rem; cursor: pointer; color: #9aa5ba; font-size: .88rem; }
 
         .table-card { border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; }
         table { width: 100%; border-collapse: collapse; color: var(--text); }
@@ -178,9 +193,6 @@
             <a href="/dashboard/plans" class="nav-link sidebar-nav-item {% if request.url.path == '/dashboard/plans' %}active{% endif %}">
                 <i class="bi bi-credit-card"></i> Тарифы
             </a>
-            <a href="/dashboard/support" class="nav-link sidebar-nav-item {% if '/dashboard/support' in request.url.path %}active{% endif %}">
-                <i class="bi bi-life-preserver"></i> Поддержка
-            </a>
             <a href="/gift" class="nav-link sidebar-nav-item {% if request.url.path.startswith('/gift') %}active{% endif %}">
                 <i class="bi bi-gift-fill"></i> Подарить подписку
             </a>
@@ -190,6 +202,9 @@
             </a>
             <a href="/docs" class="nav-link sidebar-nav-item {% if '/docs' in request.url.path and '/admin' not in request.url.path %}active{% endif %}">
                 <i class="bi bi-book"></i> Инструкции
+            </a>
+            <a href="/dashboard/support" class="nav-link sidebar-nav-item {% if '/dashboard/support' in request.url.path %}active{% endif %}">
+                <i class="bi bi-life-preserver"></i> Поддержка
             </a>
         </div>
         {% if user and user.is_admin %}

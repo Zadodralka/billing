@@ -64,7 +64,9 @@
 /* ── Прогресс-бар времени ── */
 .sub-progress-wrap { margin-top: .25rem; }
 .sub-progress-label { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted); margin-bottom: .35rem; }
-.sub-progress-bar  { height: 4px; background: var(--panel-3); border-radius: 9px; overflow: hidden; }
+/* justify-content:flex-end держит закрашенную часть у правого края - по мере убывания
+   дней граница сдвигается слева направо, а не наоборот */
+.sub-progress-bar  { height: 4px; background: var(--panel-3); border-radius: 9px; overflow: hidden; display: flex; justify-content: flex-end; }
 .sub-progress-fill { height: 100%; border-radius: 9px; transition: width .3s; }
 .sub-progress-fill.green  { background: var(--accent); }
 .sub-progress-fill.orange { background: #f59e0b; }
@@ -123,6 +125,25 @@
 .renew-plan-btn .rp-name { font-weight: 600; color: #fff; }
 .renew-plan-btn .rp-days { color: var(--muted); font-size: .78rem; }
 .renew-plan-btn .rp-price { color: var(--accent); font-weight: 700; }
+
+/* ── Компактная история платежей (список вместо широкой таблицы - на телефоне
+   не нужно скроллить вбок) ── */
+.payments-list { border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; }
+.payment-row {
+    display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+    padding: .75rem 1.1rem; border-bottom: 1px solid var(--border); background: var(--panel);
+}
+.payment-row:last-child { border-bottom: none; }
+.payment-row:hover { background: rgba(255,255,255,.015); }
+.payment-row-main { min-width: 0; }
+.payment-row-plan { color: #fff; font-weight: 600; font-size: .87rem; }
+.payment-row-date { color: var(--muted); font-size: .73rem; margin-top: .1rem; }
+.payment-row-side { display: flex; align-items: center; gap: .55rem; flex-shrink: 0; }
+.payment-row-amount { font-family: 'JetBrains Mono', monospace; color: #fff; font-weight: 600; font-size: .87rem; white-space: nowrap; }
+@media (max-width: 480px) {
+    .payment-row { flex-wrap: wrap; padding: .7rem .9rem; }
+    .payment-row-side { width: 100%; justify-content: space-between; margin-top: .35rem; }
+}
 </style>
 {% endblock %}
 
@@ -269,7 +290,7 @@
                         <i class="bi bi-arrow-repeat"></i> Продлить эту подписку
                     </button>
                     <p style="color:var(--muted);font-size:.76rem;margin-top:.9rem;text-align:center;">
-                        Вставьте ссылку в VPN-клиент (v2rayNG, Hiddify, Streisand) или откройте на телефоне для автонастройки
+                        Вставьте ссылку в VPN-клиент (Happ, V2RayTun) или откройте на телефоне для автонастройки
                     </p>
                 </div>
             </div>
@@ -292,26 +313,25 @@
 
 {% if recent_payments %}
 <h2 class="section-title">История платежей</h2>
-<div class="table-card">
-    <div class="table-wrap">
-    <table>
-        <thead><tr><th>Дата</th><th>Тариф</th><th>Сумма</th><th>Статус</th></tr></thead>
-        <tbody>
-            {% for payment in recent_payments %}
-            <tr>
-                <td class="mono" style="color:var(--muted);font-size:.8rem;">{{ payment.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
-                <td>{{ all_plans.get(payment.plan_key, {}).get('name', payment.plan_key) }}</td>
-                <td class="mono">{{ payment.amount }} ₽</td>
-                <td>
-                    {% if payment.status.value == 'success' %}<span class="badge badge-on">Оплачен</span>
-                    {% elif payment.status.value == 'pending' %}<span class="badge badge-mid">Ожидание</span>
-                    {% else %}<span class="badge badge-neutral">Отменён</span>{% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="payments-list">
+    {% for payment in recent_payments %}
+    <div class="payment-row" id="payment-row-{{ payment.id }}">
+        <div class="payment-row-main">
+            <div class="payment-row-plan">{{ all_plans.get(payment.plan_key, {}).get('name', payment.plan_key) }}</div>
+            <div class="payment-row-date">{{ payment.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+        </div>
+        <div class="payment-row-side">
+            <div class="payment-row-amount">{{ payment.amount }} ₽</div>
+            {% if payment.status.value == 'success' %}<span class="badge badge-on">Оплачен</span>
+            {% elif payment.status.value == 'pending' %}
+                <span class="badge badge-mid">Ожидание</span>
+                <button type="button" class="btn btn-sm btn-danger-1 js-cancel-payment-btn" data-id="{{ payment.id }}">
+                    Отменить
+                </button>
+            {% else %}<span class="badge badge-neutral">Отменён</span>{% endif %}
+        </div>
     </div>
+    {% endfor %}
 </div>
 {% endif %}
 
@@ -415,5 +435,27 @@ function startPolling(label) {
         if (status.paid) { clearInterval(paymentPollInterval); location.reload(); }
     }, 8000);
 }
+
+document.addEventListener('click', async function(e) {
+    const cancelBtn = e.target.closest('.js-cancel-payment-btn');
+    if (!cancelBtn) return;
+    if (!confirm('Отменить этот платёж? Если вы уже оплатили — не отменяйте, подписка активируется автоматически.')) return;
+
+    cancelBtn.disabled = true;
+    const paymentId = cancelBtn.dataset.id;
+    try {
+        const res = await fetch('/payment/' + paymentId + '/cancel', { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+            location.reload();
+        } else {
+            alert(data.error || 'Не удалось отменить платёж');
+            cancelBtn.disabled = false;
+        }
+    } catch (err) {
+        alert('Сетевая ошибка: ' + err.message);
+        cancelBtn.disabled = false;
+    }
+});
 </script>
 {% endblock %}
