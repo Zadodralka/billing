@@ -26,6 +26,9 @@ def _magic_link_html(link: str) -> str:
     HTML-шаблон письма для входа через email.
     Использует таблицы вместо flexbox/grid — единственный надёжный способ
     добиться корректного отображения в почтовых клиентах (Gmail, Apple Mail, Outlook).
+    Светлая тема: тёмный фон в письмах многие клиенты (особенно Outlook/корпоративная
+    почта) рендерят с переопределёнными цветами текста, из-за чего текст становится
+    нечитаемым - светлый фон с тёмным текстом ведёт себя предсказуемо везде.
     """
     webapp_url = settings.webapp_url
 
@@ -37,13 +40,11 @@ def _magic_link_html(link: str) -> str:
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <title>Вход в Unlock VPN</title>
 <style>
-  /* Сброс для почтовых клиентов */
   body, table, td, p, a {{ margin: 0; padding: 0; border: 0; }}
   body {{ -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }}
   table {{ border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }}
   img {{ border: 0; display: block; outline: none; }}
 
-  /* Мобильная адаптация */
   @media screen and (max-width: 600px) {{
     .email-wrapper {{ width: 100% !important; }}
     .email-content {{ padding: 24px 16px !important; }}
@@ -52,20 +53,20 @@ def _magic_link_html(link: str) -> str:
   }}
 </style>
 </head>
-<body style="background-color: #0a0e14; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+<body style="background-color: #f1f4f8; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
 
 <!-- Внешняя обёртка -->
-<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #0a0e14; padding: 40px 16px;">
+<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #f1f4f8; padding: 40px 16px;">
   <tr>
     <td align="center">
 
       <!-- Карточка письма -->
       <table class="email-wrapper" width="520" cellpadding="0" cellspacing="0" role="presentation"
-             style="background-color: #12161f; border: 1px solid #232a38; border-radius: 16px; overflow: hidden;">
+             style="background-color: #ffffff; border: 1px solid #e3e8ef; border-radius: 16px; overflow: hidden;">
 
         <!-- Шапка с брендом -->
         <tr>
-          <td style="background: linear-gradient(135deg, #12161f 0%, #161b26 100%); border-bottom: 1px solid #232a38; padding: 28px 36px;">
+          <td style="background-color: #ffffff; border-bottom: 1px solid #e3e8ef; padding: 28px 36px;">
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
               <tr>
                 <td>
@@ -78,7 +79,7 @@ def _magic_link_html(link: str) -> str:
                              style="display: block; width: 44px; height: 44px; border-radius: 12px; object-fit: cover;">
                       </td>
                       <td style="padding-left: 12px; vertical-align: middle;">
-                        <span style="color: #ffffff; font-size: 18px; font-weight: 700; letter-spacing: -0.3px;">Unlock VPN</span>
+                        <span style="color: #14181f; font-size: 18px; font-weight: 700; letter-spacing: -0.3px;">Unlock VPN</span>
                       </td>
                     </tr>
                   </table>
@@ -92,7 +93,7 @@ def _magic_link_html(link: str) -> str:
         <tr>
           <td class="email-content" style="padding: 36px 36px 28px;">
 
-            <p style="color: #9aa5ba; font-size: 15px; line-height: 1.6; margin-bottom: 28px;">
+            <p style="color: #4b5565; font-size: 15px; line-height: 1.6; margin-bottom: 28px;">
               Нажмите кнопку ниже — она откроет личный кабинет автоматически, без пароля.
             </p>
 
@@ -101,7 +102,7 @@ def _magic_link_html(link: str) -> str:
               <tr>
                 <td align="center">
                   <a href="{link}" class="btn-link"
-                     style="display: inline-block; background-color: #3ddc84; color: #06140c;
+                     style="display: inline-block; background-color: #16a34a; color: #ffffff;
                             text-decoration: none; padding: 15px 40px; border-radius: 10px;
                             font-size: 16px; font-weight: 700; letter-spacing: -0.1px;">
                     Войти в кабинет →
@@ -113,17 +114,17 @@ def _magic_link_html(link: str) -> str:
             <!-- Разделитель -->
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom: 20px;">
               <tr>
-                <td style="border-top: 1px solid #232a38; font-size: 0;">&nbsp;</td>
+                <td style="border-top: 1px solid #e3e8ef; font-size: 0;">&nbsp;</td>
               </tr>
             </table>
 
             <!-- Запасная ссылка -->
-            <p style="color: #6b7689; font-size: 13px; margin-bottom: 8px;">
+            <p style="color: #7c8697; font-size: 13px; margin-bottom: 8px;">
               Если кнопка не работает — скопируйте ссылку вручную:
             </p>
             <div class="link-box"
-                 style="background-color: #0a0e14; border: 1px solid #232a38; border-radius: 8px;
-                        padding: 10px 14px; font-size: 12px; color: #6b7689;
+                 style="background-color: #f1f4f8; border: 1px solid #e3e8ef; border-radius: 8px;
+                        padding: 10px 14px; font-size: 12px; color: #4b5565;
                         word-break: break-all; font-family: 'Courier New', monospace;">
               {link}
             </div>
@@ -133,15 +134,15 @@ def _magic_link_html(link: str) -> str:
 
         <!-- Предупреждение об истечении -->
         <tr>
-          <td style="background-color: rgba(61,220,132,0.05); border-top: 1px solid #232a38; border-bottom: 1px solid #232a38; padding: 14px 36px;">
+          <td style="background-color: #f0fdf4; border-top: 1px solid #e3e8ef; border-bottom: 1px solid #e3e8ef; padding: 14px 36px;">
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
               <tr>
                 <td style="width: 20px; vertical-align: top; padding-top: 1px;">
-                  <span style="color: #3ddc84; font-size: 14px;">⏱</span>
+                  <span style="color: #16a34a; font-size: 14px;">⏱</span>
                 </td>
                 <td style="padding-left: 8px;">
-                  <p style="color: #9aa5ba; font-size: 13px; line-height: 1.5; margin: 0;">
-                    Ссылка действительна <strong style="color: #e2e8f0;">15 минут</strong>.
+                  <p style="color: #4b5565; font-size: 13px; line-height: 1.5; margin: 0;">
+                    Ссылка действительна <strong style="color: #14181f;">15 минут</strong>.
                     После входа вы останетесь в системе на 30 дней.
                   </p>
                 </td>
@@ -153,10 +154,10 @@ def _magic_link_html(link: str) -> str:
         <!-- Подвал -->
         <tr>
           <td style="padding: 22px 36px;">
-            <p style="color: #6b7689; font-size: 12px; line-height: 1.6; margin: 0;">
+            <p style="color: #97a1b0; font-size: 12px; line-height: 1.6; margin: 0;">
               Это письмо отправлено автоматически, потому что кто-то (скорее всего вы)
               запросил вход в кабинет на сайте
-              <a href="{webapp_url}" style="color: #6b7689; text-decoration: underline;">{webapp_url}</a>.
+              <a href="{webapp_url}" style="color: #97a1b0; text-decoration: underline;">{webapp_url}</a>.
               Если вы не запрашивали вход — просто проигнорируйте это письмо.
               Ваш аккаунт в безопасности.
             </p>
@@ -170,8 +171,8 @@ def _magic_link_html(link: str) -> str:
       <table width="520" cellpadding="0" cellspacing="0" role="presentation" style="margin-top: 20px;">
         <tr>
           <td align="center">
-            <p style="color: #3a4254; font-size: 11px; margin: 0;">
-              © Unlock VPN · <a href="{webapp_url}" style="color: #3a4254; text-decoration: none;">{webapp_url}</a>
+            <p style="color: #97a1b0; font-size: 11px; margin: 0;">
+              © Unlock VPN · <a href="{webapp_url}" style="color: #97a1b0; text-decoration: none;">{webapp_url}</a>
             </p>
           </td>
         </tr>
@@ -192,7 +193,7 @@ async def send_magic_link(email: str, token: str):
 
 
 def _gift_html(code: str, plan_name: str, days: int, redeem_url: str) -> str:
-    """HTML-письмо получателю подарочной подписки, в стиле _magic_link_html выше."""
+    """HTML-письмо получателю подарочной подписки, в стиле _magic_link_html выше (светлая тема)."""
     webapp_url = settings.webapp_url
 
     return f"""<!DOCTYPE html>
@@ -216,17 +217,17 @@ def _gift_html(code: str, plan_name: str, days: int, redeem_url: str) -> str:
   }}
 </style>
 </head>
-<body style="background-color: #0a0e14; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+<body style="background-color: #f1f4f8; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
 
-<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #0a0e14; padding: 40px 16px;">
+<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #f1f4f8; padding: 40px 16px;">
   <tr>
     <td align="center">
 
       <table class="email-wrapper" width="520" cellpadding="0" cellspacing="0" role="presentation"
-             style="background-color: #12161f; border: 1px solid #232a38; border-radius: 16px; overflow: hidden;">
+             style="background-color: #ffffff; border: 1px solid #e3e8ef; border-radius: 16px; overflow: hidden;">
 
         <tr>
-          <td style="background: linear-gradient(135deg, #12161f 0%, #161b26 100%); border-bottom: 1px solid #232a38; padding: 28px 36px;">
+          <td style="background-color: #ffffff; border-bottom: 1px solid #e3e8ef; padding: 28px 36px;">
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
               <tr>
                 <td>
@@ -239,7 +240,7 @@ def _gift_html(code: str, plan_name: str, days: int, redeem_url: str) -> str:
                              style="display: block; width: 44px; height: 44px; border-radius: 12px; object-fit: cover;">
                       </td>
                       <td style="padding-left: 12px; vertical-align: middle;">
-                        <span style="color: #ffffff; font-size: 18px; font-weight: 700; letter-spacing: -0.3px;">Unlock VPN</span>
+                        <span style="color: #14181f; font-size: 18px; font-weight: 700; letter-spacing: -0.3px;">Unlock VPN</span>
                       </td>
                     </tr>
                   </table>
@@ -253,19 +254,19 @@ def _gift_html(code: str, plan_name: str, days: int, redeem_url: str) -> str:
           <td class="email-content" style="padding: 36px 36px 28px;">
 
             <p style="font-size: 34px; margin-bottom: 6px;">🎁</p>
-            <h1 style="color: #ffffff; font-size: 20px; font-weight: 700; margin-bottom: 14px;">Вам подарили подписку!</h1>
+            <h1 style="color: #14181f; font-size: 20px; font-weight: 700; margin-bottom: 14px;">Вам подарили подписку!</h1>
 
-            <p style="color: #9aa5ba; font-size: 15px; line-height: 1.6; margin-bottom: 24px;">
+            <p style="color: #4b5565; font-size: 15px; line-height: 1.6; margin-bottom: 24px;">
               Кто-то оформил для вас подарочную подписку
-              <strong style="color: #e2e8f0;">«{plan_name}»</strong> на <strong style="color: #e2e8f0;">{days} дней</strong>.
-              Нажмите кнопку ниже, чтобы активировать её на своём аккаунте.
+              <strong style="color: #14181f;">«{plan_name}»</strong> на <strong style="color: #14181f;">{days} дней</strong>.
+              Нажмите кнопку ниже — она сразу откроет активацию подарка, входить отдельно не нужно.
             </p>
 
             <div class="code-box"
-                 style="background-color: #0a0e14; border: 1px dashed #3ddc84; border-radius: 10px;
+                 style="background-color: #f0fdf4; border: 1px dashed #16a34a; border-radius: 10px;
                         padding: 18px; text-align: center; margin-bottom: 24px;
                         font-family: 'Courier New', monospace; font-size: 24px; font-weight: 700;
-                        letter-spacing: 4px; color: #3ddc84;">
+                        letter-spacing: 4px; color: #15803d;">
               {code}
             </div>
 
@@ -273,7 +274,7 @@ def _gift_html(code: str, plan_name: str, days: int, redeem_url: str) -> str:
               <tr>
                 <td align="center">
                   <a href="{redeem_url}" class="btn-link"
-                     style="display: inline-block; background-color: #3ddc84; color: #06140c;
+                     style="display: inline-block; background-color: #16a34a; color: #ffffff;
                             text-decoration: none; padding: 15px 40px; border-radius: 10px;
                             font-size: 16px; font-weight: 700; letter-spacing: -0.1px;">
                     Активировать подарок →
@@ -286,15 +287,15 @@ def _gift_html(code: str, plan_name: str, days: int, redeem_url: str) -> str:
         </tr>
 
         <tr>
-          <td style="background-color: rgba(61,220,132,0.05); border-top: 1px solid #232a38; border-bottom: 1px solid #232a38; padding: 14px 36px;">
+          <td style="background-color: #f0fdf4; border-top: 1px solid #e3e8ef; border-bottom: 1px solid #e3e8ef; padding: 14px 36px;">
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
               <tr>
                 <td style="width: 20px; vertical-align: top; padding-top: 1px;">
-                  <span style="color: #3ddc84; font-size: 14px;">💬</span>
+                  <span style="color: #16a34a; font-size: 14px;">💬</span>
                 </td>
                 <td style="padding-left: 8px;">
-                  <p style="color: #9aa5ba; font-size: 13px; line-height: 1.5; margin: 0;">
-                    Для активации нужно будет войти по этому же email (без пароля — мы пришлём ссылку для входа).
+                  <p style="color: #4b5565; font-size: 13px; line-height: 1.5; margin: 0;">
+                    Кнопка сразу авторизует вас в личном кабинете — отдельного письма для входа не будет.
                     Отсчёт срока подписки начнётся в момент активации, а не покупки.
                   </p>
                 </td>
@@ -305,9 +306,9 @@ def _gift_html(code: str, plan_name: str, days: int, redeem_url: str) -> str:
 
         <tr>
           <td style="padding: 22px 36px;">
-            <p style="color: #6b7689; font-size: 12px; line-height: 1.6; margin: 0;">
+            <p style="color: #97a1b0; font-size: 12px; line-height: 1.6; margin: 0;">
               Это письмо отправлено автоматически, потому что кто-то подарил вам подписку на сервисе
-              <a href="{webapp_url}" style="color: #6b7689; text-decoration: underline;">{webapp_url}</a>.
+              <a href="{webapp_url}" style="color: #97a1b0; text-decoration: underline;">{webapp_url}</a>.
             </p>
           </td>
         </tr>
@@ -317,8 +318,8 @@ def _gift_html(code: str, plan_name: str, days: int, redeem_url: str) -> str:
       <table width="520" cellpadding="0" cellspacing="0" role="presentation" style="margin-top: 20px;">
         <tr>
           <td align="center">
-            <p style="color: #3a4254; font-size: 11px; margin: 0;">
-              © Unlock VPN · <a href="{webapp_url}" style="color: #3a4254; text-decoration: none;">{webapp_url}</a>
+            <p style="color: #97a1b0; font-size: 11px; margin: 0;">
+              © Unlock VPN · <a href="{webapp_url}" style="color: #97a1b0; text-decoration: none;">{webapp_url}</a>
             </p>
           </td>
         </tr>

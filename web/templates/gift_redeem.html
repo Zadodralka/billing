@@ -44,12 +44,6 @@
         }
         .gift-box .plan { color: #fff; font-weight: 700; font-size: 1.05rem; }
         .gift-box .meta { color: var(--muted); font-size: .82rem; margin-top: .3rem; }
-        label { display: block; font-size: .82rem; font-weight: 500; color: #a3adc2; margin-bottom: .4rem; text-align: left; }
-        input[type=email] {
-            width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
-            border-radius: 10px; padding: .7rem .9rem; font-size: .92rem; margin-bottom: 1rem; font-family: inherit;
-        }
-        input[type=email]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(61,220,132,.15); }
         button {
             width: 100%; background: var(--accent); color: #06140c; border: none; border-radius: 10px;
             padding: .75rem; font-size: .92rem; font-weight: 600; cursor: pointer; font-family: inherit; transition: background .12s;
@@ -80,22 +74,13 @@
             <div class="meta">{{ gift.days }} дней доступа{% if gift.traffic_gb %} · {{ gift.traffic_gb }} GB{% else %} · Безлимит{% endif %}</div>
         </div>
 
-        {% if user %}
-            <div id="redeemStatus" style="min-height:1.2em;font-size:.85rem;margin-bottom:.6rem;"></div>
-            <button id="redeemBtn" onclick="redeemGift('{{ gift.code }}')">Активировать для {{ user.display_name }}</button>
-            <p class="hint">Срок подписки начнётся с момента активации</p>
-        {% else %}
-            <form method="POST" action="/auth/login/email">
-                <label>Ваш email</label>
-                <input type="email" name="email" placeholder="your@email.com" required>
-                <button type="submit">Войти и получить подарок</button>
-            </form>
-            <p class="hint">Мы пришлём письмо с кнопкой входа — без пароля. После входа вы вернётесь сюда же.</p>
-        {% endif %}
+        <div id="redeemStatus" style="min-height:1.2em;font-size:.85rem;margin-bottom:.6rem;"></div>
+        <button id="redeemBtn" onclick="redeemGift('{{ gift.code }}')">Активировать для {{ user.display_name }}</button>
+        <p class="hint">Срок подписки начнётся с момента активации</p>
     {% endif %}
 </div>
 
-{% if user and gift %}
+{% if gift %}
 <script>
 async function redeemGift(code) {
     const btn = document.getElementById('redeemBtn');

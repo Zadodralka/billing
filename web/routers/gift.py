@@ -103,9 +103,23 @@ async def redeem_page(code: str, request: Request, session: AsyncSession = Depen
 
     current_user = await get_current_user(request, session)
     if not current_user:
-        # Запоминаем код в сессии - после входа по email-ссылке auth.verify_email
-        # вернёт сюда же, а не в /dashboard.
-        request.session["pending_gift_code"] = code
+        # Код подарка приходит только на recipient_email - обладание им такое же
+        # доказательство владения почтой, как переход по обычной magic-link ссылке.
+        # Поэтому кнопка в письме сразу логинит получателя, без второго письма для входа
+        # (find-or-create по email - тот же приём, что и в auth.login_email).
+        result = await session.execute(select(User).where(User.email == gift.recipient_email))
+        current_user = result.scalar_one_or_none()
+        if not current_user:
+            current_user = User(email=gift.recipient_email)
+            session.add(current_user)
+            await session.commit()
+            await session.refresh(current_user)
+        request.session["user_id"] = current_user.id
+
+    if current_user.is_banned:
+        return templates.TemplateResponse(request, "gift_redeem.html", {
+            "error": "Доступ к аккаунту получателя заблокирован. Обратитесь в поддержку.",
+        }, status_code=403)
 
     return templates.TemplateResponse(request, "gift_redeem.html", {
         "gift": gift,

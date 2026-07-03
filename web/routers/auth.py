@@ -182,10 +182,6 @@ async def verify_email(token: str, request: Request, session: AsyncSession = Dep
     await session.commit()
 
     request.session["user_id"] = user.id
-
-    pending_gift_code = request.session.pop("pending_gift_code", None)
-    if pending_gift_code:
-        return RedirectResponse(f"/gift/redeem/{pending_gift_code}")
     return RedirectResponse("/dashboard")
 
 
