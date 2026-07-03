@@ -9,6 +9,14 @@ def terms_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
+def terms_keyboard_for_login(token: str) -> InlineKeyboardMarkup:
+    """Та же клавиатура принятия правил, но для случая входа/привязки через бот-диплинк -
+    после принятия нужно ещё и подтвердить сам токен входа, поэтому callback_data другой."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Принимаю правила", callback_data=f"terms_login:{token}")],
+    ])
+
+
 def main_menu() -> InlineKeyboardMarkup:
     """Главное меню бота"""
     return InlineKeyboardMarkup(inline_keyboard=[

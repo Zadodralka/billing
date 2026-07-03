@@ -7,7 +7,7 @@ from sqlalchemy import select
 from core.models import User
 from core.config import settings
 from core.telegram_login import confirm_token
-from bot.keyboards.main import terms_keyboard, main_menu, back_to_menu
+from bot.keyboards.main import terms_keyboard, terms_keyboard_for_login, main_menu, back_to_menu
 
 router = Router()
 
@@ -47,12 +47,9 @@ WELCOME_TEXT = """
 
 
 # ===== Вход/привязка через бота (диплинк t.me/<bot>?start=tglogin_XXXX) =====
-async def _handle_login_deeplink(payload: str, message: Message) -> bool:
-    """Возвращает True, если payload был токеном входа/привязки и уже обработан."""
-    if not payload.startswith("tglogin_"):
-        return False
-
-    token = payload[len("tglogin_"):]
+async def _confirm_login_token(token: str, message: Message):
+    """Подтверждает токен входа/привязки в Redis и отвечает пользователю. Вызывается либо сразу
+    (если правила уже приняты раньше), либо после нажатия "Принимаю правила" для этого токена."""
     tg_user = message.from_user
     data = await confirm_token(token, tg_user.id, tg_user.username, tg_user.first_name)
 
@@ -61,7 +58,7 @@ async def _handle_login_deeplink(payload: str, message: Message) -> bool:
             "⚠️ Эта ссылка для входа уже недействительна (устарела или уже использована).\n"
             "Вернитесь на сайт и запросите новую."
         )
-        return True
+        return
 
     if data.get("purpose") == "link":
         await message.answer(
@@ -73,13 +70,33 @@ async def _handle_login_deeplink(payload: str, message: Message) -> bool:
             "✅ <b>Вход подтверждён!</b>\n\nВернитесь в браузер — вы будете авторизованы автоматически.",
             parse_mode="HTML",
         )
+
+
+async def _handle_login_deeplink(payload: str, message: Message, user: User, session: AsyncSession) -> bool:
+    """Возвращает True, если payload был токеном входа/привязки и уже обработан (или отложен
+    до принятия правил). Правила обязательны и для входа через бота - без этого через диплинк
+    можно было бы попасть в кабинет, ни разу их не увидев."""
+    if not payload.startswith("tglogin_"):
+        return False
+
+    token = payload[len("tglogin_"):]
+
+    if not user.terms_accepted:
+        await message.answer(
+            TERMS_TEXT + "\n\n<i>Примите правила, чтобы завершить вход/привязку.</i>",
+            parse_mode="HTML",
+            reply_markup=terms_keyboard_for_login(token),
+        )
+        return True
+
+    await _confirm_login_token(token, message)
     return True
 
 
 # ===== /start =====
 @router.message(CommandStart())
 async def cmd_start(message: Message, command: CommandObject, user: User, session: AsyncSession):
-    if command.args and await _handle_login_deeplink(command.args, message):
+    if command.args and await _handle_login_deeplink(command.args, message, user, session):
         return
 
     name = escape(message.from_user.first_name or "друг")
@@ -115,6 +132,18 @@ async def cb_accept_terms(callback: CallbackQuery, user: User, session: AsyncSes
         parse_mode="HTML",
         reply_markup=main_menu(),
     )
+    await callback.answer()
+
+
+# ===== Принятие правил в контексте входа/привязки через бота =====
+@router.callback_query(F.data.startswith("terms_login:"))
+async def cb_accept_terms_login(callback: CallbackQuery, user: User, session: AsyncSession):
+    token = callback.data.split(":", 1)[1]
+    user.terms_accepted = True
+    await session.commit()
+
+    await callback.message.edit_text("✅ <b>Правила приняты!</b>", parse_mode="HTML")
+    await _confirm_login_token(token, callback.message)
     await callback.answer()
 
 

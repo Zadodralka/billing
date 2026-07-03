@@ -1,6 +1,4 @@
 import secrets
-import hashlib
-import hmac
 import logging
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Request, Depends, HTTPException, Form
@@ -251,28 +249,6 @@ async def _find_or_create_telegram_user(
     await session.commit()
     await session.refresh(user)
     return user
-
-
-@router.get("/telegram")
-async def telegram_auth(request: Request, session: AsyncSession = Depends(get_db)):
-    params = dict(request.query_params)
-    received_hash = params.pop("hash", "")
-
-    data_check = "\n".join(f"{k}={v}" for k, v in sorted(params.items()))
-    secret = hashlib.sha256(settings.bot_token.encode()).digest()
-    expected = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
-
-    if not hmac.compare_digest(expected, received_hash):
-        raise HTTPException(403, "Invalid Telegram signature")
-
-    if abs(datetime.utcnow().timestamp() - int(params.get("auth_date", 0))) > 300:
-        raise HTTPException(403, "Auth data expired")
-
-    tg_id = int(params["id"])
-    user = await _find_or_create_telegram_user(tg_id, params.get("username"), request, session)
-
-    request.session["user_id"] = user.id
-    return RedirectResponse("/dashboard")
 
 
 @router.post("/telegram-login/start")

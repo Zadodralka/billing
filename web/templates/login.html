@@ -57,12 +57,15 @@
         }
         button:hover { background: #34c878; }
         .hint { text-align: center; color: var(--muted); font-size: .76rem; margin-top: .7rem; }
-        .btn-outline {
-            background: transparent; border: 1px solid var(--border); color: var(--text);
-            display: flex; align-items: center; justify-content: center; gap: .5rem;
+
+        /* Кнопка входа через бота - в стиле привычного Telegram Login Widget */
+        .btn-telegram {
+            background: #2AABEE; color: #fff; display: flex; align-items: center;
+            justify-content: center; gap: .6rem; font-size: .95rem;
         }
-        .btn-outline:hover { background: var(--panel-2); }
-        .btn-outline:disabled { opacity: .6; cursor: not-allowed; }
+        .btn-telegram:hover { background: #229ED9; }
+        .btn-telegram:disabled { opacity: .65; cursor: not-allowed; }
+        .btn-telegram svg { width: 20px; height: 20px; flex-shrink: 0; }
         #tgBotLoginStatus { text-align: center; font-size: .78rem; color: var(--muted); margin-top: .6rem; min-height: 1.1em; }
     </style>
 </head>
@@ -76,23 +79,9 @@
     {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
 
     {% if bot_username %}
-    <div id="telegram-login-wrap"></div>
-    <script>
-        (function() {
-            var s = document.createElement('script');
-            s.src = 'https://telegram.org/js/telegram-widget.js?22';
-            s.setAttribute('data-telegram-login', '{{ bot_username }}');
-            s.setAttribute('data-size', 'large');
-            s.setAttribute('data-radius', '10');
-            s.setAttribute('data-auth-url', '{{ webapp_url }}/auth/telegram');
-            s.setAttribute('data-userpic', 'true');
-            s.async = true;
-            document.getElementById('telegram-login-wrap').appendChild(s);
-        })();
-    </script>
-
-    <button type="button" class="btn-outline" id="tgBotLoginBtn" onclick="startTelegramBotLogin()">
-        Войти через Telegram-бота (без номера телефона)
+    <button type="button" class="btn-telegram" id="tgBotLoginBtn" onclick="startTelegramBotLogin()">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71l-4.14-3.06-2 1.95c-.24.24-.44.44-.82.44z"/></svg>
+        Войти через Telegram
     </button>
     <div id="tgBotLoginStatus"></div>
 
