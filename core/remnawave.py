@@ -34,6 +34,17 @@ class RemnawaveClient:
             logger.info(f"Optional endpoint {path} failed: {e}")
             return None
 
+    async def ping(self) -> bool:
+        """Лёгкая проверка доступности панели для админ-дашборда - в отличие от
+        get_all_users(), не тянет весь список пользователей (который на реальной
+        базе может быть постраничным и тяжёлым), а запрашивает одну страницу
+        минимального размера и просто проверяет, что API вообще отвечает."""
+        try:
+            await self._request("GET", "/api/users?size=1&offset=0")
+            return True
+        except Exception:
+            return False
+
     async def get_internal_squads(self) -> list:
         """Получить список доступных squad'ов (нужны для создания рабочего пользователя)"""
         data = await self._try_request("GET", "/api/internal-squads")

@@ -3,6 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from core.config import settings
 from core.database import init_db, AsyncSessionLocal
 from core.plans import seed_plans_if_empty
@@ -43,6 +44,10 @@ app.add_middleware(
     https_only=settings.session_https_only,
     same_site="lax",
 )
+
+# Страницы кабинета несут по 5-10 KB инлайнового CSS/JS в каждом ответе -
+# сжатие ощутимо уменьшает трафик и время загрузки без какого-либо риска.
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 app.include_router(auth.router)
 app.include_router(dashboard.router)
