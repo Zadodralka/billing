@@ -24,10 +24,15 @@ services:
   web:
     build: .
     restart: unless-stopped
-    command: uvicorn web.main:app --host 0.0.0.0 --port 8000
+    # --proxy-headers + --forwarded-allow-ips: без этого uvicorn логирует и видит в
+    # request.client адрес докер-моста (сюда стучится nginx), а не реального
+    # посетителя, даже если nginx уже шлёт X-Forwarded-For/X-Real-IP. "*" безопасен
+    # только потому, что порт 8000 ниже привязан к 127.0.0.1 - снаружи до контейнера
+    # напрямую не достучаться, входит исключительно через nginx на этом же хосте.
+    command: uvicorn web.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips="*"
     env_file: .env
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       db:
         condition: service_healthy
