@@ -38,11 +38,7 @@ async def admin_index(request: Request, admin: User = Depends(require_admin), se
         select(func.count(SupportTicket.id)).where(SupportTicket.status == TicketStatus.OPEN)
     )).scalar()
 
-    rw_online = True
-    try:
-        await remnawave.get_all_users()
-    except Exception:
-        rw_online = False
+    rw_online = await remnawave.ping()
 
     recent_payments = (await session.execute(
         select(Payment).options(selectinload(Payment.user))

@@ -9,6 +9,8 @@
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#0a0e14">
     <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <style>
@@ -123,7 +125,17 @@
         .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); background: #06140c; }
         .toggle-row { display: flex; align-items: center; gap: .65rem; cursor: pointer; color: #9aa5ba; font-size: .88rem; }
 
-        .table-card { border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; }
+        .table-card { border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; position: relative; }
+        /* Затемнение по краям прокручиваемой таблицы - на .table-card (не на самом
+           .table-wrap), чтобы не уезжало вместе со скроллом контента. */
+        .table-card.scrollable:not(.at-end)::after {
+            content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 28px;
+            background: linear-gradient(to left, rgba(0,0,0,.35), transparent); pointer-events: none;
+        }
+        .table-card.scrollable:not(.at-start)::before {
+            content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 28px;
+            background: linear-gradient(to right, rgba(0,0,0,.35), transparent); pointer-events: none; z-index: 1;
+        }
         table { width: 100%; border-collapse: collapse; color: var(--text); }
         thead th { color: var(--muted); font-size: .71rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; border-bottom: 1px solid var(--border); padding: .9rem 1.15rem; background: var(--panel-2); text-align: left; }
         tbody td { padding: .9rem 1.15rem; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: .87rem; }
@@ -298,6 +310,22 @@ document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         document.querySelectorAll('.modal-overlay.show').forEach(m => m.classList.remove('show'));
     }
+});
+
+// Подсказка "здесь можно прокрутить вбок" для широких таблиц на узких экранах -
+// без этого край таблицы просто обрезался посреди слова, и было не очевидно,
+// что остальные колонки доступны свайпом.
+document.querySelectorAll('.table-card').forEach(function(card) {
+    const wrap = card.querySelector('.table-wrap');
+    if (!wrap) return;
+    function update() {
+        card.classList.toggle('scrollable', wrap.scrollWidth > wrap.clientWidth + 1);
+        card.classList.toggle('at-start', wrap.scrollLeft <= 0);
+        card.classList.toggle('at-end', wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 1);
+    }
+    update();
+    wrap.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
 });
 </script>
 {% block extra_scripts %}{% endblock %}
