@@ -1,6 +1,6 @@
 import string
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from datetime import datetime, timedelta
@@ -16,23 +16,39 @@ router = Router()
 GIFT_CODE_CHARS = string.ascii_uppercase + string.digits
 
 
-@router.message(F.text == "💳 Купить подписку")
-async def cmd_buy(message: Message, user: User, session: AsyncSession):
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+async def _create_payment_and_show(
+    callback: CallbackQuery, user: User, session: AsyncSession,
+    plan_key: str, plan: dict, traffic_gb: int, title: str,
+    payment_comment: str, renew_subscription_id: int | None = None,
+):
+    label = yoomoney.generate_label()
+    payment = Payment(
+        user_id=user.id,
+        plan_key=plan_key,
+        traffic_gb=traffic_gb,
+        amount=plan["price"],
+        label=label,
+        renew_subscription_id=renew_subscription_id,
+    )
+    session.add(payment)
+    await session.commit()
 
-    plans = await get_active_plans(session)
-    buttons = []
-    for key, plan in plans.items():
-        buttons.append([
-            InlineKeyboardButton(text=f"{plan['name']} — {plan['price']} ₽", callback_data=f"buy:{key}")
-        ])
-    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="cancel")])
+    pay_url = yoomoney.create_payment_url(
+        amount=plan["price"],
+        label=label,
+        comment=payment_comment,
+    )
 
-    await message.answer(
-        "💳 <b>Выберите тарифный план:</b>",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+    await callback.message.edit_text(
+        f"💳 <b>{title}</b>\n\n"
+        f"📦 Тариф: {plan['name']}\n"
+        f"💰 Сумма: {plan['price']} ₽\n\n"
+        f"Нажмите кнопку ниже для оплаты через ЮМани.\n"
+        f"После оплаты нажмите <b>✅ Я оплатил(а)</b>",
+        reply_markup=payment_keyboard(pay_url, label),
         parse_mode="HTML",
     )
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("buy:"))
@@ -43,33 +59,79 @@ async def cb_buy_plan(callback: CallbackQuery, user: User, session: AsyncSession
         await callback.answer("Тариф недоступен")
         return
 
-    label = yoomoney.generate_label()
-    payment = Payment(
-        user_id=user.id,
-        plan_key=plan_key,
+    await _create_payment_and_show(
+        callback, user, session, plan_key, plan,
         traffic_gb=plan.get("traffic_gb", 50),
-        amount=plan["price"],
-        label=label,
-    )
-    session.add(payment)
-    await session.commit()
-
-    pay_url = yoomoney.create_payment_url(
-        amount=plan["price"],
-        label=label,
-        comment=f"VPN подписка {plan['name']}",
+        title="Оплата подписки",
+        payment_comment=f"VPN подписка {plan['name']}",
     )
 
-    await callback.message.edit_text(
-        f"💳 <b>Оплата подписки</b>\n\n"
-        f"📦 Тариф: {plan['name']}\n"
-        f"💰 Сумма: {plan['price']} ₽\n\n"
-        f"Нажмите кнопку ниже для оплаты через ЮМани.\n"
-        f"После оплаты нажмите <b>✅ Я оплатил(а)</b>",
-        reply_markup=payment_keyboard(pay_url, label),
+
+# ===== Продление существующей подписки (кнопка "Продлить" в "Мои подписки") =====
+@router.callback_query(F.data.startswith("sub:renew:"))
+async def cb_sub_renew_start(callback: CallbackQuery, user: User, session: AsyncSession):
+    sub_id = int(callback.data.split(":")[2])
+    result = await session.execute(
+        select(Subscription).where(Subscription.id == sub_id, Subscription.user_id == user.id)
+    )
+    sub = result.scalar_one_or_none()
+    if not sub:
+        await callback.answer("Подписка не найдена", show_alert=True)
+        return
+
+    # Аккаунт в Remnawave мог быть уже удалён планировщиком (см. scheduler.delete_old_expired_accounts,
+    # если подписка была заблокирована больше DELETE_AFTER_DAYS дней назад) - в этом случае продлить
+    # старую запись нечем, extend_user/enable_user отработают вникуда и пользователь оплатит без VPN.
+    if not sub.remnawave_sub_id:
+        await callback.answer(
+            "Эта подписка больше не может быть продлена (аккаунт был удалён после долгого простоя). "
+            "Оформите новую подписку или напишите в поддержку.",
+            show_alert=True,
+        )
+        return
+
+    plans = await get_active_plans(session)
+    buttons = []
+    for key, plan in plans.items():
+        buttons.append([InlineKeyboardButton(
+            text=f"{plan['name']} — {plan['price']} ₽",
+            callback_data=f"renew_buy:{sub_id}:{key}",
+        )])
+    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="menu:subs")])
+
+    await callback.message.answer(
+        "🔁 <b>Продление подписки</b>\n\nВыберите тариф для продления (срок добавится к текущему):",
         parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
     )
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("renew_buy:"))
+async def cb_renew_buy_plan(callback: CallbackQuery, user: User, session: AsyncSession):
+    _, sub_id_str, plan_key = callback.data.split(":")
+    sub_id = int(sub_id_str)
+
+    result = await session.execute(
+        select(Subscription).where(Subscription.id == sub_id, Subscription.user_id == user.id)
+    )
+    sub = result.scalar_one_or_none()
+    if not sub:
+        await callback.answer("Подписка не найдена", show_alert=True)
+        return
+
+    plan = await get_plan(session, plan_key)
+    if not plan or not plan.get("is_active", True):
+        await callback.answer("Тариф недоступен")
+        return
+
+    await _create_payment_and_show(
+        callback, user, session, plan_key, plan,
+        traffic_gb=sub.traffic_gb,
+        title="Продление подписки",
+        payment_comment=f"Продление VPN {plan['name']}",
+        renew_subscription_id=sub.id,
+    )
 
 
 @router.callback_query(F.data.startswith("check_payment:"))
@@ -132,6 +194,7 @@ async def activate_subscription(user: User, payment: Payment, session: AsyncSess
         base = sub.expires_at if sub.expires_at and sub.expires_at > now else now
         sub.expires_at = base + timedelta(days=plan["days"])
         sub.status = SubscriptionStatus.ACTIVE
+        sub.expiry_reminder_sent = False
 
         if sub.remnawave_sub_id:
             try:

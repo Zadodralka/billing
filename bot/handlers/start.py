@@ -1,15 +1,25 @@
 from html import escape
-from aiogram import Router, F
-from aiogram.filters import CommandStart, CommandObject
+from aiogram import Router, F, Bot
+from aiogram.filters import CommandStart, CommandObject, Command
 from aiogram.types import Message, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from core.models import User
 from core.config import settings
 from core.telegram_login import confirm_token
 from bot.keyboards.main import terms_keyboard, terms_keyboard_for_login, main_menu, back_to_menu
 
 router = Router()
+
+_bot_username_cache: str | None = None
+
+
+async def _get_bot_username(bot: Bot) -> str:
+    global _bot_username_cache
+    if _bot_username_cache is None:
+        me = await bot.get_me()
+        _bot_username_cache = me.username
+    return _bot_username_cache
 
 # ===== Текст правил использования =====
 TERMS_TEXT = """
@@ -99,11 +109,29 @@ async def _handle_login_deeplink(payload: str, message: Message, user: User, ses
     return True
 
 
+# ===== Реферальная ссылка через бота (диплинк t.me/<bot>?start=ref_XXXX) =====
+async def _apply_referral_deeplink(payload: str, user: User, session: AsyncSession) -> None:
+    """Привязывает пользователя к пригласившему по реферальному коду из /start ref_<code>.
+    Бонус начисляется позже, при первой успешной оплате (см. core.promo_referral.process_referral_bonus).
+    Не трогаем уже привязанных пользователей - повторный переход по чужой ссылке ничего не меняет."""
+    if not payload.startswith("ref_") or user.referred_by_id:
+        return
+
+    ref_code = payload[len("ref_"):].upper()
+    result = await session.execute(select(User).where(User.referral_code == ref_code))
+    referrer = result.scalar_one_or_none()
+    if referrer and referrer.id != user.id:
+        user.referred_by_id = referrer.id
+        await session.commit()
+
+
 # ===== /start =====
 @router.message(CommandStart())
 async def cmd_start(message: Message, command: CommandObject, user: User, session: AsyncSession):
-    if command.args and await _handle_login_deeplink(command.args, message, user, session):
-        return
+    if command.args:
+        if await _handle_login_deeplink(command.args, message, user, session):
+            return
+        await _apply_referral_deeplink(command.args, user, session)
 
     name = escape(message.from_user.first_name or "друг")
 
@@ -164,54 +192,6 @@ async def cb_main_menu(callback: CallbackQuery, user: User):
     await callback.answer()
 
 
-@router.callback_query(F.data == "menu:subs")
-async def cb_my_subs(callback: CallbackQuery, user: User, session: AsyncSession):
-    from datetime import datetime
-    from sqlalchemy.orm import selectinload
-    from core.models import SubscriptionStatus
-
-    result = await session.execute(
-        select(User).where(User.id == user.id).options(selectinload(User.subscriptions))
-    )
-    user = result.scalar_one()
-    now = datetime.utcnow()
-
-    active = [s for s in user.subscriptions
-              if s.status == SubscriptionStatus.ACTIVE
-              and (not s.expires_at or s.expires_at > now)]
-
-    if not active:
-        await callback.message.edit_text(
-            "📋 <b>Мои подписки</b>\n\n"
-            "У вас нет активных подписок.\n"
-            "Нажмите «Купить подписку» чтобы начать.",
-            parse_mode="HTML",
-            reply_markup=back_to_menu(),
-        )
-        await callback.answer()
-        return
-
-    from core.plans import get_active_plans
-    plans = await get_active_plans(session)
-
-    lines = ["📋 <b>Мои активные подписки:</b>\n"]
-    for sub in active:
-        plan_name = plans.get(sub.plan_key, {}).get("name", sub.plan_key)
-        expires = sub.expires_at.strftime("%d.%m.%Y") if sub.expires_at else "—"
-        traffic = "Безлимит" if sub.traffic_gb == 0 else f"{sub.traffic_gb} GB"
-        lines.append(f"✅ <b>{plan_name}</b> · {traffic}\n📅 До {expires}")
-
-    lines.append(f"\n🌐 Управление подписками: <a href='{settings.webapp_url}/dashboard'>Личный кабинет</a>")
-
-    await callback.message.edit_text(
-        "\n\n".join(lines),
-        parse_mode="HTML",
-        reply_markup=back_to_menu(),
-        disable_web_page_preview=True,
-    )
-    await callback.answer()
-
-
 @router.callback_query(F.data == "menu:buy")
 async def cb_menu_buy(callback: CallbackQuery, user: User, session: AsyncSession):
     from core.plans import get_active_plans
@@ -233,3 +213,56 @@ async def cb_menu_buy(callback: CallbackQuery, user: User, session: AsyncSession
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
     )
     await callback.answer()
+
+
+# ===== Баланс и реферальная программа =====
+@router.callback_query(F.data == "menu:balance")
+async def cb_menu_balance(callback: CallbackQuery, user: User, session: AsyncSession, bot: Bot):
+    from core.promo_referral import ensure_referral_code
+
+    ref_code = await ensure_referral_code(user, session)
+    bot_username = await _get_bot_username(bot)
+    ref_link = f"https://t.me/{bot_username}?start=ref_{ref_code}"
+
+    referrals_count = (await session.execute(
+        select(func.count(User.id)).where(User.referred_by_id == user.id)
+    )).scalar() or 0
+    paid_referrals = (await session.execute(
+        select(func.count(User.id)).where(User.referred_by_id == user.id, User.referral_bonus_paid == True)
+    )).scalar() or 0
+
+    await callback.message.edit_text(
+        f"💰 <b>Баланс: {user.balance} ₽</b>\n"
+        "Баланс можно использовать при оплате подписки в личном кабинете на сайте.\n\n"
+        "🎁 <b>Реферальная программа</b>\n"
+        f"Приглашайте друзей — получайте {settings.referral_bonus_referrer} ₽ на баланс "
+        f"за каждого, кто оформит подписку. Друг тоже получит {settings.referral_bonus_referred} ₽.\n\n"
+        f"👥 Приглашено: {referrals_count} (оплатили: {paid_referrals})\n\n"
+        f"🔗 Ваша реферальная ссылка:\n<code>{ref_link}</code>",
+        parse_mode="HTML",
+        reply_markup=back_to_menu(),
+        disable_web_page_preview=True,
+    )
+    await callback.answer()
+
+
+# ===== /help =====
+HELP_TEXT = """
+ℹ️ <b>Что умеет этот бот</b>
+
+/start — открыть главное меню
+/help — показать эту справку
+
+💳 <b>Купить подписку</b> — выбрать тариф и оплатить через ЮMoney
+📋 <b>Мои подписки</b> — список активных подписок, продление, доступ к конфигу
+🔑 <b>Мои конфиги</b> — QR-код и ссылка для подключения VPN
+💰 <b>Баланс и бонусы</b> — баланс и реферальная ссылка
+💬 <b>Поддержка</b> — задать вопрос, ответим в чате
+
+Полное управление подпиской (включая оплату балансом и промокоды) — в личном кабинете на сайте.
+""".strip()
+
+
+@router.message(Command("help"))
+async def cmd_help(message: Message):
+    await message.answer(HELP_TEXT, parse_mode="HTML", reply_markup=main_menu())

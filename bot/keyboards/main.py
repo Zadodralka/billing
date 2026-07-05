@@ -25,6 +25,10 @@ def main_menu() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="📋 Мои подписки", callback_data="menu:subs"),
         ],
         [
+            InlineKeyboardButton(text="🔑 Мои конфиги", callback_data="menu:configs"),
+            InlineKeyboardButton(text="💰 Баланс и бонусы", callback_data="menu:balance"),
+        ],
+        [
             InlineKeyboardButton(text="🌐 Личный кабинет", url=settings.webapp_url),
             InlineKeyboardButton(text="📖 Инструкции", url=f"{settings.webapp_url}/docs"),
         ],
@@ -32,6 +36,16 @@ def main_menu() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="💬 Поддержка", callback_data="support:menu"),
         ],
     ])
+
+
+def subscription_actions_row(sub_id: int, index: int) -> list[InlineKeyboardButton]:
+    """Ряд кнопок действий для одной подписки в списке — index (1, 2, ...) соответствует
+    порядковому номеру подписки в тексте сообщения, чтобы при нескольких активных
+    подписках было понятно, какая кнопка к какой из них относится."""
+    return [
+        InlineKeyboardButton(text=f"🔑 Конфиг {index}", callback_data=f"sub:config:{sub_id}"),
+        InlineKeyboardButton(text=f"🔁 Продлить {index}", callback_data=f"sub:renew:{sub_id}"),
+    ]
 
 
 def payment_keyboard(payment_url: str, label: str) -> InlineKeyboardMarkup:

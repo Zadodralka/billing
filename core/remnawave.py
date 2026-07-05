@@ -218,6 +218,20 @@ class RemnawaveClient:
         user = await self.get_user(uuid)
         return {"subscriptionUrl": user.get("subscriptionUrl", "")}
 
+    async def get_traffic_usage_gb(self, uuid: str) -> float | None:
+        """Использованный трафик за текущий период для одной подписки, в GB.
+        None - если Remnawave недоступна или не отдаёт эти данные (не считаем это ошибкой,
+        UI должен просто скрыть строку с расходом, а не падать)."""
+        try:
+            user = await self.get_user(uuid)
+        except Exception as e:
+            logger.info(f"get_traffic_usage_gb: could not fetch user {uuid}: {e}")
+            return None
+        used_bytes = self._extract_traffic_bytes(user)
+        if used_bytes is None:
+            return None
+        return round(used_bytes / 1024 ** 3, 2)
+
     async def disable_user(self, uuid: str) -> dict:
         return await self._update_user(uuid, {"status": "DISABLED"})
 

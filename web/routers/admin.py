@@ -362,6 +362,7 @@ async def extend_subscription(
         new_expires = base + timedelta(days=days)
         sub.expires_at = new_expires
         sub.status = SubscriptionStatus.ACTIVE
+        sub.expiry_reminder_sent = False
 
         remnawave_warning = None
         if sub.remnawave_sub_id:

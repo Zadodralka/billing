@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 DELETE_AFTER_DAYS = 7  # сколько дней хранить заблокированный аккаунт перед полным удалением
 PENDING_PAYMENT_TIMEOUT_HOURS = 24  # через сколько часов гасить неоплаченный счёт и вернуть баланс
+EXPIRY_REMINDER_DAYS_BEFORE = 3  # за сколько дней до истечения напомнить о продлении
 
 
 async def disable_expired_subscriptions():
@@ -77,6 +78,52 @@ async def disable_expired_subscriptions():
         if disabled_count:
             await session.commit()
             logger.info(f"Disabled {disabled_count} expired subscription(s)")
+
+
+async def notify_expiring_soon():
+    """Напоминает пользователю о скором истечении подписки, чтобы он успел продлить
+    без разрыва доступа. Шлётся один раз на подписку (expiry_reminder_sent), флаг
+    сбрасывается при продлении (см. bot.handlers.payments.activate_subscription)."""
+    async with AsyncSessionLocal() as session:
+        now = datetime.utcnow()
+        cutoff = now + timedelta(days=EXPIRY_REMINDER_DAYS_BEFORE)
+        result = await session.execute(
+            select(Subscription).where(
+                Subscription.status == SubscriptionStatus.ACTIVE,
+                Subscription.expires_at.is_not(None),
+                Subscription.expires_at > now,
+                Subscription.expires_at <= cutoff,
+                Subscription.expiry_reminder_sent == False,
+            )
+        )
+        expiring = result.scalars().all()
+
+        count = 0
+        for sub in expiring:
+            user_result = await session.execute(select(User).where(User.id == sub.user_id))
+            user = user_result.scalar_one_or_none()
+            sub.expiry_reminder_sent = True
+
+            if user and user.telegram_id:
+                days_left = (sub.expires_at - now).days
+                try:
+                    bot = Bot(token=settings.bot_token)
+                    await bot.send_message(
+                        user.telegram_id,
+                        f"⏳ <b>Подписка скоро истекает</b>\n\n"
+                        f"Осталось {days_left} дн. (до {sub.expires_at.strftime('%d.%m.%Y')}).\n"
+                        "Продлите заранее, чтобы доступ к VPN не прерывался — "
+                        "кнопка «🔁 Продлить» в разделе «Мои подписки» в боте.",
+                        parse_mode="HTML",
+                    )
+                    await bot.session.close()
+                except Exception as e:
+                    logger.warning(f"Failed to send expiry reminder to {user.telegram_id}: {e}")
+            count += 1
+
+        if count:
+            await session.commit()
+            logger.info(f"Sent expiry reminder for {count} subscription(s)")
 
 
 async def delete_old_expired_accounts():
@@ -146,6 +193,11 @@ async def run_cycle():
         await disable_expired_subscriptions()
     except Exception as e:
         logger.error(f"disable_expired_subscriptions failed: {e}")
+
+    try:
+        await notify_expiring_soon()
+    except Exception as e:
+        logger.error(f"notify_expiring_soon failed: {e}")
 
     try:
         await delete_old_expired_accounts()
