@@ -151,8 +151,8 @@ vpn_shop_bot/
 
 1. Склонируйте репозиторий и перейдите в него:
    ```bash
-   git clone https://github.com/Korstane/vpn_shop_bot.git
-   cd vpn_shop_bot
+   git clone https://github.com/Zadodralka/billing.git
+   cd billing
    ```
 
 2. Создайте `.env` из примера и заполните переменные (таблица ниже):
