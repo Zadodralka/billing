@@ -76,6 +76,10 @@ class Subscription(Base):
     remnawave_sub_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     config_link: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Сброс на False при продлении - чтобы после продления снова напомнить
+    # об истечении ближе к новой дате (см. scheduler.notify_expiring_soon)
+    expiry_reminder_sent: Mapped[bool] = mapped_column(Boolean, default=False)
+
     user: Mapped["User"] = relationship(back_populates="subscriptions")
 
     @property

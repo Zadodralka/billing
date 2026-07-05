@@ -65,6 +65,18 @@ async def yoomoney_webhook(request: Request, session: AsyncSession = Depends(get
     from bot.handlers.payments import activate_subscription
     subscription, config_link = await activate_subscription(user, payment, session)
 
+    from core.plans import get_plan
+    plan = await get_plan(session, payment.plan_key) or {}
+
+    from core.admin_notify import notify_admins_new_payment
+    await notify_admins_new_payment(
+        user.display_name,
+        plan.get("name", payment.plan_key),
+        payment.amount,
+        is_gift=payment.is_gift,
+        is_renew=bool(payment.renew_subscription_id),
+    )
+
     if user.telegram_id:
         try:
             bot = Bot(token=settings.bot_token)
@@ -77,8 +89,6 @@ async def yoomoney_webhook(request: Request, session: AsyncSession = Depends(get
                     parse_mode="HTML",
                 )
             else:
-                from core.plans import get_plan
-                plan = await get_plan(session, payment.plan_key) or {}
                 expires = subscription.expires_at.strftime("%d.%m.%Y")
                 await bot.send_message(
                     user.telegram_id,

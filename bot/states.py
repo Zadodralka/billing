@@ -12,3 +12,8 @@ class ReplyToTicket(StatesGroup):
 
 class AdminReplyToTicket(StatesGroup):
     waiting_reply = State()
+
+
+class AdminBroadcast(StatesGroup):
+    waiting_text = State()
+    waiting_confirm = State()
