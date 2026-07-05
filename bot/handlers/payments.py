@@ -9,7 +9,8 @@ from core.models import User, Subscription, Payment, PaymentStatus, Subscription
 from core.plans import get_active_plans, get_plan
 from core.yoomoney import yoomoney
 from core.remnawave import remnawave
-from bot.keyboards.main import payment_keyboard
+from bot.keyboards.main import payment_keyboard, main_menu
+from bot.handlers.start import WELCOME_TEXT
 
 router = Router()
 
@@ -159,8 +160,15 @@ async def cb_check_payment(callback: CallbackQuery, user: User, session: AsyncSe
 
 @router.callback_query(F.data == "cancel")
 async def cb_cancel(callback: CallbackQuery):
-    await callback.message.delete()
-    await callback.answer("Отменено")
+    # Раньше здесь было callback.message.delete() - сообщение с клавиатурой пропадало,
+    # а никакого нового меню не показывалось, и пользователь оставался без единой кнопки
+    # в чате (приходилось вручную набирать /start). Правим на возврат в главное меню.
+    await callback.message.edit_text(
+        "❌ Платёж отменён.\n\n" + WELCOME_TEXT,
+        parse_mode="HTML",
+        reply_markup=main_menu(),
+    )
+    await callback.answer()
 
 
 async def activate_subscription(user: User, payment: Payment, session: AsyncSession):
