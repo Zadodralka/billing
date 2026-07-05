@@ -1,5 +1,6 @@
 import re
 import secrets
+import asyncio
 import logging
 from fastapi import APIRouter, Request, Depends, HTTPException, Form
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -9,14 +10,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta
 from core.database import get_db
-from core.models import User, Subscription, Payment, SubscriptionStatus, EmailToken
+from core.models import User, Subscription, Payment, PaymentStatus, SubscriptionStatus, EmailToken
 from core.plans import get_active_plans, get_all_plans
+from core.remnawave import remnawave
 from core.version import APP_VERSION
 from core.telegram_login import create_token as create_tg_login_token, get_token_data as get_tg_login_data, consume_token as consume_tg_login_token
 from web.routers.auth import require_user, get_bot_username, _check_login_email_rate_limit
 
 logger = logging.getLogger(__name__)
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+EXPIRING_SOON_DAYS = 3  # тот же порог, что и у напоминания в scheduler.notify_expiring_soon
 
 router = APIRouter(prefix="/dashboard")
 templates = Jinja2Templates(directory="web/templates")
@@ -49,6 +52,22 @@ async def dashboard(request: Request, user: User = Depends(require_user), sessio
     all_plans = await get_all_plans(session)
     active_plans = await get_active_plans(session)
 
+    # Расход трафика по активным подпискам - запросы к Remnawave идут параллельно,
+    # а не по очереди, иначе при нескольких подписках открытие кабинета ждало бы
+    # каждый запрос последовательно (см. аналогичный фикс для бота).
+    usage_map = {}
+    active_uuids = [s.remnawave_sub_id for s in active_subs if s.remnawave_sub_id]
+    if active_uuids:
+        usage_results = await asyncio.gather(*(remnawave.get_traffic_usage_gb(u) for u in active_uuids))
+        usage_map = dict(zip(active_uuids, usage_results))
+
+    expiring_soon = [
+        s for s in active_subs
+        if s.expires_at and s.expires_at <= now + timedelta(days=EXPIRING_SOON_DAYS)
+    ]
+
+    total_spent = sum(p.amount for p in user.payments if p.status == PaymentStatus.SUCCESS)
+
     return templates.TemplateResponse(request, "dashboard.html", {
         "user": user,
         "active_subs": active_subs,
@@ -57,6 +76,9 @@ async def dashboard(request: Request, user: User = Depends(require_user), sessio
         "plans": active_plans,
         "all_plans": all_plans,
         "now": now,
+        "usage_map": usage_map,
+        "expiring_soon": expiring_soon,
+        "total_spent": total_spent,
     })
 
 

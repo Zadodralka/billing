@@ -3,6 +3,9 @@
 
 {% block extra_head %}
 <style>
+.stat-card-link { transition: border-color .15s; }
+.stat-card-link:hover { border-color: var(--accent); }
+
 /* ── Сетка карточек ── */
 .subs-grid {
     display: grid;
@@ -67,6 +70,9 @@
 /* justify-content:flex-end держит закрашенную часть у правого края - по мере убывания
    дней граница сдвигается слева направо, а не наоборот */
 .sub-progress-bar  { height: 4px; background: var(--panel-3); border-radius: 9px; overflow: hidden; display: flex; justify-content: flex-end; }
+/* Трафик - это "использовано", а не "осталось": заполнение растёт слева направо
+   по мере расхода, в отличие от полосы времени выше (та якорится справа). */
+.sub-progress-bar.traffic { justify-content: flex-start; }
 .sub-progress-fill { height: 100%; border-radius: 9px; transition: width .3s; }
 .sub-progress-fill.green  { background: var(--accent); }
 .sub-progress-fill.orange { background: #f59e0b; }
@@ -156,6 +162,63 @@
         </div>
     </div>
     <a href="/dashboard/plans" class="btn btn-accent"><i class="bi bi-plus-lg"></i> Купить подписку</a>
+</div>
+
+{% if expiring_soon %}
+<div class="card" style="padding:1rem 1.3rem;margin-bottom:1.5rem;border-color:rgba(245,191,66,.35);background:linear-gradient(135deg, rgba(245,191,66,.08) 0%, transparent 100%);">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.8rem;">
+        <div style="display:flex;align-items:center;gap:.75rem;">
+            <div class="icon-badge" style="background:var(--gold-soft);color:var(--gold);"><i class="bi bi-alarm"></i></div>
+            <div>
+                {% if expiring_soon|length == 1 %}
+                {% set exp_sub = expiring_soon[0] %}
+                <div style="color:#fff;font-weight:700;font-size:.92rem;">
+                    Подписка «{{ all_plans.get(exp_sub.plan_key, {}).get('name', exp_sub.plan_key) }}» истекает {{ exp_sub.expires_at.strftime('%d.%m.%Y') }}
+                </div>
+                {% else %}
+                <div style="color:#fff;font-weight:700;font-size:.92rem;">{{ expiring_soon|length }} подписки скоро истекают</div>
+                {% endif %}
+                <div style="color:var(--muted);font-size:.82rem;">Продлите заранее, чтобы доступ к VPN не прерывался</div>
+            </div>
+        </div>
+        {% if expiring_soon|length == 1 %}
+        <button class="btn btn-accent btn-sm" onclick="openRenewModal('{{ expiring_soon[0].id }}', '{{ expiring_soon[0].plan_key }}')">
+            <i class="bi bi-arrow-repeat"></i> Продлить
+        </button>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1.5rem;">
+    <div class="card stat-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div><div class="label">Активных подписок</div><div class="value">{{ active_subs|length }}</div></div>
+            <div class="icon-badge" style="background:var(--accent-soft);color:var(--accent);"><i class="bi bi-broadcast"></i></div>
+        </div>
+    </div>
+    <a href="/dashboard/referral" class="card stat-card stat-card-link" style="display:block;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+                <div class="label">Баланс</div>
+                <div class="value" style="color:var(--accent);">{{ user.balance }} ₽</div>
+                <div style="color:var(--muted);font-size:.74rem;margin-top:.2rem;">Пригласить друга →</div>
+            </div>
+            <div class="icon-badge" style="background:var(--gold-soft);color:var(--gold);"><i class="bi bi-wallet2"></i></div>
+        </div>
+    </a>
+    <div class="card stat-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div><div class="label">Потрачено всего</div><div class="value">{{ total_spent }} ₽</div></div>
+            <div class="icon-badge" style="background:var(--blue-soft);color:var(--blue);"><i class="bi bi-cash-coin"></i></div>
+        </div>
+    </div>
+    <div class="card stat-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div><div class="label">С нами с</div><div class="value" style="font-size:1.3rem;">{{ user.created_at.strftime('%d.%m.%Y') }}</div></div>
+            <div class="icon-badge" style="background:var(--panel-3);color:var(--muted);"><i class="bi bi-calendar-heart"></i></div>
+        </div>
+    </div>
 </div>
 
 {% if not user.email or not user.telegram_id %}
@@ -255,6 +318,23 @@
                 <span class="k">Трафик</span>
                 <span class="v">{% if sub.traffic_gb == 0 %}Безлимит{% else %}{{ sub.traffic_gb }} GB{% endif %}</span>
             </div>
+
+            {% set usage = usage_map.get(sub.remnawave_sub_id) if card_state == 'active' else none %}
+            {% if usage is not none %}
+            <div class="sub-info-row">
+                <span class="k">Использовано</span>
+                <span class="v">{{ usage }} GB{% if sub.traffic_gb > 0 %} из {{ sub.traffic_gb }} GB{% endif %}</span>
+            </div>
+            {% if sub.traffic_gb > 0 %}
+            {% set traffic_pct = [(usage / sub.traffic_gb * 100) | round(0, 'floor') | int, 100] | min %}
+            <div class="sub-progress-wrap">
+                <div class="sub-progress-bar traffic">
+                    <div class="sub-progress-fill {% if traffic_pct < 70 %}green{% elif traffic_pct < 90 %}orange{% else %}red{% endif %}"
+                         style="width: {{ traffic_pct }}%"></div>
+                </div>
+            </div>
+            {% endif %}
+            {% endif %}
 
             {% if card_state == 'active' and sub.expires_at and sub.starts_at %}
             <div class="sub-progress-wrap">
