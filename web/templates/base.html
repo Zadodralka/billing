@@ -22,6 +22,13 @@
             --radius: 16px; --radius-sm: 10px;
         }
         * { box-sizing: border-box; }
+        /* Системный скроллбар (обычно светлый и широкий) резал глаз на тёмной теме -
+           тонкий тёмный вариант вместо него, везде где что-то может прокручиваться. */
+        * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+        *::-webkit-scrollbar { width: 8px; height: 8px; }
+        *::-webkit-scrollbar-track { background: transparent; }
+        *::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+        *::-webkit-scrollbar-thumb:hover { background: var(--muted); }
         html, body { margin: 0; padding: 0; }
         body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; min-height: 100vh; -webkit-font-smoothing: antialiased; }
         h1, h2, h3, h4, h5, h6, .brand, .display-num { font-family: 'Space Grotesk', sans-serif; margin: 0; }
