@@ -30,6 +30,12 @@
     </div>
     <div class="card stat-card">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div><div class="label">Открытые тикеты</div><div class="value">{{ open_tickets }}</div></div>
+            <div class="icon-badge" style="background:{% if open_tickets %}var(--gold-soft){% else %}var(--panel-3){% endif %};color:{% if open_tickets %}var(--gold){% else %}var(--muted){% endif %};"><i class="bi bi-life-preserver"></i></div>
+        </div>
+    </div>
+    <div class="card stat-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
             <div>
                 <div class="label">Remnawave</div>
                 <div class="value" style="font-size:1.1rem;">
@@ -42,13 +48,69 @@
     </div>
 </div>
 
-<div class="card">
-    <div class="card-body">
-        <h3 style="color:#fff;font-weight:700;margin-bottom:1rem;font-size:1rem;">Быстрые ссылки</h3>
-        <a href="/admin/users" class="nav-link" style="margin-bottom:.2rem;"><i class="bi bi-people"></i> Управление пользователями</a>
-        <a href="/admin/subscriptions" class="nav-link" style="margin-bottom:.2rem;"><i class="bi bi-list-check"></i> Все подписки</a>
-        <a href="/admin/payments" class="nav-link" style="margin-bottom:.2rem;"><i class="bi bi-receipt"></i> Платежи</a>
-        <a href="/admin/remnawave" class="nav-link"><i class="bi bi-hdd-network"></i> Состояние Remnawave</a>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem;">
+    <div class="card">
+        <div class="card-body">
+            <h3 style="color:#fff;font-weight:700;margin-bottom:1rem;font-size:1rem;">Последние оплаты</h3>
+            {% if recent_payments %}
+            {% for p in recent_payments %}
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:.55rem 0;{% if not loop.last %}border-bottom:1px solid var(--border);{% endif %}">
+                <div style="min-width:0;">
+                    <div style="color:#fff;font-size:.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.user.display_name if p.user else '—' }}</div>
+                    <div style="color:var(--muted);font-size:.72rem;">{{ p.created_at.strftime('%d.%m %H:%M') }} · {{ plans.get(p.plan_key, {}).get('name', p.plan_key) }}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0;margin-left:.6rem;">
+                    <div class="mono" style="color:#fff;font-size:.85rem;">{{ p.amount }} ₽</div>
+                    {% if p.status.value == 'success' %}<span class="badge badge-on" style="font-size:.68rem;">Оплачен</span>
+                    {% elif p.status.value == 'pending' %}<span class="badge badge-mid" style="font-size:.68rem;">Ожидание</span>
+                    {% else %}<span class="badge badge-neutral" style="font-size:.68rem;">Отменён</span>{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <p style="color:var(--muted);font-size:.85rem;margin:0;">Пока нет оплат</p>
+            {% endif %}
+            <a href="/admin/payments" class="nav-link" style="margin-top:.8rem;padding-left:0;">Все платежи <i class="bi bi-arrow-right"></i></a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <h3 style="color:#fff;font-weight:700;margin-bottom:1rem;font-size:1rem;">Новые пользователи</h3>
+            {% if recent_users %}
+            {% for u in recent_users %}
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:.55rem 0;{% if not loop.last %}border-bottom:1px solid var(--border);{% endif %}">
+                <div style="color:#fff;font-size:.85rem;font-weight:600;">{{ u.display_name }}</div>
+                <div style="color:var(--muted);font-size:.75rem;">{{ u.created_at.strftime('%d.%m.%Y') }}</div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <p style="color:var(--muted);font-size:.85rem;margin:0;">Пока нет пользователей</p>
+            {% endif %}
+            <a href="/admin/users" class="nav-link" style="margin-top:.8rem;padding-left:0;">Все пользователи <i class="bi bi-arrow-right"></i></a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <h3 style="color:#fff;font-weight:700;margin-bottom:1rem;font-size:1rem;">Последние тикеты</h3>
+            {% if recent_tickets %}
+            {% for t in recent_tickets %}
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:.55rem 0;{% if not loop.last %}border-bottom:1px solid var(--border);{% endif %}">
+                <div style="min-width:0;">
+                    <div style="color:#fff;font-size:.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;">{{ t.subject }}</div>
+                    <div style="color:var(--muted);font-size:.72rem;">{{ t.user.display_name if t.user else '—' }}</div>
+                </div>
+                {% if t.status.value == 'open' %}<span class="badge badge-mid" style="font-size:.68rem;flex-shrink:0;">Ожидает</span>
+                {% elif t.status.value == 'answered' %}<span class="badge badge-on" style="font-size:.68rem;flex-shrink:0;">Отвечен</span>
+                {% else %}<span class="badge badge-neutral" style="font-size:.68rem;flex-shrink:0;">Закрыт</span>{% endif %}
+            </div>
+            {% endfor %}
+            {% else %}
+            <p style="color:var(--muted);font-size:.85rem;margin:0;">Пока нет тикетов</p>
+            {% endif %}
+            <a href="/admin/support" class="nav-link" style="margin-top:.8rem;padding-left:0;">Вся поддержка <i class="bi bi-arrow-right"></i></a>
+        </div>
     </div>
 </div>
 {% endblock %}
