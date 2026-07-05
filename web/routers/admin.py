@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, Depends, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, or_, and_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta
@@ -44,13 +44,31 @@ async def admin_index(request: Request, admin: User = Depends(require_admin), se
     except Exception:
         rw_online = False
 
+    recent_payments = (await session.execute(
+        select(Payment).options(selectinload(Payment.user))
+        .order_by(Payment.created_at.desc()).limit(5)
+    )).scalars().all()
+    recent_users = (await session.execute(
+        select(User).order_by(User.created_at.desc()).limit(5)
+    )).scalars().all()
+    recent_tickets = (await session.execute(
+        select(SupportTicket).options(selectinload(SupportTicket.user))
+        .order_by(SupportTicket.updated_at.desc()).limit(5)
+    )).scalars().all()
+
+    from core.config import PLANS
     return templates.TemplateResponse(request, "admin/index.html", {
         "user": admin,
         "total_users": total_users,
         "active_subs": active_subs,
         "total_revenue": total_revenue,
         "rw_online": rw_online,
+        "open_tickets": open_tickets,
         "admin_open_tickets_count": open_tickets,
+        "recent_payments": recent_payments,
+        "recent_users": recent_users,
+        "recent_tickets": recent_tickets,
+        "plans": PLANS,
     })
 
 
@@ -60,18 +78,27 @@ async def admin_users(
     admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
     page: int = 1,
+    q: str = "",
 ):
     per_page = 20
     offset = (page - 1) * per_page
+    q = q.strip()
+
+    query = select(User).options(selectinload(User.subscriptions))
+    count_query = select(func.count(User.id))
+    if q:
+        conditions = [User.email.ilike(f"%{q}%"), User.telegram_username.ilike(f"%{q}%")]
+        if q.isdigit():
+            conditions += [User.id == int(q), User.telegram_id == int(q)]
+        filter_ = or_(*conditions)
+        query = query.where(filter_)
+        count_query = count_query.where(filter_)
+
     result = await session.execute(
-        select(User)
-        .options(selectinload(User.subscriptions))
-        .order_by(User.created_at.desc())
-        .offset(offset)
-        .limit(per_page)
+        query.order_by(User.created_at.desc()).offset(offset).limit(per_page)
     )
     users = result.scalars().all()
-    total = (await session.execute(select(func.count(User.id)))).scalar()
+    total = (await session.execute(count_query)).scalar()
 
     from core.config import PLANS
     return templates.TemplateResponse(request, "admin/users.html", {
@@ -82,6 +109,7 @@ async def admin_users(
         "total": total,
         "per_page": per_page,
         "pages": (total + per_page - 1) // per_page,
+        "q": q,
     })
 
 
@@ -257,18 +285,38 @@ async def admin_subscriptions(
     admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
     page: int = 1,
+    q: str = "",
+    status: str = "",
 ):
     per_page = 20
     offset = (page - 1) * per_page
+    q = q.strip()
+    status = status.strip()
+
+    query = select(Subscription).options(selectinload(Subscription.user))
+    count_query = select(func.count(Subscription.id))
+
+    conditions = []
+    if q:
+        query = query.join(User, Subscription.user_id == User.id)
+        count_query = count_query.join(User, Subscription.user_id == User.id)
+        user_cond = [User.email.ilike(f"%{q}%"), User.telegram_username.ilike(f"%{q}%")]
+        if q.isdigit():
+            user_cond += [Subscription.id == int(q), User.id == int(q)]
+        conditions.append(or_(*user_cond))
+    if status and status in SubscriptionStatus._value2member_map_:
+        conditions.append(Subscription.status == SubscriptionStatus(status))
+
+    if conditions:
+        filter_ = and_(*conditions)
+        query = query.where(filter_)
+        count_query = count_query.where(filter_)
+
     result = await session.execute(
-        select(Subscription)
-        .options(selectinload(Subscription.user))
-        .order_by(Subscription.created_at.desc())
-        .offset(offset)
-        .limit(per_page)
+        query.order_by(Subscription.created_at.desc()).offset(offset).limit(per_page)
     )
     subs = result.scalars().all()
-    total = (await session.execute(select(func.count(Subscription.id)))).scalar()
+    total = (await session.execute(count_query)).scalar()
 
     from core.config import PLANS
     return templates.TemplateResponse(request, "admin/subscriptions.html", {
@@ -279,6 +327,9 @@ async def admin_subscriptions(
         "total": total,
         "per_page": per_page,
         "pages": (total + per_page - 1) // per_page,
+        "q": q,
+        "status": status,
+        "statuses": list(SubscriptionStatus),
     })
 
 
@@ -420,18 +471,38 @@ async def admin_payments(
     admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
     page: int = 1,
+    q: str = "",
+    status: str = "",
 ):
     per_page = 25
     offset = (page - 1) * per_page
+    q = q.strip()
+    status = status.strip()
+
+    query = select(Payment).options(selectinload(Payment.user))
+    count_query = select(func.count(Payment.id))
+
+    conditions = []
+    if q:
+        query = query.join(User, Payment.user_id == User.id)
+        count_query = count_query.join(User, Payment.user_id == User.id)
+        user_cond = [User.email.ilike(f"%{q}%"), User.telegram_username.ilike(f"%{q}%")]
+        if q.isdigit():
+            user_cond += [Payment.id == int(q), User.id == int(q)]
+        conditions.append(or_(*user_cond))
+    if status and status in PaymentStatus._value2member_map_:
+        conditions.append(Payment.status == PaymentStatus(status))
+
+    if conditions:
+        filter_ = and_(*conditions)
+        query = query.where(filter_)
+        count_query = count_query.where(filter_)
+
     result = await session.execute(
-        select(Payment)
-        .options(selectinload(Payment.user))
-        .order_by(Payment.created_at.desc())
-        .offset(offset)
-        .limit(per_page)
+        query.order_by(Payment.created_at.desc()).offset(offset).limit(per_page)
     )
     payments = result.scalars().all()
-    total = (await session.execute(select(func.count(Payment.id)))).scalar()
+    total = (await session.execute(count_query)).scalar()
     pending_count = (await session.execute(
         select(func.count(Payment.id)).where(Payment.status == PaymentStatus.PENDING)
     )).scalar()
@@ -446,6 +517,9 @@ async def admin_payments(
         "per_page": per_page,
         "pages": (total + per_page - 1) // per_page,
         "pending_count": pending_count,
+        "q": q,
+        "status": status,
+        "statuses": list(PaymentStatus),
     })
 
 
