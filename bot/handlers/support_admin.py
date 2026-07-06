@@ -60,11 +60,16 @@ async def cmd_tickets(message: Message, user: User, session: AsyncSession):
     )
     tickets = result.scalars().all()
 
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     if not tickets:
-        await message.answer("✅ Нет открытых тикетов.")
+        await message.answer(
+            "✅ Нет открытых тикетов.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="← Админ-панель", callback_data="admin_menu:root")],
+            ]),
+        )
         return
 
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     buttons = []
     for t in tickets:
         name = t.user.display_name if t.user else f"User#{t.user_id}"
@@ -73,6 +78,7 @@ async def cmd_tickets(message: Message, user: User, session: AsyncSession):
             text=f"🔴 #{t.id} {name} — {label}",
             callback_data=f"admin_ticket:view:{t.id}",
         )])
+    buttons.append([InlineKeyboardButton(text="← Админ-панель", callback_data="admin_menu:root")])
 
     await message.answer(
         f"📋 <b>Открытые тикеты ({len(tickets)})</b>:",
@@ -98,12 +104,17 @@ async def cb_admin_ticket_list(callback: CallbackQuery, user: User, session: Asy
     )
     tickets = result.scalars().all()
 
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     if not tickets:
-        await callback.message.edit_text("✅ Нет открытых тикетов.")
+        await callback.message.edit_text(
+            "✅ Нет открытых тикетов.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="← Админ-панель", callback_data="admin_menu:root")],
+            ]),
+        )
         await callback.answer()
         return
 
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     buttons = []
     for t in tickets:
         name = t.user.display_name if t.user else f"User#{t.user_id}"
@@ -112,6 +123,7 @@ async def cb_admin_ticket_list(callback: CallbackQuery, user: User, session: Asy
             text=f"🔴 #{t.id} {name} — {label}",
             callback_data=f"admin_ticket:view:{t.id}",
         )])
+    buttons.append([InlineKeyboardButton(text="← Админ-панель", callback_data="admin_menu:root")])
 
     await callback.message.edit_text(
         f"📋 <b>Открытые тикеты ({len(tickets)})</b>:",

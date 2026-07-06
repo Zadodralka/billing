@@ -11,7 +11,8 @@ from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 from core.models import User, Subscription, SubscriptionStatus, Payment, PaymentStatus, SupportTicket, TicketStatus
 from core.config import settings
-from bot.states import AdminBroadcast
+from bot.states import AdminBroadcast, AdminFind
+from bot.keyboards.main import admin_menu
 
 logger = logging.getLogger("bot.admin")
 
@@ -19,17 +20,32 @@ router = Router()
 
 MAX_BROADCAST_RECIPIENTS_PER_SECOND = 25  # запас от лимита Telegram (~30 msg/sec)
 
+_ADMIN_MENU_BACK = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="← Админ-панель", callback_data="admin_menu:root")],
+])
+
 
 def _is_admin(user: User) -> bool:
     return user.telegram_id in settings.admin_ids
 
 
-# ===== /stats — быстрая сводка =====
-@router.message(Command("stats"))
-async def cmd_stats(message: Message, user: User, session: AsyncSession):
+# ===== Открыть админ-меню кнопками (вместо слэш-команд) =====
+@router.callback_query(F.data == "admin_menu:root")
+async def cb_admin_menu_root(callback: CallbackQuery, user: User, state: FSMContext):
     if not _is_admin(user):
+        await callback.answer("Нет доступа", show_alert=True)
         return
+    await state.clear()
+    await callback.message.edit_text(
+        "🛡 <b>Админ-панель</b>\n\nВыберите действие:",
+        parse_mode="HTML",
+        reply_markup=admin_menu(),
+    )
+    await callback.answer()
 
+
+# ===== /stats — быстрая сводка =====
+async def _stats_text(session: AsyncSession) -> str:
     now = datetime.utcnow()
     today_start = datetime(now.year, now.month, now.day)
     month_start = datetime(now.year, now.month, 1)
@@ -65,28 +81,34 @@ async def cmd_stats(message: Message, user: User, session: AsyncSession):
         select(func.count(SupportTicket.id)).where(SupportTicket.status == TicketStatus.OPEN)
     )).scalar() or 0
 
-    await message.answer(
+    return (
         "📊 <b>Статистика</b>\n\n"
         f"👥 Пользователей всего: {total_users}\n"
         f"✅ Активных подписок: {active_subs}\n\n"
         f"💰 Выручка сегодня: {revenue_today} ₽ ({payments_today} оплат)\n"
         f"💰 Выручка за месяц: {revenue_month} ₽\n\n"
-        f"🎫 Открытых тикетов: {open_tickets}",
-        parse_mode="HTML",
+        f"🎫 Открытых тикетов: {open_tickets}"
     )
 
 
-# ===== /find <email или username> — поиск пользователя =====
-@router.message(Command("find"))
-async def cmd_find(message: Message, user: User, session: AsyncSession, command: CommandObject):
+@router.message(Command("stats"))
+async def cmd_stats(message: Message, user: User, session: AsyncSession):
     if not _is_admin(user):
         return
+    await message.answer(await _stats_text(session), parse_mode="HTML")
 
-    query = (command.args or "").strip()
-    if not query:
-        await message.answer("Использование: <code>/find email_или_username</code>", parse_mode="HTML")
+
+@router.callback_query(F.data == "admin_menu:stats")
+async def cb_admin_stats(callback: CallbackQuery, user: User, session: AsyncSession):
+    if not _is_admin(user):
+        await callback.answer("Нет доступа", show_alert=True)
         return
+    await callback.message.edit_text(await _stats_text(session), parse_mode="HTML", reply_markup=_ADMIN_MENU_BACK)
+    await callback.answer()
 
+
+# ===== /find <email или username> — поиск пользователя =====
+async def _find_text(session: AsyncSession, query: str) -> str:
     result = await session.execute(
         select(User)
         .options(selectinload(User.subscriptions))
@@ -99,8 +121,7 @@ async def cmd_find(message: Message, user: User, session: AsyncSession, command:
     users = result.scalars().all()
 
     if not users:
-        await message.answer("Никого не найдено.")
-        return
+        return "Никого не найдено."
 
     now = datetime.utcnow()
     lines = [f"🔎 <b>Найдено: {len(users)}</b>\n"]
@@ -112,28 +133,88 @@ async def cmd_find(message: Message, user: User, session: AsyncSession, command:
             f"   email: {u.email or '—'} · tg: @{u.telegram_username or '—'}\n"
             f"   баланс: {u.balance} ₽ · активных подписок: {len(active)}"
         )
+    return "\n\n".join(lines)
 
-    await message.answer("\n\n".join(lines), parse_mode="HTML")
+
+@router.message(Command("find"))
+async def cmd_find(message: Message, user: User, session: AsyncSession, command: CommandObject):
+    if not _is_admin(user):
+        return
+
+    query = (command.args or "").strip()
+    if not query:
+        await message.answer("Использование: <code>/find email_или_username</code>", parse_mode="HTML")
+        return
+
+    await message.answer(await _find_text(session, query), parse_mode="HTML")
+
+
+@router.callback_query(F.data == "admin_menu:find")
+async def cb_admin_find_start(callback: CallbackQuery, user: User, state: FSMContext):
+    if not _is_admin(user):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    await state.set_state(AdminFind.waiting_query)
+    await callback.message.edit_text(
+        "🔍 Введите email или telegram-username (можно частично) для поиска:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_menu:root")],
+        ]),
+    )
+    await callback.answer()
+
+
+@router.message(AdminFind.waiting_query)
+async def process_admin_find_query(message: Message, user: User, state: FSMContext, session: AsyncSession):
+    if not _is_admin(user):
+        await state.clear()
+        return
+    await state.clear()
+
+    query = (message.text or "").strip()
+    if not query:
+        await message.answer("Пожалуйста, отправьте текст для поиска.")
+        return
+
+    await message.answer(await _find_text(session, query), parse_mode="HTML", reply_markup=_ADMIN_MENU_BACK)
 
 
 # ===== /broadcast — рассылка всем пользователям =====
+BROADCAST_PROMPT = (
+    "📣 Введите текст рассылки (уйдёт всем пользователям с привязанным Telegram).\n"
+    "Поддерживается HTML-разметка. Для отмены — /cancel."
+)
+
+
 @router.message(Command("broadcast"))
 async def cmd_broadcast_start(message: Message, user: User, state: FSMContext):
     if not _is_admin(user):
         return
-
     await state.set_state(AdminBroadcast.waiting_text)
-    await message.answer(
-        "📣 Введите текст рассылки (уйдёт всем пользователям с привязанным Telegram).\n"
-        "Поддерживается HTML-разметка. Для отмены — /cancel."
+    await message.answer(BROADCAST_PROMPT)
+
+
+@router.callback_query(F.data == "admin_menu:broadcast")
+async def cb_admin_broadcast_start(callback: CallbackQuery, user: User, state: FSMContext):
+    if not _is_admin(user):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    await state.set_state(AdminBroadcast.waiting_text)
+    await callback.message.edit_text(
+        BROADCAST_PROMPT,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_menu:root")],
+        ]),
     )
+    await callback.answer()
 
 
 @router.message(Command("cancel"), AdminBroadcast.waiting_text)
 @router.message(Command("cancel"), AdminBroadcast.waiting_confirm)
-async def cmd_broadcast_cancel(message: Message, state: FSMContext):
+@router.message(Command("cancel"), AdminFind.waiting_query)
+async def cmd_admin_cancel(message: Message, state: FSMContext):
     await state.clear()
-    await message.answer("Рассылка отменена.")
+    await message.answer("Отменено.")
 
 
 @router.message(AdminBroadcast.waiting_text)
@@ -165,7 +246,7 @@ async def process_broadcast_text(message: Message, user: User, state: FSMContext
 @router.callback_query(F.data == "broadcast:cancel", AdminBroadcast.waiting_confirm)
 async def cb_broadcast_cancel(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-    await callback.message.edit_text("Рассылка отменена.")
+    await callback.message.edit_text("Рассылка отменена.", reply_markup=_ADMIN_MENU_BACK)
     await callback.answer()
 
 
@@ -181,7 +262,7 @@ async def cb_broadcast_send(callback: CallbackQuery, user: User, state: FSMConte
     await callback.answer()
 
     if not text:
-        await callback.message.edit_text("Текст рассылки потерян, начните заново через /broadcast.")
+        await callback.message.edit_text("Текст рассылки потерян, начните заново.", reply_markup=_ADMIN_MENU_BACK)
         return
 
     result = await session.execute(select(User.telegram_id).where(User.telegram_id.is_not(None)))
@@ -203,4 +284,4 @@ async def cb_broadcast_send(callback: CallbackQuery, user: User, state: FSMConte
         if i % MAX_BROADCAST_RECIPIENTS_PER_SECOND == 0:
             await asyncio.sleep(1)
 
-    await callback.message.answer(f"✅ Рассылка завершена. Доставлено: {sent}, ошибок: {failed}.")
+    await callback.message.answer(f"✅ Рассылка завершена. Доставлено: {sent}, ошибок: {failed}.", reply_markup=_ADMIN_MENU_BACK)

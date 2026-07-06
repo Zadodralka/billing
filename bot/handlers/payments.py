@@ -6,6 +6,7 @@ from sqlalchemy import select, update
 from datetime import datetime, timedelta
 import secrets
 from core.models import User, Subscription, Payment, PaymentStatus, SubscriptionStatus, GiftCode, GiftCodeStatus
+from core.config import settings
 from core.plans import get_active_plans, get_plan
 from core.yoomoney import yoomoney
 from core.remnawave import remnawave
@@ -159,14 +160,14 @@ async def cb_check_payment(callback: CallbackQuery, user: User, session: AsyncSe
 
 
 @router.callback_query(F.data == "cancel")
-async def cb_cancel(callback: CallbackQuery):
+async def cb_cancel(callback: CallbackQuery, user: User):
     # Раньше здесь было callback.message.delete() - сообщение с клавиатурой пропадало,
     # а никакого нового меню не показывалось, и пользователь оставался без единой кнопки
     # в чате (приходилось вручную набирать /start). Правим на возврат в главное меню.
     await callback.message.edit_text(
         "❌ Платёж отменён.\n\n" + WELCOME_TEXT,
         parse_mode="HTML",
-        reply_markup=main_menu(),
+        reply_markup=main_menu(is_admin=user.telegram_id in settings.admin_ids),
     )
     await callback.answer()
 

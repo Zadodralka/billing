@@ -17,3 +17,7 @@ class AdminReplyToTicket(StatesGroup):
 class AdminBroadcast(StatesGroup):
     waiting_text = State()
     waiting_confirm = State()
+
+
+class AdminFind(StatesGroup):
+    waiting_query = State()

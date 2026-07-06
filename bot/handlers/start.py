@@ -11,6 +11,10 @@ from bot.keyboards.main import terms_keyboard, terms_keyboard_for_login, main_me
 
 router = Router()
 
+
+def _is_admin(user: User) -> bool:
+    return user.telegram_id in settings.admin_ids
+
 _bot_username_cache: str | None = None
 
 
@@ -148,7 +152,7 @@ async def cmd_start(message: Message, command: CommandObject, user: User, sessio
     await message.answer(
         f"👋 С возвращением, {name}!\n\n" + WELCOME_TEXT,
         parse_mode="HTML",
-        reply_markup=main_menu(),
+        reply_markup=main_menu(is_admin=_is_admin(user)),
     )
 
 
@@ -164,7 +168,7 @@ async def cb_accept_terms(callback: CallbackQuery, user: User, session: AsyncSes
         f"👋 Добро пожаловать, {name}!\n\n"
         + WELCOME_TEXT,
         parse_mode="HTML",
-        reply_markup=main_menu(),
+        reply_markup=main_menu(is_admin=_is_admin(user)),
     )
     await callback.answer()
 
@@ -187,7 +191,7 @@ async def cb_main_menu(callback: CallbackQuery, user: User):
     await callback.message.edit_text(
         WELCOME_TEXT,
         parse_mode="HTML",
-        reply_markup=main_menu(),
+        reply_markup=main_menu(is_admin=_is_admin(user)),
     )
     await callback.answer()
 
@@ -264,5 +268,5 @@ HELP_TEXT = """
 
 
 @router.message(Command("help"))
-async def cmd_help(message: Message):
-    await message.answer(HELP_TEXT, parse_mode="HTML", reply_markup=main_menu())
+async def cmd_help(message: Message, user: User):
+    await message.answer(HELP_TEXT, parse_mode="HTML", reply_markup=main_menu(is_admin=_is_admin(user)))

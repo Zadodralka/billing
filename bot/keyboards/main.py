@@ -17,9 +17,11 @@ def terms_keyboard_for_login(token: str) -> InlineKeyboardMarkup:
     ])
 
 
-def main_menu() -> InlineKeyboardMarkup:
-    """Главное меню бота"""
-    return InlineKeyboardMarkup(inline_keyboard=[
+def main_menu(is_admin: bool = False) -> InlineKeyboardMarkup:
+    """Главное меню бота. is_admin добавляет отдельную кнопку входа в админ-меню -
+    админские команды раньше были доступны только через слэш-команды (/stats,
+    /find, /broadcast), теперь то же самое доступно кнопками."""
+    buttons = [
         [
             InlineKeyboardButton(text="💳 Купить подписку", callback_data="menu:buy"),
             InlineKeyboardButton(text="📋 Мои подписки", callback_data="menu:subs"),
@@ -35,6 +37,20 @@ def main_menu() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(text="💬 Поддержка", callback_data="support:menu"),
         ],
+    ]
+    if is_admin:
+        buttons.append([InlineKeyboardButton(text="🛡 Админ-панель", callback_data="admin_menu:root")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def admin_menu() -> InlineKeyboardMarkup:
+    """Меню админ-функций бота кнопками вместо слэш-команд."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Статистика", callback_data="admin_menu:stats")],
+        [InlineKeyboardButton(text="🎫 Тикеты поддержки", callback_data="admin_ticket:list")],
+        [InlineKeyboardButton(text="🔍 Найти пользователя", callback_data="admin_menu:find")],
+        [InlineKeyboardButton(text="📣 Рассылка", callback_data="admin_menu:broadcast")],
+        [InlineKeyboardButton(text="← Главное меню", callback_data="menu:main")],
     ])
 
 
