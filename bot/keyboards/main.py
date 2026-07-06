@@ -27,7 +27,7 @@ def main_menu(is_admin: bool = False) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="📋 Мои подписки", callback_data="menu:subs"),
         ],
         [
-            InlineKeyboardButton(text="🔑 Мои конфиги", callback_data="menu:configs"),
+            InlineKeyboardButton(text="🔑 QR-код подключения", callback_data="menu:configs"),
             InlineKeyboardButton(text="💰 Баланс и бонусы", callback_data="menu:balance"),
         ],
         [

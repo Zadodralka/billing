@@ -18,6 +18,10 @@ router = Router()
 GIFT_CODE_CHARS = string.ascii_uppercase + string.digits
 
 
+def _traffic_label(traffic_gb: int) -> str:
+    return "Безлимит" if traffic_gb == 0 else f"{traffic_gb} GB"
+
+
 async def _create_payment_and_show(
     callback: CallbackQuery, user: User, session: AsyncSession,
     plan_key: str, plan: dict, traffic_gb: int, title: str,
@@ -44,6 +48,7 @@ async def _create_payment_and_show(
     await callback.message.edit_text(
         f"💳 <b>{title}</b>\n\n"
         f"📦 Тариф: {plan['name']}\n"
+        f"📊 Трафик: {_traffic_label(traffic_gb)}\n"
         f"💰 Сумма: {plan['price']} ₽\n\n"
         f"Нажмите кнопку ниже для оплаты через ЮМани.\n"
         f"После оплаты нажмите <b>✅ Я оплатил(а)</b>",
@@ -53,19 +58,67 @@ async def _create_payment_and_show(
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("buy:"))
-async def cb_buy_plan(callback: CallbackQuery, user: User, session: AsyncSession):
+# ===== Покупка — шаг 1: выбор тарифа уже сделан, выбираем объём трафика =====
+@router.callback_query(F.data.startswith("buy_plan:"))
+async def cb_buy_plan_traffic(callback: CallbackQuery, user: User, session: AsyncSession):
     plan_key = callback.data.split(":")[1]
     plan = await get_plan(session, plan_key)
     if not plan or not plan.get("is_active", True):
         await callback.answer("Тариф недоступен")
         return
 
+    base_traffic = plan.get("traffic_gb", 50)
+    unlimited_extra = plan.get("unlimited_extra", 0)
+
+    # Тариф уже безлимитный сам по себе - выбирать нечего, сразу к оплате
+    if base_traffic == 0:
+        await _create_payment_and_show(
+            callback, user, session, plan_key, plan,
+            traffic_gb=0,
+            title="Оплата подписки",
+            payment_comment=f"VPN подписка {plan['name']}",
+        )
+        return
+
+    unlimited_price = plan["price"] + unlimited_extra
+    buttons = [
+        [InlineKeyboardButton(
+            text=f"{base_traffic} GB — {plan['price']} ₽",
+            callback_data=f"buy:{plan_key}:{base_traffic}",
+        )],
+        [InlineKeyboardButton(
+            text=f"♾ Безлимит — {unlimited_price} ₽",
+            callback_data=f"buy:{plan_key}:0",
+        )],
+        [InlineKeyboardButton(text="← Назад", callback_data="menu:buy")],
+    ]
+    await callback.message.edit_text(
+        f"📦 <b>{plan['name']}</b>\n\nВыберите объём трафика:",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+    )
+    await callback.answer()
+
+
+# ===== Покупка — шаг 2: тариф и трафик выбраны, создаём счёт =====
+@router.callback_query(F.data.startswith("buy:"))
+async def cb_buy_plan(callback: CallbackQuery, user: User, session: AsyncSession):
+    _, plan_key, traffic_str = callback.data.split(":")
+    traffic_gb = int(traffic_str)
+
+    plan = await get_plan(session, plan_key)
+    if not plan or not plan.get("is_active", True):
+        await callback.answer("Тариф недоступен")
+        return
+
+    price = plan["price"] + (plan.get("unlimited_extra", 0) if traffic_gb == 0 else 0)
+    plan_for_payment = {**plan, "price": price}
+
     await _create_payment_and_show(
-        callback, user, session, plan_key, plan,
-        traffic_gb=plan.get("traffic_gb", 50),
+        callback, user, session, plan_key, plan_for_payment,
+        traffic_gb=traffic_gb,
         title="Оплата подписки",
-        payment_comment=f"VPN подписка {plan['name']}",
+        payment_comment=f"VPN подписка {plan['name']}" + (" (безлимит)" if traffic_gb == 0 else ""),
     )
 
 

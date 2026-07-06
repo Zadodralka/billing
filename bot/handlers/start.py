@@ -56,6 +56,9 @@ TERMS_TEXT = """
 WELCOME_TEXT = """
 👋 <b>Добро пожаловать в Unlock VPN!</b>
 
+Быстрый и стабильный VPN по подписке: оплата картой прямо в этом чате, конфиг для
+подключения приходит сразу после оплаты — никаких дополнительных ссылок и писем.
+
 Выберите действие в меню ниже:
 """.strip()
 
@@ -204,11 +207,13 @@ async def cb_menu_buy(callback: CallbackQuery, user: User, session: AsyncSession
     plans = await get_active_plans(session)
     buttons = []
     for key, plan in plans.items():
+        # Цена тут "от" - точная сумма зависит от объёма трафика, который
+        # выбирается следующим шагом (см. cb_buy_plan_traffic в payments.py)
         buttons.append([InlineKeyboardButton(
-            text=f"{plan['name']} — {plan['price']} ₽",
-            callback_data=f"buy:{key}",
+            text=f"{plan['name']} — от {plan['price']} ₽",
+            callback_data=f"buy_plan:{key}",
         )])
-    buttons.append([InlineKeyboardButton(text="← Назад", callback_data="menu:main")])
+    buttons.append([InlineKeyboardButton(text="← Главное меню", callback_data="menu:main")])
 
     await callback.message.edit_text(
         "💳 <b>Выберите тарифный план:</b>\n\n"
@@ -257,9 +262,9 @@ HELP_TEXT = """
 /start — открыть главное меню
 /help — показать эту справку
 
-💳 <b>Купить подписку</b> — выбрать тариф и оплатить через ЮMoney
-📋 <b>Мои подписки</b> — список активных подписок, продление, доступ к конфигу
-🔑 <b>Мои конфиги</b> — QR-код и ссылка для подключения VPN
+💳 <b>Купить подписку</b> — выбрать тариф, объём трафика и оплатить через ЮMoney
+📋 <b>Мои подписки</b> — даты, расход трафика, продление и конфиг каждой подписки
+🔑 <b>QR-код подключения</b> — быстрый доступ к QR-коду и ссылке без лишних деталей
 💰 <b>Баланс и бонусы</b> — баланс и реферальная ссылка
 💬 <b>Поддержка</b> — задать вопрос, ответим в чате
 

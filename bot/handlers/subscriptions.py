@@ -136,6 +136,16 @@ async def cb_menu_configs(callback: CallbackQuery, user: User, session: AsyncSes
 
     plans = await get_active_plans(session)
     await callback.answer()
+
+    intro = (
+        "🔑 <b>Конфиг для подключения ниже.</b>\n"
+        "Управлять подписками (даты, трафик, продление) — в разделе «📋 Мои подписки»."
+        if len(active) == 1 else
+        f"🔑 <b>Конфиги для всех {len(active)} активных подписок ниже.</b>\n"
+        "Управлять подписками (даты, трафик, продление) — в разделе «📋 Мои подписки»."
+    )
+    await callback.message.answer(intro, parse_mode="HTML")
+
     for sub in active:
         plan_name = plans.get(sub.plan_key, {}).get("name", sub.plan_key)
         await _send_subscription_qr(callback.message, sub, plan_name)
