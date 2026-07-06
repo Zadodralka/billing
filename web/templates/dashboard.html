@@ -120,6 +120,9 @@
     flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; background: var(--accent-soft); color: var(--accent);
     font-size: .74rem; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-top: .05rem;
 }
+/* flex: 1 + min-width: 0 - без этого текст в узком flex-элементе не переносится по
+   словам как обычно, а норовит вылезти за контейнер или разъехаться по колонкам */
+.connect-step-text { flex: 1; min-width: 0; }
 .connect-step b { color: #fff; }
 
 /* ── Оплата ── */
@@ -416,9 +419,18 @@
                 {% endif %}
 
                 <div class="connect-steps">
-                    <div class="connect-step"><span class="connect-step-num">1</span> Установите приложение <b>Happ</b> или <b>V2RayTun</b> (есть для iOS, Android, Windows и macOS)</div>
-                    <div class="connect-step"><span class="connect-step-num">2</span> На этом устройстве нажмите кнопку «Открыть и подключиться» ниже — конфиг добавится в приложение автоматически</div>
-                    <div class="connect-step"><span class="connect-step-num">3</span> На другом устройстве — скопируйте ссылку и в приложении выберите «Добавить подписку по ссылке»</div>
+                    <div class="connect-step">
+                        <span class="connect-step-num">1</span>
+                        <span class="connect-step-text">Установите приложение <b>Happ</b> или <b>V2RayTun</b> (есть для iOS, Android, Windows и macOS)</span>
+                    </div>
+                    <div class="connect-step">
+                        <span class="connect-step-num">2</span>
+                        <span class="connect-step-text">На этом устройстве нажмите кнопку «Открыть и подключиться» ниже — конфиг добавится в приложение автоматически</span>
+                    </div>
+                    <div class="connect-step">
+                        <span class="connect-step-num">3</span>
+                        <span class="connect-step-text">На другом устройстве — скопируйте ссылку и в приложении выберите «Добавить подписку по ссылке»</span>
+                    </div>
                 </div>
 
                 <div style="margin-top:1.1rem;">
