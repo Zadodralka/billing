@@ -161,16 +161,7 @@
 .spinner { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--panel-3); border-top-color: var(--accent); animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.renew-plan-btn {
-    display: flex; justify-content: space-between; align-items: center;
-    background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
-    padding: .75rem 1rem; cursor: pointer; transition: border-color .12s; font-family: inherit;
-    color: var(--text); width: 100%; text-align: left; margin-bottom: .5rem;
-}
-.renew-plan-btn:hover { border-color: var(--accent); }
-.renew-plan-btn .rp-name { font-weight: 600; color: #fff; }
-.renew-plan-btn .rp-days { color: var(--muted); font-size: .78rem; }
-.renew-plan-btn .rp-price { color: var(--accent); font-weight: 700; }
+.sub-action-row:disabled { opacity: .55; cursor: default; }
 
 /* ── Компактная история платежей (список вместо широкой таблицы - на телефоне
    не нужно скроллить вбок) ── */
@@ -262,30 +253,40 @@
 </div>
 
 {% if not user.email or not user.telegram_id %}
-<div class="card" style="padding:1.1rem 1.3rem;margin-bottom:1.5rem;">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.8rem;">
-        <div>
-            <div style="color:#fff;font-weight:700;font-size:.92rem;margin-bottom:.2rem;">Способы входа</div>
-            <div style="color:var(--muted);font-size:.82rem;">Привяжите оба способа, чтобы заходить и по почте, и через Telegram</div>
-        </div>
-        <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
-            {% if user.telegram_id %}
-                <span class="badge badge-on"><i class="bi bi-telegram"></i> Telegram привязан</span>
-            {% else %}
-                <button type="button" class="btn btn-outline-1 btn-sm" id="linkTelegramBtn" onclick="startLinkTelegram()">
-                    <i class="bi bi-telegram"></i> Привязать Telegram
-                </button>
-            {% endif %}
-            {% if user.email %}
-                <span class="badge badge-on"><i class="bi bi-envelope"></i> {{ user.email }}</span>
-            {% else %}
-                <button type="button" class="btn btn-outline-1 btn-sm" onclick="openModal('linkEmailModal')">
-                    <i class="bi bi-envelope"></i> Привязать email
-                </button>
-            {% endif %}
-        </div>
+<div class="card" style="padding:0;margin-bottom:1.5rem;overflow:hidden;">
+    <div style="padding:1.1rem 1.3rem .9rem;">
+        <div style="color:#fff;font-weight:700;font-size:.92rem;margin-bottom:.2rem;">Способы входа</div>
+        <div style="color:var(--muted);font-size:.82rem;">Привяжите оба способа, чтобы заходить и по почте, и через Telegram</div>
     </div>
-    <div id="linkTelegramStatus" style="font-size:.8rem;margin-top:.6rem;"></div>
+    <div class="sub-actions">
+        {% if user.telegram_id %}
+        <div class="sub-action-row" style="cursor:default;">
+            <span class="sub-action-icon" style="color:var(--accent);"><i class="bi bi-telegram"></i></span>
+            <span class="sub-action-text"><span class="sub-action-title">Telegram привязан</span>{% if user.telegram_username %}<span class="sub-action-sub">@{{ user.telegram_username }}</span>{% endif %}</span>
+            <i class="bi bi-check2-circle" style="color:var(--accent);"></i>
+        </div>
+        {% else %}
+        <button type="button" class="sub-action-row" id="linkTelegramBtn" onclick="startLinkTelegram()">
+            <span class="sub-action-icon"><i class="bi bi-telegram"></i></span>
+            <span class="sub-action-text"><span class="sub-action-title">Привязать Telegram</span></span>
+            <i class="bi bi-chevron-right sub-action-chevron"></i>
+        </button>
+        {% endif %}
+        {% if user.email %}
+        <div class="sub-action-row" style="cursor:default;">
+            <span class="sub-action-icon" style="color:var(--accent);"><i class="bi bi-envelope"></i></span>
+            <span class="sub-action-text"><span class="sub-action-title">{{ user.email }}</span></span>
+            <i class="bi bi-check2-circle" style="color:var(--accent);"></i>
+        </div>
+        {% else %}
+        <button type="button" class="sub-action-row" onclick="openModal('linkEmailModal')">
+            <span class="sub-action-icon"><i class="bi bi-envelope"></i></span>
+            <span class="sub-action-text"><span class="sub-action-title">Привязать email</span></span>
+            <i class="bi bi-chevron-right sub-action-chevron"></i>
+        </button>
+        {% endif %}
+    </div>
+    <div id="linkTelegramStatus" style="font-size:.8rem;padding:.6rem 1.3rem 0;"></div>
 </div>
 
 <div class="modal-overlay" id="linkEmailModal">
@@ -589,8 +590,14 @@ function openRenewModal(subId, currentPlanKey) {
     for (const [key, plan] of Object.entries(ALL_PLANS)) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'renew-plan-btn';
-        btn.innerHTML = `<div><div class="rp-name">${plan.name}</div><div class="rp-days">${plan.days} дней</div></div><div class="rp-price">${plan.price} ₽</div>`;
+        btn.className = 'sub-action-row';
+        btn.innerHTML = `
+            <span class="sub-action-icon"><i class="bi bi-calendar-check"></i></span>
+            <span class="sub-action-text">
+                <span class="sub-action-title">${plan.name}</span>
+                <span class="sub-action-sub">${plan.days} дней</span>
+            </span>
+            <span style="color:var(--accent);font-weight:700;font-size:.9rem;flex-shrink:0;">${plan.price} ₽</span>`;
         btn.onclick = () => startRenewPayment(subId, key);
         list.appendChild(btn);
     }
