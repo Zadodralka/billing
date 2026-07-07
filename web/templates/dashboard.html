@@ -162,38 +162,34 @@
 }
 
 /* ── Широкая карточка (мало подписок на десктопе - карточка растягивается
-   на всю ширину ряда): вместо тесного столбика показываем лаконичную
-   горизонтальную полоску - статус, тариф, трафик, отсчёт, кнопки-иконки
-   в один ряд. Раскладку показываем только для активных подписок - у
+   на всю ширину ряда): вместо тесного столбика показываем горизонтальную
+   полоску. Важно: сами блоки трафика и обратного отсчёта - это те же
+   .sub-traffic-block/.sub-countdown, что и в мобильной карточке (тот же
+   крупный шрифт значения, та же полоса и 4 бокса отсчёта), просто
+   уложенные в ряд - раньше здесь были урезанные мини-версии с мелким
+   шрифтом, из-за чего полоска выглядела бедно на фоне мобильной карточки.
+   Раскладку показываем только для активных подписок - у
    приостановленных/истёкших есть баннер с пояснением, там не жмёт. ── */
 .sub-strip { display: none; }
-@container (min-width: 640px) {
+@container (min-width: 900px) {
     .sub-card.active .sub-card-header,
     .sub-card.active .sub-card-body,
     .sub-card.active .sub-actions { display: none; }
-    .sub-card.active .sub-strip { display: flex; align-items: center; gap: 1.3rem; padding: .85rem 1.3rem; }
+    .sub-card.active .sub-strip { display: flex; align-items: center; gap: 1.6rem; padding: 1rem 1.3rem; flex-wrap: wrap; }
 }
-.sub-strip-main { display: flex; align-items: center; gap: .65rem; flex: 1.1; min-width: 0; }
-.sub-strip-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex-shrink: 0; box-shadow: 0 0 0 3px rgba(61,220,132,.15); }
+.sub-strip-main { display: flex; align-items: center; gap: .7rem; flex: 0 1 190px; min-width: 160px; }
+.sub-strip-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex-shrink: 0; box-shadow: 0 0 0 3px rgba(61,220,132,.15); margin-top: .15rem; align-self: flex-start; }
 .sub-strip-title { display: flex; flex-direction: column; min-width: 0; gap: .1rem; }
-.sub-strip-name { color: #fff; font-weight: 700; font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sub-strip-sub { color: var(--muted); font-size: .74rem; white-space: nowrap; }
-.sub-strip-traffic { flex: 1.2; min-width: 0; }
-.sub-strip-traffic-bar { height: 4px; background: var(--panel-3); border-radius: 9px; overflow: hidden; margin-bottom: .35rem; }
-.sub-strip-traffic-fill { display: block; height: 100%; border-radius: 9px; }
-.sub-strip-traffic-fill.green  { background: var(--accent); }
-.sub-strip-traffic-fill.orange { background: #f59e0b; }
-.sub-strip-traffic-fill.red    { background: #ef5b5b; }
-.sub-strip-traffic-text { font-size: .78rem; color: var(--muted); white-space: nowrap; }
-.sub-strip-countdown {
-    flex: 0 0 auto; font-family: 'Space Grotesk', sans-serif; font-size: .88rem; font-weight: 700; color: #fff;
-    background: var(--panel-2); border: 1px solid var(--border); border-radius: 9px; padding: .5rem .85rem; white-space: nowrap;
-}
+.sub-strip-status { color: var(--accent); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.sub-strip-name { color: #fff; font-weight: 700; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sub-strip-sub { color: var(--muted); font-size: .76rem; white-space: nowrap; }
+.sub-strip .sub-traffic-block { flex: 1.5; min-width: 200px; margin-top: 0; }
+.sub-strip .sub-countdown { flex: 0 0 auto; margin: 0; }
 .sub-strip-actions { display: flex; gap: .5rem; flex-shrink: 0; }
 .sub-strip-btn {
-    width: 38px; height: 38px; border-radius: 9px; background: var(--panel-2); border: 1px solid var(--border);
+    width: 40px; height: 40px; border-radius: 9px; background: var(--panel-2); border: 1px solid var(--border);
     color: var(--accent); display: flex; align-items: center; justify-content: center; cursor: pointer;
-    transition: background .12s, border-color .12s; font-size: 1rem;
+    transition: background .12s, border-color .12s; font-size: 1.05rem;
 }
 .sub-strip-btn:hover { border-color: var(--accent); background: rgba(61,220,132,.08); }
 
@@ -551,37 +547,51 @@
             {% endif %}
         </div>
 
-        <!-- Полоска для широкой карточки (см. @container выше) - только для активных -->
+        <!-- Полоска для широкой карточки (см. @container выше) - только для активных.
+             Блоки трафика и отсчёта - те же классы, что и в мобильной карточке выше,
+             без урезанного шрифта - меняется только раскладка (в ряд, не в столбик). -->
         {% if card_state == 'active' %}
         {% set strip_usage = usage_map.get(sub.remnawave_sub_id) %}
         <div class="sub-strip">
             <div class="sub-strip-main">
                 <span class="sub-strip-dot"></span>
                 <div class="sub-strip-title">
+                    <span class="sub-strip-status">Активна</span>
                     <span class="sub-strip-name">{{ all_plans.get(sub.plan_key, {}).get('name', sub.plan_key) }}</span>
                     {% if sub.expires_at %}<span class="sub-strip-sub">до {{ sub.expires_at.strftime('%d.%m.%Y') }}</span>{% endif %}
                 </div>
             </div>
-            <div class="sub-strip-traffic">
-                {% if strip_usage is not none %}
-                    {% if sub.traffic_gb > 0 %}
-                    {% set strip_pct = [(strip_usage / sub.traffic_gb * 100) | round(0, 'floor') | int, 100] | min %}
-                    <div class="sub-strip-traffic-bar">
-                        <div class="sub-strip-traffic-fill {% if strip_pct < 70 %}green{% elif strip_pct < 90 %}orange{% else %}red{% endif %}" style="width: {{ strip_pct }}%"></div>
-                    </div>
-                    <span class="sub-strip-traffic-text">{{ strip_usage }} / {{ sub.traffic_gb }} ГБ</span>
+
+            <div class="sub-traffic-block">
+                <div class="sub-traffic-label">Трафик</div>
+                <div class="sub-traffic-value">
+                    {% if strip_usage is not none %}
+                    <span class="sub-traffic-used">{{ strip_usage }} ГБ</span>
+                    <span class="sub-traffic-total">{% if sub.traffic_gb > 0 %}из {{ sub.traffic_gb }} ГБ{% else %}безлимит{% endif %}</span>
                     {% else %}
-                    <span class="sub-strip-traffic-text">{{ strip_usage }} ГБ · безлимит</span>
+                    <span class="sub-traffic-used">{% if sub.traffic_gb == 0 %}Безлимит{% else %}{{ sub.traffic_gb }} ГБ{% endif %}</span>
                     {% endif %}
-                {% else %}
-                    <span class="sub-strip-traffic-text">{% if sub.traffic_gb == 0 %}Безлимит{% else %}{{ sub.traffic_gb }} ГБ{% endif %}</span>
+                </div>
+                {% if strip_usage is not none and sub.traffic_gb > 0 %}
+                {% set strip_pct = [(strip_usage / sub.traffic_gb * 100) | round(0, 'floor') | int, 100] | min %}
+                <div class="sub-progress-bar">
+                    <div class="sub-progress-fill {% if strip_pct < 70 %}green{% elif strip_pct < 90 %}orange{% else %}red{% endif %}" style="width: {{ strip_pct }}%"></div>
+                </div>
                 {% endif %}
             </div>
+
             {% if sub.expires_at %}
-            <div class="sub-countdown sub-strip-countdown" data-expires="{{ sub.expires_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z">
-                <span data-unit="d">--</span>д <span data-unit="h">--</span>ч
+            <div class="sub-countdown" data-expires="{{ sub.expires_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z">
+                <div class="sub-countdown-unit"><span class="sub-countdown-num" data-unit="d">--</span><span class="sub-countdown-label">дн</span></div>
+                <span class="sub-countdown-sep">:</span>
+                <div class="sub-countdown-unit"><span class="sub-countdown-num" data-unit="h">--</span><span class="sub-countdown-label">ч</span></div>
+                <span class="sub-countdown-sep">:</span>
+                <div class="sub-countdown-unit"><span class="sub-countdown-num" data-unit="m">--</span><span class="sub-countdown-label">мин</span></div>
+                <span class="sub-countdown-sep">:</span>
+                <div class="sub-countdown-unit"><span class="sub-countdown-num" data-unit="s">--</span><span class="sub-countdown-label">сек</span></div>
             </div>
             {% endif %}
+
             <div class="sub-strip-actions">
                 {% if sub.config_link %}
                 <button type="button" class="sub-strip-btn" title="Подключение" onclick="openSubModal('{{ sub.id }}')"><i class="bi bi-qr-code"></i></button>
