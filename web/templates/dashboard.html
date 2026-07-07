@@ -28,7 +28,10 @@
 /* ── Сетка карточек ── */
 .subs-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    /* auto-fit (не auto-fill) схлопывает пустые колонки - если подписка одна
+       (или их меньше, чем помещается в ряд), карточка растягивается на всю
+       ширину вместо того, чтобы жаться к левому краю с пустым местом справа. */
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 1.1rem;
     margin-bottom: 2rem;
 }
@@ -43,6 +46,10 @@
     display: flex;
     flex-direction: column;
     transition: border-color .15s, box-shadow .15s;
+    /* container query ниже реагирует на реальную ширину самой карточки (а не
+       вьюпорта) - если подписок несколько и каждая карточка узкая, макет
+       остаётся вертикальным, даже если экран сам по себе широкий. */
+    container-type: inline-size;
 }
 .sub-card:hover { box-shadow: 0 8px 32px rgba(0,0,0,.3); }
 .sub-card.active  { border-color: rgba(61,220,132,.3); }
@@ -138,6 +145,48 @@
 @media (max-width: 480px) {
     /* На узких телефонах фиксированный minmax(300px) может вылезать за экран - даём сетке схлопнуться в одну колонку */
     .subs-grid { grid-template-columns: 1fr; }
+
+    /* Чуть компактнее: карточка подписки на телефоне и так одна в столбик,
+       незачем тратить на неё столько воздуха по краям и между блоками. */
+    .sub-card-header { padding: .85rem 1rem .65rem; }
+    .sub-card-body { padding: .85rem 1rem; gap: .4rem; }
+    .sub-traffic-used { font-size: 1.15rem; }
+    .sub-countdown { margin: .3rem 0 .05rem; gap: .25rem; }
+    .sub-countdown-unit { padding: .3rem .15rem; }
+    .sub-countdown-num { font-size: 1rem; }
+    .sub-countdown-label { font-size: .56rem; }
+    .sub-action-row { padding: .65rem 1rem; gap: .6rem; }
+    .sub-action-icon { width: 32px; height: 32px; font-size: .85rem; }
+    .sub-action-title { font-size: .82rem; }
+    .sub-action-sub { font-size: .68rem; }
+}
+
+/* ── Широкая карточка (мало подписок на десктопе - карточка растягивается
+   на всю ширину ряда): раскладываем блоки в строку вместо тесного столбика,
+   чтобы освободившееся место не выглядело просто пустым отступом. ── */
+@container (min-width: 640px) {
+    /* flex (не grid с фиксированным числом колонок) - число прямых потомков
+       .sub-card-body отличается по статусу подписки (у paused/expired нет
+       блока обратного отсчёта) - flex подстраивается сам, без фиксации колонок. */
+    .sub-card-body { flex-direction: row; align-items: center; gap: 1.5rem; }
+    .sub-card-body > .sub-info-row {
+        flex: 1; min-width: 0;
+        flex-direction: column; align-items: flex-start; gap: .3rem;
+        padding: 0; border-bottom: none;
+    }
+    .sub-card-body > .sub-info-row .k { font-size: .72rem; }
+    .sub-card-body > .sub-info-row .v { font-size: .95rem; }
+    .sub-card-body > .sub-traffic-block { flex: 1.2; min-width: 0; margin: 0; }
+    .sub-card-body > .sub-countdown { flex: 1.6; min-width: 0; margin: 0; justify-content: flex-start; }
+
+    .sub-actions { display: flex; }
+    .sub-action-row {
+        flex: 1; flex-direction: column; align-items: center; text-align: center; gap: .4rem;
+        border-bottom: none; border-right: 1px solid var(--border);
+    }
+    .sub-action-row:last-child { border-right: none; }
+    .sub-action-text { text-align: center; }
+    .sub-action-chevron { display: none; }
 }
 
 /* ── Модалка конфига ── */
