@@ -162,32 +162,40 @@
 }
 
 /* ── Широкая карточка (мало подписок на десктопе - карточка растягивается
-   на всю ширину ряда): раскладываем блоки в строку вместо тесного столбика,
-   чтобы освободившееся место не выглядело просто пустым отступом. ── */
+   на всю ширину ряда): вместо тесного столбика показываем лаконичную
+   горизонтальную полоску - статус, тариф, трафик, отсчёт, кнопки-иконки
+   в один ряд. Раскладку показываем только для активных подписок - у
+   приостановленных/истёкших есть баннер с пояснением, там не жмёт. ── */
+.sub-strip { display: none; }
 @container (min-width: 640px) {
-    /* flex (не grid с фиксированным числом колонок) - число прямых потомков
-       .sub-card-body отличается по статусу подписки (у paused/expired нет
-       блока обратного отсчёта) - flex подстраивается сам, без фиксации колонок. */
-    .sub-card-body { flex-direction: row; align-items: center; gap: 1.5rem; }
-    .sub-card-body > .sub-info-row {
-        flex: 1; min-width: 0;
-        flex-direction: column; align-items: flex-start; gap: .3rem;
-        padding: 0; border-bottom: none;
-    }
-    .sub-card-body > .sub-info-row .k { font-size: .72rem; }
-    .sub-card-body > .sub-info-row .v { font-size: .95rem; }
-    .sub-card-body > .sub-traffic-block { flex: 1.2; min-width: 0; margin: 0; }
-    .sub-card-body > .sub-countdown { flex: 1.6; min-width: 0; margin: 0; justify-content: flex-start; }
-
-    .sub-actions { display: flex; }
-    .sub-action-row {
-        flex: 1; flex-direction: column; align-items: center; text-align: center; gap: .4rem;
-        border-bottom: none; border-right: 1px solid var(--border);
-    }
-    .sub-action-row:last-child { border-right: none; }
-    .sub-action-text { text-align: center; }
-    .sub-action-chevron { display: none; }
+    .sub-card.active .sub-card-header,
+    .sub-card.active .sub-card-body,
+    .sub-card.active .sub-actions { display: none; }
+    .sub-card.active .sub-strip { display: flex; align-items: center; gap: 1.3rem; padding: .85rem 1.3rem; }
 }
+.sub-strip-main { display: flex; align-items: center; gap: .65rem; flex: 1.1; min-width: 0; }
+.sub-strip-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex-shrink: 0; box-shadow: 0 0 0 3px rgba(61,220,132,.15); }
+.sub-strip-title { display: flex; flex-direction: column; min-width: 0; gap: .1rem; }
+.sub-strip-name { color: #fff; font-weight: 700; font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sub-strip-sub { color: var(--muted); font-size: .74rem; white-space: nowrap; }
+.sub-strip-traffic { flex: 1.2; min-width: 0; }
+.sub-strip-traffic-bar { height: 4px; background: var(--panel-3); border-radius: 9px; overflow: hidden; margin-bottom: .35rem; }
+.sub-strip-traffic-fill { display: block; height: 100%; border-radius: 9px; }
+.sub-strip-traffic-fill.green  { background: var(--accent); }
+.sub-strip-traffic-fill.orange { background: #f59e0b; }
+.sub-strip-traffic-fill.red    { background: #ef5b5b; }
+.sub-strip-traffic-text { font-size: .78rem; color: var(--muted); white-space: nowrap; }
+.sub-strip-countdown {
+    flex: 0 0 auto; font-family: 'Space Grotesk', sans-serif; font-size: .88rem; font-weight: 700; color: #fff;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 9px; padding: .5rem .85rem; white-space: nowrap;
+}
+.sub-strip-actions { display: flex; gap: .5rem; flex-shrink: 0; }
+.sub-strip-btn {
+    width: 38px; height: 38px; border-radius: 9px; background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--accent); display: flex; align-items: center; justify-content: center; cursor: pointer;
+    transition: background .12s, border-color .12s; font-size: 1rem;
+}
+.sub-strip-btn:hover { border-color: var(--accent); background: rgba(61,220,132,.08); }
 
 /* ── Модалка конфига ── */
 .config-row { display: flex; gap: .5rem; }
@@ -398,7 +406,7 @@
 {% set all_visible_subs = active_subs + paused_subs %}
 
 {% if all_visible_subs %}
-<h2 class="section-title">Мои подписки</h2>
+<h2 class="section-title">Подписки</h2>
 <div class="subs-grid">
     {% for sub in all_visible_subs %}
 
@@ -525,6 +533,46 @@
             </button>
             {% endif %}
         </div>
+
+        <!-- Полоска для широкой карточки (см. @container выше) - только для активных -->
+        {% if card_state == 'active' %}
+        {% set strip_usage = usage_map.get(sub.remnawave_sub_id) %}
+        <div class="sub-strip">
+            <div class="sub-strip-main">
+                <span class="sub-strip-dot"></span>
+                <div class="sub-strip-title">
+                    <span class="sub-strip-name">{{ all_plans.get(sub.plan_key, {}).get('name', sub.plan_key) }}</span>
+                    {% if sub.expires_at %}<span class="sub-strip-sub">до {{ sub.expires_at.strftime('%d.%m.%Y') }}</span>{% endif %}
+                </div>
+            </div>
+            <div class="sub-strip-traffic">
+                {% if strip_usage is not none %}
+                    {% if sub.traffic_gb > 0 %}
+                    {% set strip_pct = [(strip_usage / sub.traffic_gb * 100) | round(0, 'floor') | int, 100] | min %}
+                    <div class="sub-strip-traffic-bar">
+                        <div class="sub-strip-traffic-fill {% if strip_pct < 70 %}green{% elif strip_pct < 90 %}orange{% else %}red{% endif %}" style="width: {{ strip_pct }}%"></div>
+                    </div>
+                    <span class="sub-strip-traffic-text">{{ strip_usage }} / {{ sub.traffic_gb }} ГБ</span>
+                    {% else %}
+                    <span class="sub-strip-traffic-text">{{ strip_usage }} ГБ · безлимит</span>
+                    {% endif %}
+                {% else %}
+                    <span class="sub-strip-traffic-text">{% if sub.traffic_gb == 0 %}Безлимит{% else %}{{ sub.traffic_gb }} ГБ{% endif %}</span>
+                {% endif %}
+            </div>
+            {% if sub.expires_at %}
+            <div class="sub-countdown sub-strip-countdown" data-expires="{{ sub.expires_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z">
+                <span data-unit="d">--</span>д <span data-unit="h">--</span>ч
+            </div>
+            {% endif %}
+            <div class="sub-strip-actions">
+                {% if sub.config_link %}
+                <button type="button" class="sub-strip-btn" title="Подключение" onclick="openSubModal('{{ sub.id }}')"><i class="bi bi-qr-code"></i></button>
+                {% endif %}
+                <button type="button" class="sub-strip-btn" title="Продлить подписку" onclick="openRenewModal('{{ sub.id }}', '{{ sub.plan_key }}')"><i class="bi bi-arrow-repeat"></i></button>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Модалка с конфигом (только для активных) -->
