@@ -197,6 +197,23 @@
 }
 .sub-strip-btn:hover { border-color: var(--accent); background: rgba(61,220,132,.08); }
 
+/* ── Строка выбора тарифа в модалке продления: план + переключатель трафика + цена.
+   Не весь ряд кликабелен (внутри есть свой переключатель), поэтому оборачиваем
+   в div, а не button, и даём содержимому перенос на узких экранах. ── */
+.renew-row { flex-wrap: wrap; row-gap: .5rem; cursor: default; }
+.renew-row .sub-action-text { flex: 1 1 130px; }
+.renew-traffic-toggle { display: flex; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 2px; flex-shrink: 0; }
+.renew-traffic-btn {
+    background: transparent; border: none; color: var(--muted); font-size: .72rem; font-weight: 600;
+    padding: .4rem .65rem; border-radius: 6px; cursor: pointer; font-family: inherit; white-space: nowrap; transition: all .12s;
+}
+.renew-traffic-btn.active { background: var(--accent); color: #06140c; }
+.renew-go-btn {
+    background: none; border: none; color: var(--accent); font-weight: 700; font-size: .9rem; cursor: pointer;
+    font-family: inherit; flex-shrink: 0; padding: .4rem .2rem;
+}
+.renew-go-btn:hover { text-decoration: underline; }
+
 /* ── Модалка конфига ── */
 .config-row { display: flex; gap: .5rem; }
 .config-row input { flex: 1; font-size: .76rem; padding: .55rem .7rem; }
@@ -723,31 +740,53 @@ function copyConfig(id) {
 function openRenewModal(subId, currentPlanKey) {
     const list = document.getElementById('renewPlansList');
     list.innerHTML = '';
-    for (const [key, plan] of Object.entries(ALL_PLANS)) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'sub-action-row';
-        btn.innerHTML = `
+    const sortedPlans = Object.entries(ALL_PLANS).sort((a, b) => a[1].days - b[1].days || a[1].price - b[1].price);
+    for (const [key, plan] of sortedPlans) {
+        const defaultTraffic = plan.traffic_gb || 50;
+        const priceLimited = plan.price;
+        const priceUnlimited = plan.price + (plan.unlimited_extra || 0);
+
+        const row = document.createElement('div');
+        row.className = 'sub-action-row renew-row';
+        row.innerHTML = `
             <span class="sub-action-icon"><i class="bi bi-calendar-check"></i></span>
             <span class="sub-action-text">
                 <span class="sub-action-title">${plan.name}</span>
                 <span class="sub-action-sub">${plan.days} дней</span>
             </span>
-            <span style="color:var(--accent);font-weight:700;font-size:.9rem;flex-shrink:0;">${plan.price} ₽</span>`;
-        btn.onclick = () => startRenewPayment(subId, key);
-        list.appendChild(btn);
+            <div class="renew-traffic-toggle">
+                <button type="button" class="renew-traffic-btn active" data-traffic="${defaultTraffic}">${defaultTraffic} GB</button>
+                <button type="button" class="renew-traffic-btn" data-traffic="0">Безлимит</button>
+            </div>
+            <button type="button" class="renew-go-btn">${priceLimited} ₽</button>`;
+
+        const goBtn = row.querySelector('.renew-go-btn');
+        row.querySelectorAll('.renew-traffic-btn').forEach(tb => {
+            tb.addEventListener('click', () => {
+                row.querySelectorAll('.renew-traffic-btn').forEach(b => b.classList.remove('active'));
+                tb.classList.add('active');
+                const traffic = parseInt(tb.dataset.traffic, 10);
+                goBtn.textContent = (traffic === 0 ? priceUnlimited : priceLimited) + ' ₽';
+            });
+        });
+        goBtn.addEventListener('click', () => {
+            const activeBtn = row.querySelector('.renew-traffic-btn.active');
+            const traffic = activeBtn ? parseInt(activeBtn.dataset.traffic, 10) : defaultTraffic;
+            startRenewPayment(subId, key, traffic);
+        });
+        list.appendChild(row);
     }
     openModal('renewModal');
 }
 
-async function startRenewPayment(subId, planKey) {
+async function startRenewPayment(subId, planKey, trafficGb) {
     closeModal('renewModal');
     openModal('payModal');
     document.getElementById('payModalBody').innerHTML = `<div class="pay-loading"><div class="spinner"></div><span style="color:var(--muted);font-size:.85rem;">Создаём счёт…</span></div>`;
 
     const res = await fetch('/payment/create', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({plan_key: planKey, traffic_gb: 50, renew_subscription_id: parseInt(subId)})
+        body: JSON.stringify({plan_key: planKey, traffic_gb: trafficGb, renew_subscription_id: parseInt(subId)})
     });
     const data = await res.json();
     document.getElementById('payModalBody').innerHTML = `

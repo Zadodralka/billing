@@ -63,7 +63,7 @@
 
 {% set ref_plan = plans.values() | list | sort(attribute='days') | first %}
 <div class="plans-grid">
-    {% for key, plan in plans.items() %}
+    {% for key, plan in plans.items() | sort(attribute='1.days') %}
         {{ plan_card(key, plan, ref_plan, true, 'Купить', "handlePlanClick('" ~ key ~ "')") }}
     {% endfor %}
 </div>
