@@ -10,6 +10,7 @@ from core.database import get_db
 from core.models import User, Payment, PaymentStatus, GiftCode, GiftCodeStatus
 from core.plans import get_active_plans, get_plan
 from core.yoomoney import yoomoney
+from core.rate_limit import check_rate_limit
 from core.version import APP_VERSION
 from web.routers.auth import require_user, get_current_user
 
@@ -20,6 +21,11 @@ templates = Jinja2Templates(directory="web/templates")
 templates.env.globals["app_version"] = APP_VERSION
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+# Ограничение на создание счетов на подарок - получатель узнаёт о подарке письмом
+# на свой email, не должно быть возможности заспамить произвольный адрес счетами.
+GIFT_CREATE_RATE_LIMIT = 10
+GIFT_CREATE_RATE_WINDOW_SECONDS = 3600
 
 
 @router.get("", response_class=HTMLResponse)
@@ -36,6 +42,9 @@ async def create_gift_payment(request: Request, user: User = Depends(require_use
 
     if not recipient_email or not EMAIL_RE.match(recipient_email):
         raise HTTPException(400, "Введите корректный email получателя")
+
+    if not await check_rate_limit(f"gift_create:{user.id}", GIFT_CREATE_RATE_LIMIT, GIFT_CREATE_RATE_WINDOW_SECONDS):
+        raise HTTPException(429, "Слишком много подарков подряд. Попробуйте позже.")
 
     plan = await get_plan(session, plan_key)
     if not plan or not plan.get("is_active", True):

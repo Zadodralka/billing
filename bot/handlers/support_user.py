@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from core.models import User, SupportTicket, SupportMessage, TicketStatus
 from core.support_notify import notify_admins_new_message
+from core.rate_limit import check_rate_limit
 from core.config import settings
 from bot.states import CreateTicket, ReplyToTicket
 from bot.keyboards.support import (
@@ -17,6 +18,11 @@ from bot.keyboards.support import (
 router = Router()
 
 MAX_MESSAGES_PREVIEW = 5  # сколько последних сообщений показываем в просмотре тикета
+
+# Создание тикетов и ответы шлют уведомление всем админам в Telegram - без лимита
+# один аккаунт может завалить их сообщениями за секунды.
+TICKET_RATE_LIMIT = 5
+TICKET_RATE_WINDOW_SECONDS = 600
 
 
 def _parse_id(callback_data: str, index: int) -> int | None:
@@ -198,6 +204,10 @@ async def process_ticket_message(message: Message, user: User, state: FSMContext
     subject = data.get("subject", "Без темы")
     await state.clear()
 
+    if not await check_rate_limit(f"ticket_create:{user.id}", TICKET_RATE_LIMIT, TICKET_RATE_WINDOW_SECONDS):
+        await message.answer("⚠️ Слишком много обращений подряд. Попробуйте позже.")
+        return
+
     ticket = SupportTicket(user_id=user.id, subject=subject, status=TicketStatus.OPEN)
     session.add(ticket)
     await session.flush()
@@ -243,6 +253,10 @@ async def process_user_reply(message: Message, user: User, state: FSMContext, se
     data = await state.get_data()
     ticket_id = data.get("ticket_id")
     await state.clear()
+
+    if not await check_rate_limit(f"ticket_create:{user.id}", TICKET_RATE_LIMIT, TICKET_RATE_WINDOW_SECONDS):
+        await message.answer("⚠️ Слишком много сообщений подряд. Попробуйте позже.")
+        return
 
     result = await session.execute(
         select(SupportTicket)

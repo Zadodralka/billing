@@ -150,21 +150,42 @@ async def process_referral_bonus(referred_user: User, payment: Payment, session:
 
     referred_user.referral_bonus_paid = True
 
-    # Уведомление реферера в Telegram
-    if referrer.telegram_id:
+    await _notify_bonus(
+        referrer, bonus_referrer,
+        "Пользователь, которого вы пригласили, оформил подписку.",
+    )
+    await _notify_bonus(
+        referred_user, bonus_referred,
+        "Вы получили бонус за регистрацию по реферальной ссылке.",
+    )
+
+    logger.info(f"Referral bonuses paid: referrer={referrer.id} +{bonus_referrer}, referred={referred_user.id} +{bonus_referred}")
+
+
+async def _notify_bonus(user: User, amount: int, reason_text: str):
+    """Уведомляет о начислении бонуса на баланс - в Telegram (если привязан) и на
+    email (если есть), независимо друг от друга. Раньше уведомлялся только реферер
+    и только в Telegram - приглашённый пользователь о своём бонусе не узнавал вовсе,
+    а реферер без привязанного Telegram не узнавал о начислении никак."""
+    if user.telegram_id:
         try:
             from aiogram import Bot
             bot = Bot(token=settings.bot_token)
             await bot.send_message(
-                referrer.telegram_id,
-                f"🎉 <b>Реферальный бонус!</b>\n\n"
-                f"Пользователь, которого вы пригласили, оформил подписку.\n"
-                f"Вам начислено <b>{bonus_referrer} ₽</b> на баланс.\n\n"
-                f"💰 Текущий баланс: <b>{referrer.balance} ₽</b>",
+                user.telegram_id,
+                f"🎉 <b>Начислен бонус на баланс!</b>\n\n"
+                f"{reason_text}\n"
+                f"Вам начислено <b>{amount} ₽</b> на баланс.\n\n"
+                f"💰 Текущий баланс: <b>{user.balance} ₽</b>",
                 parse_mode="HTML",
             )
             await bot.session.close()
         except Exception as e:
-            logger.warning(f"Could not notify referrer {referrer.telegram_id}: {e}")
+            logger.warning(f"_notify_bonus (telegram) failed for {user.telegram_id}: {e}")
 
-    logger.info(f"Referral bonuses paid: referrer={referrer.id} +{bonus_referrer}, referred={referred_user.id} +{bonus_referred}")
+    if user.email:
+        try:
+            from core.email import send_balance_bonus_email
+            await send_balance_bonus_email(user.email, amount, reason_text, user.balance)
+        except Exception as e:
+            logger.warning(f"_notify_bonus (email) failed for {user.email}: {e}")

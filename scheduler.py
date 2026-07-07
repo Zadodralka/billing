@@ -12,6 +12,7 @@
 """
 import asyncio
 import logging
+import pathlib
 from datetime import datetime, timedelta
 from sqlalchemy import select
 from core.database import AsyncSessionLocal, init_db
@@ -22,6 +23,11 @@ from aiogram import Bot
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Docker healthcheck читает mtime этого файла - если цикл планировщика завис,
+# файл перестаёт обновляться и контейнер помечается unhealthy.
+HEARTBEAT_FILE = pathlib.Path("/tmp/scheduler_heartbeat")
+HEARTBEAT_INTERVAL_SECONDS = 30
 
 DELETE_AFTER_DAYS = 7  # сколько дней хранить заблокированный аккаунт перед полным удалением
 PENDING_PAYMENT_TIMEOUT_HOURS = 24  # через сколько часов гасить неоплаченный счёт и вернуть баланс
@@ -288,9 +294,19 @@ async def run_cycle():
         logger.error(f"expire_stale_pending_payments failed: {e}")
 
 
+async def _heartbeat_loop():
+    while True:
+        try:
+            HEARTBEAT_FILE.touch()
+        except Exception as e:
+            logger.warning(f"Heartbeat touch failed: {e}")
+        await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
+
+
 async def main():
     await init_db()
     logger.info("Scheduler started")
+    asyncio.create_task(_heartbeat_loop())
     while True:
         await run_cycle()
         await asyncio.sleep(3600)  # каждый час

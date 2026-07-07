@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import pathlib
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import ErrorEvent, BotCommand, BotCommandScopeDefault, BotCommandScopeChat
@@ -12,6 +13,11 @@ from bot.handlers import support_user, support_admin
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Docker healthcheck читает mtime этого файла - если бот завис (event loop не
+# крутится), файл перестаёт обновляться и контейнер помечается unhealthy.
+HEARTBEAT_FILE = pathlib.Path("/tmp/bot_heartbeat")
+HEARTBEAT_INTERVAL_SECONDS = 30
 
 USER_COMMANDS = [
     BotCommand(command="start", description="Главное меню"),
@@ -57,8 +63,18 @@ async def on_error(event: ErrorEvent):
     return True
 
 
+async def _heartbeat_loop():
+    while True:
+        try:
+            HEARTBEAT_FILE.touch()
+        except Exception as e:
+            logger.warning(f"Heartbeat touch failed: {e}")
+        await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
+
+
 async def main():
     await init_db()
+    asyncio.create_task(_heartbeat_loop())
 
     storage = RedisStorage.from_url(settings.redis_url)
     bot = Bot(token=settings.bot_token)

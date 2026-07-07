@@ -69,6 +69,11 @@ async def root(request: Request, ref: str = None):
     return RedirectResponse("/dashboard")
 
 
+@app.get("/health")
+async def health():
+    return JSONResponse({"status": "ok"})
+
+
 @app.on_event("startup")
 async def startup():
     await init_db()

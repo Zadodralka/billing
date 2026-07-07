@@ -8,6 +8,7 @@ import logging
 from core.database import get_db
 from core.models import User, SupportTicket, SupportMessage, TicketStatus
 from core.support_notify import notify_admins_new_message
+from core.rate_limit import check_rate_limit
 from core.version import APP_VERSION
 from web.routers.auth import require_user
 
@@ -16,6 +17,11 @@ logger = logging.getLogger("support")
 router = APIRouter(prefix="/dashboard/support")
 templates = Jinja2Templates(directory="web/templates")
 templates.env.globals["app_version"] = APP_VERSION
+
+# Создание тикетов и ответы шлют уведомление всем админам в Telegram - без лимита
+# один аккаунт может завалить их сообщениями за секунды.
+TICKET_RATE_LIMIT = 5
+TICKET_RATE_WINDOW_SECONDS = 600
 
 
 @router.get("", response_class=HTMLResponse)
@@ -43,6 +49,9 @@ async def create_ticket(
     message = message.strip()
     if not subject or not message:
         return JSONResponse({"ok": False, "error": "Заполните тему и сообщение"}, status_code=400)
+
+    if not await check_rate_limit(f"ticket_create:{user.id}", TICKET_RATE_LIMIT, TICKET_RATE_WINDOW_SECONDS):
+        return JSONResponse({"ok": False, "error": "Слишком много обращений подряд. Попробуйте позже."}, status_code=429)
 
     try:
         ticket = SupportTicket(user_id=user.id, subject=subject, status=TicketStatus.OPEN)
@@ -91,6 +100,9 @@ async def reply_to_ticket(
     message = message.strip()
     if not message:
         return JSONResponse({"ok": False, "error": "Сообщение не может быть пустым"}, status_code=400)
+
+    if not await check_rate_limit(f"ticket_create:{user.id}", TICKET_RATE_LIMIT, TICKET_RATE_WINDOW_SECONDS):
+        return JSONResponse({"ok": False, "error": "Слишком много сообщений подряд. Попробуйте позже."}, status_code=429)
 
     try:
         result = await session.execute(

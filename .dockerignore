@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+.git
+__pycache__/
+*.pyc
+*.pyo
+backup_*.sql
+backups/
+web/static/uploads/
+.dockerignore
+Dockerfile
+docker-compose.yml

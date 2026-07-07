@@ -507,3 +507,28 @@ async def send_ticket_reply_email(recipient_email: str, ticket_id: int, subject:
         ),
     )
     await send_email(recipient_email, f"💬 Ответ по обращению #{ticket_id} — Unlock VPN", html)
+
+
+async def send_balance_bonus_email(recipient_email: str, amount: int, reason_text: str, balance: int):
+    """Письмо о начислении бонуса на баланс (реферальная программа) - дублирует
+    Telegram-уведомление на случай, если у пользователя не привязан Telegram."""
+    body_html = f"""
+    <p style="color: #4b5565; font-size: 15px; line-height: 1.6; margin-bottom: 24px;">
+      {escape(reason_text)}<br>
+      Вам начислено <strong style="color: #14181f;">{amount} ₽</strong> на баланс.
+      Текущий баланс: <strong style="color: #14181f;">{balance} ₽</strong>.
+      Баланс можно использовать при оплате подписки.
+    </p>
+    """
+    html = _simple_notice_html(
+        emoji="🎉",
+        title="Начислен бонус на баланс",
+        body_html=body_html,
+        cta_text="Перейти в кабинет",
+        cta_url=f"{settings.webapp_url}/dashboard/referral",
+        footer_note=(
+            "Это письмо отправлено автоматически по реферальной программе на "
+            f"<a href='{settings.webapp_url}' style='color: #97a1b0; text-decoration: underline;'>{settings.webapp_url}</a>."
+        ),
+    )
+    await send_email(recipient_email, "🎉 Начислен бонус на баланс — Unlock VPN", html)
