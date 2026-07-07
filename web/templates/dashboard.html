@@ -64,19 +64,29 @@
 .sub-info-row .k { color: var(--muted); }
 .sub-info-row .v { color: #fff; font-weight: 500; }
 
-/* ── Прогресс-бар времени ── */
-.sub-progress-wrap { margin-top: .25rem; }
-.sub-progress-label { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted); margin-bottom: .35rem; }
-/* justify-content:flex-end держит закрашенную часть у правого края - по мере убывания
-   дней граница сдвигается слева направо, а не наоборот */
-.sub-progress-bar  { height: 4px; background: var(--panel-3); border-radius: 9px; overflow: hidden; display: flex; justify-content: flex-end; }
-/* Трафик - это "использовано", а не "осталось": заполнение растёт слева направо
-   по мере расхода, в отличие от полосы времени выше (та якорится справа). */
-.sub-progress-bar.traffic { justify-content: flex-start; }
-.sub-progress-fill { height: 100%; border-radius: 9px; transition: width .3s; }
+/* ── Крупная статистика трафика (акцентное число, а не мелкая строка) ── */
+.sub-traffic-block { margin-top: .3rem; }
+.sub-traffic-label { font-size: .72rem; color: var(--muted); margin-bottom: .3rem; }
+.sub-traffic-value { display: flex; align-items: baseline; gap: .4rem; margin-bottom: .45rem; }
+.sub-traffic-used  { font-family: 'Space Grotesk', sans-serif; font-size: 1.35rem; font-weight: 700; color: #fff; }
+.sub-traffic-total { font-size: .78rem; color: var(--muted); }
+
+.sub-progress-bar { height: 4px; background: var(--panel-3); border-radius: 9px; overflow: hidden; }
+.sub-progress-fill { display: block; height: 100%; border-radius: 9px; transition: width .3s; }
 .sub-progress-fill.green  { background: var(--accent); }
 .sub-progress-fill.orange { background: #f59e0b; }
 .sub-progress-fill.red    { background: #ef5b5b; }
+
+/* ── Обратный отсчёт до истечения подписки ── */
+.sub-countdown { display: flex; align-items: center; justify-content: center; gap: .3rem; margin: .4rem 0 .1rem; }
+.sub-countdown-unit {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 9px;
+    padding: .4rem .2rem; flex: 1;
+}
+.sub-countdown-num { font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; font-weight: 700; color: #fff; line-height: 1; }
+.sub-countdown-label { font-size: .6rem; color: var(--muted); text-transform: uppercase; margin-top: .2rem; }
+.sub-countdown-sep { color: var(--muted); font-weight: 700; }
 
 /* ── Баннер статуса для приостановленных ── */
 .sub-status-banner {
@@ -86,14 +96,29 @@
 .sub-status-banner.paused  { background: rgba(239,91,91,.1); color: #ef5b5b; border: 1px solid rgba(239,91,91,.2); }
 .sub-status-banner.expired { background: rgba(107,118,137,.1); color: var(--muted); border: 1px solid rgba(107,118,137,.2); }
 
-/* ── Кнопки в подвале карточки ── */
-.sub-card-footer { padding: .9rem 1.3rem; border-top: 1px solid var(--border); display: flex; gap: .6rem; }
-.sub-card-footer .btn { flex: 1; font-size: .82rem; padding: .7rem .55rem; }
+/* ── Строки-действия в подвале карточки: крупнее тап-зона и понятнее на телефоне,
+   чем ряд узких кнопок вплотную друг к другу ── */
+.sub-actions { border-top: 1px solid var(--border); }
+.sub-action-row {
+    display: flex; align-items: center; gap: .75rem; width: 100%;
+    padding: .85rem 1.3rem; background: none; border: none; border-bottom: 1px solid var(--border);
+    font-family: inherit; text-align: left; cursor: pointer; text-decoration: none; color: inherit;
+    transition: background .12s;
+}
+.sub-action-row:last-child { border-bottom: none; }
+.sub-action-row:hover { background: rgba(255,255,255,.02); }
+.sub-action-icon {
+    width: 36px; height: 36px; border-radius: 9px; background: var(--panel-2); color: var(--accent);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: .95rem;
+}
+.sub-action-text { flex: 1; min-width: 0; }
+.sub-action-title { display: block; color: #fff; font-weight: 600; font-size: .86rem; }
+.sub-action-sub   { display: block; color: var(--muted); font-size: .72rem; margin-top: .1rem; }
+.sub-action-chevron { color: var(--muted); flex-shrink: 0; }
 
 @media (max-width: 480px) {
     /* На узких телефонах фиксированный minmax(300px) может вылезать за экран - даём сетке схлопнуться в одну колонку */
     .subs-grid { grid-template-columns: 1fr; }
-    .sub-card-footer { flex-direction: column; }
 }
 
 /* ── Модалка конфига ── */
@@ -299,12 +324,6 @@
         {% set icon = 'bi-clock-history' %}
     {% endif %}
 
-    {% set days_total = ((sub.expires_at - sub.starts_at).days) if sub.expires_at and sub.starts_at else 0 %}
-    {% set days_left = ((sub.expires_at - now).days) if sub.expires_at else 0 %}
-    {% set days_left = [days_left, 0] | max %}
-    {% set progress = ((days_left / days_total * 100) | int) if days_total > 0 else 0 %}
-    {% set progress = [progress, 100] | min %}
-
     <div class="sub-card {{ card_state }}">
         <!-- Шапка -->
         <div class="sub-card-header {{ card_state }}">
@@ -329,38 +348,38 @@
                 <span class="v">{{ sub.expires_at.strftime('%d.%m.%Y') }}</span>
             </div>
             {% endif %}
+            {% set usage = usage_map.get(sub.remnawave_sub_id) if card_state == 'active' else none %}
+            {% if usage is not none %}
+            <div class="sub-traffic-block">
+                <div class="sub-traffic-label">Трафик</div>
+                <div class="sub-traffic-value">
+                    <span class="sub-traffic-used">{{ usage }} ГБ</span>
+                    <span class="sub-traffic-total">{% if sub.traffic_gb > 0 %}из {{ sub.traffic_gb }} ГБ{% else %}безлимит{% endif %}</span>
+                </div>
+                {% if sub.traffic_gb > 0 %}
+                {% set traffic_pct = [(usage / sub.traffic_gb * 100) | round(0, 'floor') | int, 100] | min %}
+                <div class="sub-progress-bar">
+                    <div class="sub-progress-fill {% if traffic_pct < 70 %}green{% elif traffic_pct < 90 %}orange{% else %}red{% endif %}"
+                         style="width: {{ traffic_pct }}%"></div>
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
             <div class="sub-info-row">
                 <span class="k">Трафик</span>
                 <span class="v">{% if sub.traffic_gb == 0 %}Безлимит{% else %}{{ sub.traffic_gb }} GB{% endif %}</span>
             </div>
-
-            {% set usage = usage_map.get(sub.remnawave_sub_id) if card_state == 'active' else none %}
-            {% if usage is not none %}
-            <div class="sub-info-row">
-                <span class="k">Использовано</span>
-                <span class="v">{{ usage }} GB{% if sub.traffic_gb > 0 %} из {{ sub.traffic_gb }} GB{% endif %}</span>
-            </div>
-            {% if sub.traffic_gb > 0 %}
-            {% set traffic_pct = [(usage / sub.traffic_gb * 100) | round(0, 'floor') | int, 100] | min %}
-            <div class="sub-progress-wrap">
-                <div class="sub-progress-bar traffic">
-                    <div class="sub-progress-fill {% if traffic_pct < 70 %}green{% elif traffic_pct < 90 %}orange{% else %}red{% endif %}"
-                         style="width: {{ traffic_pct }}%"></div>
-                </div>
-            </div>
-            {% endif %}
             {% endif %}
 
-            {% if card_state == 'active' and sub.expires_at and sub.starts_at %}
-            <div class="sub-progress-wrap">
-                <div class="sub-progress-label">
-                    <span>{{ days_left }} дн. осталось</span>
-                    <span>из {{ days_total }} дн.</span>
-                </div>
-                <div class="sub-progress-bar">
-                    <div class="sub-progress-fill {% if progress > 30 %}green{% elif progress > 10 %}orange{% else %}red{% endif %}"
-                         style="width: {{ progress }}%"></div>
-                </div>
+            {% if card_state == 'active' and sub.expires_at %}
+            <div class="sub-countdown" data-expires="{{ sub.expires_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z">
+                <div class="sub-countdown-unit"><span class="sub-countdown-num" data-unit="d">--</span><span class="sub-countdown-label">дн</span></div>
+                <span class="sub-countdown-sep">:</span>
+                <div class="sub-countdown-unit"><span class="sub-countdown-num" data-unit="h">--</span><span class="sub-countdown-label">ч</span></div>
+                <span class="sub-countdown-sep">:</span>
+                <div class="sub-countdown-unit"><span class="sub-countdown-num" data-unit="m">--</span><span class="sub-countdown-label">мин</span></div>
+                <span class="sub-countdown-sep">:</span>
+                <div class="sub-countdown-unit"><span class="sub-countdown-num" data-unit="s">--</span><span class="sub-countdown-label">сек</span></div>
             </div>
             {% endif %}
         </div>
@@ -378,26 +397,42 @@
         </div>
         {% endif %}
 
-        <!-- Кнопки -->
-        <div class="sub-card-footer">
+        <!-- Действия -->
+        <div class="sub-actions">
             {% if card_state == 'active' and sub.config_link %}
-            <button class="btn btn-accent" onclick="openSubModal('{{ sub.id }}')">
-                <i class="bi bi-qr-code"></i> Подключение
+            <button type="button" class="sub-action-row" onclick="openSubModal('{{ sub.id }}')">
+                <span class="sub-action-icon"><i class="bi bi-qr-code"></i></span>
+                <span class="sub-action-text">
+                    <span class="sub-action-title">Подключение</span>
+                    <span class="sub-action-sub">QR-код и ссылка для конфига</span>
+                </span>
+                <i class="bi bi-chevron-right sub-action-chevron"></i>
             </button>
-            <button class="btn btn-outline-1" onclick="openRenewModal('{{ sub.id }}', '{{ sub.plan_key }}')">
-                <i class="bi bi-arrow-repeat"></i> Продлить
+            <button type="button" class="sub-action-row" onclick="openRenewModal('{{ sub.id }}', '{{ sub.plan_key }}')">
+                <span class="sub-action-icon"><i class="bi bi-arrow-repeat"></i></span>
+                <span class="sub-action-text">
+                    <span class="sub-action-title">Продлить подписку</span>
+                    <span class="sub-action-sub">Конфиг останется тем же</span>
+                </span>
+                <i class="bi bi-chevron-right sub-action-chevron"></i>
             </button>
             {% elif card_state == 'active' %}
-            <button class="btn btn-outline-1 w-100" onclick="openRenewModal('{{ sub.id }}', '{{ sub.plan_key }}')">
-                <i class="bi bi-arrow-repeat"></i> Продлить
+            <button type="button" class="sub-action-row" onclick="openRenewModal('{{ sub.id }}', '{{ sub.plan_key }}')">
+                <span class="sub-action-icon"><i class="bi bi-arrow-repeat"></i></span>
+                <span class="sub-action-text"><span class="sub-action-title">Продлить подписку</span></span>
+                <i class="bi bi-chevron-right sub-action-chevron"></i>
             </button>
             {% elif card_state == 'paused' %}
-            <a href="/dashboard/support" class="btn btn-outline-1" style="flex:1;text-align:center;">
-                <i class="bi bi-life-preserver"></i> Написать в поддержку
+            <a href="/dashboard/support" class="sub-action-row">
+                <span class="sub-action-icon"><i class="bi bi-life-preserver"></i></span>
+                <span class="sub-action-text"><span class="sub-action-title">Написать в поддержку</span></span>
+                <i class="bi bi-chevron-right sub-action-chevron"></i>
             </a>
             {% else %}
-            <button class="btn btn-accent" style="flex:1;" onclick="openRenewModal('{{ sub.id }}', '{{ sub.plan_key }}')">
-                <i class="bi bi-arrow-repeat"></i> Возобновить подписку
+            <button type="button" class="sub-action-row" onclick="openRenewModal('{{ sub.id }}', '{{ sub.plan_key }}')">
+                <span class="sub-action-icon"><i class="bi bi-arrow-repeat"></i></span>
+                <span class="sub-action-text"><span class="sub-action-title">Возобновить подписку</span></span>
+                <i class="bi bi-chevron-right sub-action-chevron"></i>
             </button>
             {% endif %}
         </div>
@@ -520,6 +555,23 @@
 <script>
 const ALL_PLANS = {{ plans | tojson }};
 let paymentPollInterval = null;
+
+function updateCountdowns() {
+    document.querySelectorAll('.sub-countdown').forEach(function (el) {
+        const expires = new Date(el.dataset.expires).getTime();
+        let diff = Math.max(0, expires - Date.now());
+        const d = Math.floor(diff / 86400000); diff -= d * 86400000;
+        const h = Math.floor(diff / 3600000); diff -= h * 3600000;
+        const m = Math.floor(diff / 60000); diff -= m * 60000;
+        const s = Math.floor(diff / 1000);
+        const values = { d: d, h: h, m: m, s: s };
+        el.querySelectorAll('[data-unit]').forEach(function (u) {
+            u.textContent = String(values[u.dataset.unit]).padStart(2, '0');
+        });
+    });
+}
+updateCountdowns();
+setInterval(updateCountdowns, 1000);
 
 function openSubModal(id) { openModal('subModal-' + id); }
 
