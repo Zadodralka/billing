@@ -80,6 +80,13 @@ class Subscription(Base):
     # об истечении ближе к новой дате (см. scheduler.notify_expiring_soon)
     expiry_reminder_sent: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Разовая проверка "подписка активна давно, а трафик так и не расходовался" -
+    # похоже на проблему с подключением, а не на то, что клиент просто не торопится
+    # (см. scheduler.notify_zero_traffic_subscriptions). True после первой проверки
+    # независимо от результата - чтобы не дёргать Remnawave на одну и ту же подписку
+    # бесконечно каждый час.
+    zero_traffic_checked: Mapped[bool] = mapped_column(Boolean, default=False)
+
     user: Mapped["User"] = relationship(back_populates="subscriptions")
 
     @property

@@ -1,3 +1,4 @@
+from html import escape
 import aiosmtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -337,3 +338,172 @@ async def send_gift_email(recipient_email: str, code: str, plan_name: str, days:
     redeem_url = f"{settings.webapp_url}/gift/redeem/{code}"
     html = _gift_html(code, plan_name, days, redeem_url)
     await send_email(recipient_email, "🎁 Вам подарили подписку Unlock VPN", html)
+
+
+def _simple_notice_html(
+    emoji: str, title: str, body_html: str, cta_text: str, cta_url: str,
+    footer_note: str,
+) -> str:
+    """Общий каркас для коротких уведомлений (нулевой трафик, ответ поддержки) -
+    та же карточка в стиле остальных писем, но без специфичных для конкретного
+    письма блоков вроде кода подарка или запасной ссылки."""
+    webapp_url = settings.webapp_url
+
+    return f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<title>{title} — Unlock VPN</title>
+<style>
+  body, table, td, p, a {{ margin: 0; padding: 0; border: 0; }}
+  body {{ -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }}
+  table {{ border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }}
+  img {{ border: 0; display: block; outline: none; }}
+
+  @media screen and (max-width: 600px) {{
+    .email-wrapper {{ width: 100% !important; }}
+    .email-content {{ padding: 24px 16px !important; }}
+    .btn-link {{ padding: 14px 24px !important; font-size: 15px !important; }}
+  }}
+</style>
+</head>
+<body style="background-color: #f1f4f8; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+
+<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #f1f4f8; padding: 40px 16px;">
+  <tr>
+    <td align="center">
+
+      <table class="email-wrapper" width="520" cellpadding="0" cellspacing="0" role="presentation"
+             style="background-color: #ffffff; border: 1px solid #e3e8ef; border-radius: 16px; overflow: hidden;">
+
+        <tr>
+          <td style="background-color: #ffffff; border-bottom: 1px solid #e3e8ef; padding: 28px 36px;">
+            <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+              <tr>
+                <td>
+                  <table cellpadding="0" cellspacing="0" role="presentation">
+                    <tr>
+                      <td style="width: 44px; height: 44px; border-radius: 12px; overflow: hidden; vertical-align: middle;">
+                        <img src="{webapp_url}/static/img/logo.jpg"
+                             alt="Unlock VPN"
+                             width="44" height="44"
+                             style="display: block; width: 44px; height: 44px; border-radius: 12px; object-fit: cover;">
+                      </td>
+                      <td style="padding-left: 12px; vertical-align: middle;">
+                        <span style="color: #14181f; font-size: 18px; font-weight: 700; letter-spacing: -0.3px;">Unlock VPN</span>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="email-content" style="padding: 36px 36px 28px;">
+
+            <p style="font-size: 34px; margin-bottom: 6px;">{emoji}</p>
+            <h1 style="color: #14181f; font-size: 20px; font-weight: 700; margin-bottom: 14px;">{title}</h1>
+
+            {body_html}
+
+            <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top: 8px;">
+              <tr>
+                <td align="center">
+                  <a href="{cta_url}" class="btn-link"
+                     style="display: inline-block; background-color: #16a34a; color: #ffffff;
+                            text-decoration: none; padding: 15px 40px; border-radius: 10px;
+                            font-size: 16px; font-weight: 700; letter-spacing: -0.1px;">
+                    {cta_text} →
+                  </a>
+                </td>
+              </tr>
+            </table>
+
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding: 22px 36px;">
+            <p style="color: #97a1b0; font-size: 12px; line-height: 1.6; margin: 0;">
+              {footer_note}
+            </p>
+          </td>
+        </tr>
+
+      </table>
+
+      <table width="520" cellpadding="0" cellspacing="0" role="presentation" style="margin-top: 20px;">
+        <tr>
+          <td align="center">
+            <p style="color: #97a1b0; font-size: 11px; margin: 0;">
+              © Unlock VPN · <a href="{webapp_url}" style="color: #97a1b0; text-decoration: none;">{webapp_url}</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>"""
+
+
+async def send_zero_traffic_email(recipient_email: str, plan_name: str):
+    """Письмо тем, у кого подписка активна уже давно, а расход трафика так и остался
+    нулевым - вероятно, не получилось подключиться, и стоит предложить помощь заранее,
+    не дожидаясь пока человек сам напишет (или просто молча не продлит подписку)."""
+    body_html = f"""
+    <p style="color: #4b5565; font-size: 15px; line-height: 1.6; margin-bottom: 24px;">
+      У вас активна подписка <strong style="color: #14181f;">«{escape(plan_name)}»</strong>,
+      но мы пока не видим расхода трафика по ней. Если уже пытались подключиться и
+      что-то не получилось — напишите в поддержку, поможем настроить VPN-клиент.
+      Если ещё не приступали — самое время начать: конфиг ждёт в личном кабинете.
+    </p>
+    """
+    html = _simple_notice_html(
+        emoji="📡",
+        title="Не видим активности по вашей подписке",
+        body_html=body_html,
+        cta_text="Открыть личный кабинет",
+        cta_url=f"{settings.webapp_url}/dashboard",
+        footer_note=(
+            "Это письмо отправлено автоматически по подписке на "
+            f"<a href='{settings.webapp_url}' style='color: #97a1b0; text-decoration: underline;'>{settings.webapp_url}</a>. "
+            "Если уже пользуетесь VPN на другом устройстве или через другую подписку — можно проигнорировать."
+        ),
+    )
+    await send_email(recipient_email, "📡 Не видим активности по вашей VPN-подписке", html)
+
+
+async def send_ticket_reply_email(recipient_email: str, ticket_id: int, subject: str, text_preview: str):
+    """Письмо о том, что администратор ответил на тикет поддержки - дублирует
+    Telegram-уведомление на случай, если у пользователя не привязан Telegram
+    или он его не проверяет."""
+    preview = escape(text_preview[:400]) + ("…" if len(text_preview) > 400 else "")
+    body_html = f"""
+    <p style="color: #4b5565; font-size: 15px; line-height: 1.6; margin-bottom: 18px;">
+      Администратор ответил на ваше обращение <strong style="color: #14181f;">«{escape(subject)}»</strong> (#{ticket_id}):
+    </p>
+    <div style="background-color: #f1f4f8; border: 1px solid #e3e8ef; border-radius: 10px;
+                padding: 16px 18px; margin-bottom: 24px; color: #14181f; font-size: 14px; line-height: 1.6;">
+      {preview}
+    </div>
+    """
+    html = _simple_notice_html(
+        emoji="💬",
+        title="Ответ по вашему обращению в поддержку",
+        body_html=body_html,
+        cta_text="Открыть обращение",
+        cta_url=f"{settings.webapp_url}/dashboard/support/{ticket_id}",
+        footer_note=(
+            "Это письмо отправлено автоматически по обращению в поддержку на "
+            f"<a href='{settings.webapp_url}' style='color: #97a1b0; text-decoration: underline;'>{settings.webapp_url}</a>."
+        ),
+    )
+    await send_email(recipient_email, f"💬 Ответ по обращению #{ticket_id} — Unlock VPN", html)

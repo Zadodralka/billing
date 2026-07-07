@@ -1,8 +1,9 @@
-"""Утилиты для уведомлений о тикетах поддержки через Telegram"""
+"""Утилиты для уведомлений о тикетах поддержки через Telegram и email"""
 import logging
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from core.config import settings
+from core.models import User
 
 logger = logging.getLogger("support.notify")
 
@@ -51,25 +52,31 @@ async def notify_admins_new_message(ticket_id: int, subject: str, user_display_n
         logger.error(f"notify_admins_new_message failed: {e}")
 
 
-async def notify_user_admin_replied(telegram_id: int | None, ticket_id: int, subject: str, text_preview: str):
-    """Уведомляет пользователя об ответе администратора"""
-    if not telegram_id:
-        return
-
-    message = (
-        f"💬 <b>Ответ по тикету #{ticket_id}</b>\n\n"
-        f"📋 {subject}\n\n"
-        f"«{text_preview[:400]}»"
-    )
-
-    try:
-        bot = Bot(token=settings.bot_token)
-        await bot.send_message(
-            telegram_id,
-            message,
-            parse_mode="HTML",
-            reply_markup=_user_reply_keyboard(ticket_id),
+async def notify_user_admin_replied(user: User, ticket_id: int, subject: str, text_preview: str):
+    """Уведомляет пользователя об ответе администратора - в Telegram (если привязан)
+    и на email (если есть), независимо друг от друга: у пользователя может быть
+    привязан только один из способов входа, а уведомление важно не пропустить."""
+    if user.telegram_id:
+        message = (
+            f"💬 <b>Ответ по тикету #{ticket_id}</b>\n\n"
+            f"📋 {subject}\n\n"
+            f"«{text_preview[:400]}»"
         )
-        await bot.session.close()
-    except Exception as e:
-        logger.warning(f"notify_user_admin_replied failed for {telegram_id}: {e}")
+        try:
+            bot = Bot(token=settings.bot_token)
+            await bot.send_message(
+                user.telegram_id,
+                message,
+                parse_mode="HTML",
+                reply_markup=_user_reply_keyboard(ticket_id),
+            )
+            await bot.session.close()
+        except Exception as e:
+            logger.warning(f"notify_user_admin_replied (telegram) failed for {user.telegram_id}: {e}")
+
+    if user.email:
+        try:
+            from core.email import send_ticket_reply_email
+            await send_ticket_reply_email(user.email, ticket_id, subject, text_preview)
+        except Exception as e:
+            logger.warning(f"notify_user_admin_replied (email) failed for {user.email}: {e}")

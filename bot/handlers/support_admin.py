@@ -256,7 +256,7 @@ async def process_admin_reply(message: Message, user: User, state: FSMContext, s
     # Уведомление пользователю
     if ticket.user:
         await notify_user_admin_replied(
-            ticket.user.telegram_id,
+            ticket.user,
             ticket.id,
             ticket.subject,
             reply_text,

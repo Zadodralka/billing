@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 DELETE_AFTER_DAYS = 7  # сколько дней хранить заблокированный аккаунт перед полным удалением
 PENDING_PAYMENT_TIMEOUT_HOURS = 24  # через сколько часов гасить неоплаченный счёт и вернуть баланс
 EXPIRY_REMINDER_DAYS_BEFORE = 3  # за сколько дней до истечения напомнить о продлении
+ZERO_TRAFFIC_CHECK_AFTER_HOURS = 24  # через сколько часов после начала подписки проверять расход трафика
 
 
 async def disable_expired_subscriptions():
@@ -126,6 +127,78 @@ async def notify_expiring_soon():
             logger.info(f"Sent expiry reminder for {count} subscription(s)")
 
 
+async def notify_zero_traffic_subscriptions():
+    """Предупреждает пользователя, если подписка активна уже сутки, а трафик по ней
+    так и не расходовался - похоже на проблему с подключением, о которой лучше
+    сказать заранее, а не ждать, пока человек сам напишет в поддержку (или молча
+    не продлит подписку). Проверяется один раз на подписку (zero_traffic_checked)."""
+    async with AsyncSessionLocal() as session:
+        now = datetime.utcnow()
+        cutoff = now - timedelta(hours=ZERO_TRAFFIC_CHECK_AFTER_HOURS)
+        result = await session.execute(
+            select(Subscription).where(
+                Subscription.status == SubscriptionStatus.ACTIVE,
+                Subscription.remnawave_sub_id.is_not(None),
+                Subscription.starts_at.is_not(None),
+                Subscription.starts_at <= cutoff,
+                Subscription.zero_traffic_checked == False,
+            )
+        )
+        candidates = result.scalars().all()
+
+        checked_count = 0
+        notified_count = 0
+        for sub in candidates:
+            used_gb = await remnawave.get_traffic_usage_gb(sub.remnawave_sub_id)
+            if used_gb is None:
+                # Remnawave недоступна/не ответила - пробуем ещё раз в следующем цикле,
+                # флаг не трогаем, иначе можем ошибочно "простить" реально проблемную подписку
+                continue
+
+            sub.zero_traffic_checked = True
+            checked_count += 1
+
+            if used_gb > 0:
+                continue
+
+            user_result = await session.execute(select(User).where(User.id == sub.user_id))
+            user = user_result.scalar_one_or_none()
+            if not user:
+                continue
+
+            from core.plans import get_plan
+            plan = await get_plan(session, sub.plan_key)
+            plan_name = plan["name"] if plan else sub.plan_key
+
+            if user.telegram_id:
+                try:
+                    bot = Bot(token=settings.bot_token)
+                    await bot.send_message(
+                        user.telegram_id,
+                        f"📡 <b>Не видим активности по подписке «{plan_name}»</b>\n\n"
+                        "Похоже, конфиг ещё не подключён — трафик по подписке пока нулевой.\n"
+                        "Если не получается подключиться — напишите в поддержку, поможем.\n"
+                        "Если ещё не приступали — конфиг ждёт в разделе «🔑 QR-код подключения».",
+                        parse_mode="HTML",
+                    )
+                    await bot.session.close()
+                except Exception as e:
+                    logger.warning(f"Failed to send zero-traffic notice to {user.telegram_id}: {e}")
+
+            if user.email:
+                try:
+                    from core.email import send_zero_traffic_email
+                    await send_zero_traffic_email(user.email, plan_name)
+                except Exception as e:
+                    logger.warning(f"Failed to send zero-traffic email to {user.email}: {e}")
+
+            notified_count += 1
+
+        if checked_count:
+            await session.commit()
+            logger.info(f"Zero-traffic check: checked {checked_count} subscription(s), notified {notified_count}")
+
+
 async def delete_old_expired_accounts():
     """Шаг 2: полностью удаляет аккаунты, истёкшие более DELETE_AFTER_DAYS дней назад"""
     async with AsyncSessionLocal() as session:
@@ -198,6 +271,11 @@ async def run_cycle():
         await notify_expiring_soon()
     except Exception as e:
         logger.error(f"notify_expiring_soon failed: {e}")
+
+    try:
+        await notify_zero_traffic_subscriptions()
+    except Exception as e:
+        logger.error(f"notify_zero_traffic_subscriptions failed: {e}")
 
     try:
         await delete_old_expired_accounts()

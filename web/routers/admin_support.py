@@ -90,7 +90,7 @@ async def admin_reply_to_ticket(
         await session.commit()
 
         if ticket.user:
-            await notify_user_admin_replied(ticket.user.telegram_id, ticket.id, ticket.subject, message)
+            await notify_user_admin_replied(ticket.user, ticket.id, ticket.subject, message)
 
         return JSONResponse({"ok": True})
     except Exception as e:
