@@ -10,7 +10,7 @@
 <div class="topbar">
     <div>
         <h1>Тарифные планы</h1>
-        <div class="sub">Выберите подходящий период подписки</div>
+        <div class="sub">Выберите подходящий период подписки — себе или в подарок другу</div>
     </div>
     {% if user.balance > 0 %}
     <div style="background:var(--panel);border:1px solid rgba(61,220,132,.25);border-radius:10px;padding:.6rem 1rem;display:flex;align-items:center;gap:.6rem;">
@@ -21,8 +21,28 @@
     {% endif %}
 </div>
 
+<!-- Себе / В подарок -->
+<div class="card" style="padding:1.1rem 1.2rem;margin-bottom:1.3rem;">
+    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <div class="mode-toggle">
+            <button type="button" class="mode-btn active" data-mode="self" onclick="setPurchaseMode('self')">
+                <i class="bi bi-person"></i> Себе
+            </button>
+            <button type="button" class="mode-btn" data-mode="gift" onclick="setPurchaseMode('gift')">
+                <i class="bi bi-gift"></i> В подарок
+            </button>
+        </div>
+        <div id="giftRecipientWrap" style="display:none;flex:1;min-width:220px;">
+            <input type="email" id="recipientEmail" placeholder="Email получателя, friend@example.com">
+        </div>
+    </div>
+    <div id="giftHint" style="display:none;color:var(--muted);font-size:.8rem;margin-top:.6rem;">
+        🎁 Получателю придёт письмо с кодом активации на указанный email — оплата проходит с вашего аккаунта.
+    </div>
+</div>
+
 <!-- Промокод и баланс -->
-<div class="card" style="padding:1.1rem 1.2rem;margin-bottom:1.3rem;display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-start;">
+<div class="card" id="promoBalanceCard" style="padding:1.1rem 1.2rem;margin-bottom:1.3rem;display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-start;">
     <div style="flex:1;min-width:240px;">
         <label class="form-label">🏷 Промокод</label>
         <div style="display:flex;gap:.5rem;">
@@ -44,14 +64,14 @@
 {% set ref_plan = plans.values() | list | sort(attribute='days') | first %}
 <div class="plans-grid">
     {% for key, plan in plans.items() %}
-        {{ plan_card(key, plan, ref_plan, true, 'Купить', "buyPlan('" ~ key ~ "')") }}
+        {{ plan_card(key, plan, ref_plan, true, 'Купить', "handlePlanClick('" ~ key ~ "')") }}
     {% endfor %}
 </div>
 
 <div class="modal-overlay" id="payModal">
     <div class="modal-box">
         <div class="modal-head">
-            <h3>Оплата подписки</h3>
+            <h3 id="payModalTitle">Оплата подписки</h3>
             <button class="modal-close" onclick="closeModal('payModal')"><i class="bi bi-x-lg"></i></button>
         </div>
         <div class="modal-body-c" id="payModalBody">
@@ -67,9 +87,38 @@
 {% block extra_scripts %}
 <script>
 let paymentPollInterval = null;
+let purchaseMode = 'self';
 const selectedTraffic = {};
 let promoDiscount = 0, promoCode = '', promoValidated = false, useBalance = false;
 const USER_BALANCE = {{ user.balance | default(0) }};
+
+function isValidEmail(v) {
+    return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);
+}
+
+function setPurchaseMode(mode) {
+    purchaseMode = mode;
+    const isGift = mode === 'gift';
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    document.getElementById('giftRecipientWrap').style.display = isGift ? 'block' : 'none';
+    document.getElementById('giftHint').style.display = isGift ? 'block' : 'none';
+    // Промокод/баланс пока не поддержаны для подарков - прячем, чтобы не путать
+    // отображаемую цену с реально списываемой суммой.
+    document.getElementById('promoBalanceCard').style.display = isGift ? 'none' : 'flex';
+    document.querySelectorAll('.plan-buy-btn').forEach(btn => { btn.textContent = isGift ? 'Подарить' : 'Купить'; });
+    if (isGift) { _clearCardPrices(); }
+    else if (promoValidated) { _updateCardPrices(); }
+}
+
+function handlePlanClick(planKey) {
+    if (purchaseMode === 'gift') { giftPlan(planKey); } else { buyPlan(planKey); }
+}
+
+function _trafficFor(planKey) {
+    if (selectedTraffic[planKey] !== undefined) return selectedTraffic[planKey];
+    const defaultBtn = document.querySelector(`.traffic-toggle[data-plan="${planKey}"] button.active`);
+    return defaultBtn ? parseInt(defaultBtn.dataset.traffic, 10) : 50;
+}
 
 function selectTraffic(btn, planKey) {
     const toggle = btn.parentElement;
@@ -148,14 +197,8 @@ function _clearCardPrices() {
 }
 
 async function buyPlan(planKey) {
-    // Берём выбранный трафик или дефолтный из плана (data-traffic кнопки по умолчанию)
-    let traffic;
-    if (selectedTraffic[planKey] !== undefined) {
-        traffic = selectedTraffic[planKey];
-    } else {
-        const defaultBtn = document.querySelector(`.traffic-toggle[data-plan="${planKey}"] button.active`);
-        traffic = defaultBtn ? parseInt(defaultBtn.dataset.traffic, 10) : 50;
-    }
+    const traffic = _trafficFor(planKey);
+    document.getElementById('payModalTitle').textContent = 'Оплата подписки';
     openModal('payModal');
     document.getElementById('payModalBody').innerHTML = `<div class="pay-loading"><div class="spinner"></div><span style="color:var(--muted);font-size:.85rem;">Создаём счёт…</span></div>`;
     const res = await fetch('/payment/create', {
@@ -166,7 +209,7 @@ async function buyPlan(planKey) {
     if (data.free) {
         document.getElementById('payModalBody').innerHTML = `<div style="text-align:center;padding:1.5rem 0;"><div style="font-size:2rem;margin-bottom:.8rem;">🎉</div><p style="color:#fff;font-weight:600;">Оплачено балансом!</p><p style="color:var(--muted);font-size:.85rem;">Активируем подписку…</p></div>`;
         if (paymentPollInterval) clearInterval(paymentPollInterval);
-        startPolling(data.label);
+        startPolling(data.label, () => { window.location.href = '/dashboard'; });
         return;
     }
     let discHtml = '';
@@ -181,10 +224,63 @@ async function buyPlan(planKey) {
         </div>
         <a href="${data.payment_url}" target="_blank" class="pay-cta">Оплатить через ЮMoney</a>
         <p class="pay-hint">Окно обновится автоматически после оплаты</p>`;
-    startPolling(data.label);
+    startPolling(data.label, () => { window.location.href = '/dashboard'; });
 }
 
-function startPolling(label) {
+async function giftPlan(planKey) {
+    const emailInput = document.getElementById('recipientEmail');
+    const email = emailInput.value.trim().toLowerCase();
+    if (!isValidEmail(email)) {
+        emailInput.style.borderColor = '#ef5b5b';
+        emailInput.focus();
+        return;
+    }
+    emailInput.style.borderColor = '';
+    const traffic = _trafficFor(planKey);
+
+    document.getElementById('payModalTitle').textContent = 'Оформление подарка';
+    openModal('payModal');
+    document.getElementById('payModalBody').innerHTML = `<div class="pay-loading"><div class="spinner"></div><span style="color:var(--muted);font-size:.85rem;">Создаём счёт…</span></div>`;
+
+    const res = await fetch('/gift/create', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({plan_key: planKey, traffic_gb: traffic, recipient_email: email})
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        document.getElementById('payModalBody').innerHTML = `<div style="text-align:center;padding:1.5rem 0;color:#ef5b5b;">${err.detail || 'Не удалось создать платёж'}</div>`;
+        return;
+    }
+    const data = await res.json();
+
+    if (data.free) {
+        showGiftSent(data.recipient_email);
+        return;
+    }
+
+    document.getElementById('payModalBody').innerHTML = `
+        <div class="pay-summary">
+            <div class="pname">${data.plan_name} · в подарок для ${data.recipient_email}</div>
+            <div class="pamount">${data.amount} ₽</div>
+        </div>
+        <a href="${data.payment_url}" target="_blank" class="pay-cta">Оплатить через ЮMoney</a>
+        <p class="pay-hint">Окно обновится автоматически после оплаты</p>`;
+    startPolling(data.label, () => showGiftSent(data.recipient_email), '/gift/status/');
+}
+
+function showGiftSent(email) {
+    if (paymentPollInterval) clearInterval(paymentPollInterval);
+    document.getElementById('payModalBody').innerHTML = `
+        <div style="text-align:center;padding:1.5rem 0;">
+            <div style="font-size:2.2rem;margin-bottom:.8rem;">🎉</div>
+            <p style="color:#fff;font-weight:600;">Подарок оформлен!</p>
+            <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem;">Письмо с кодом активации отправлено на <strong style="color:#e2e8f0;">${email}</strong>.</p>
+            <a href="/dashboard" class="btn btn-accent" style="display:inline-block;">Перейти в кабинет</a>
+        </div>`;
+}
+
+function startPolling(label, onPaid, statusPrefix) {
+    statusPrefix = statusPrefix || '/payment/status/';
     if (paymentPollInterval) clearInterval(paymentPollInterval);
     const deadline = Date.now() + 5 * 60 * 1000; // 5 минут
 
@@ -205,9 +301,9 @@ function startPolling(label) {
             return;
         }
 
-        const check = await fetch('/payment/status/' + label);
+        const check = await fetch(statusPrefix + label);
         const status = await check.json();
-        if (status.paid) { clearInterval(paymentPollInterval); window.location.href = '/dashboard'; }
+        if (status.paid) { clearInterval(paymentPollInterval); onPaid(); }
     }, 8000); // каждые 8 секунд вместо 4
 }
 </script>

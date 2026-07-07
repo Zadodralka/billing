@@ -213,9 +213,6 @@
             <a href="/dashboard/plans" class="nav-link sidebar-nav-item {% if request.url.path == '/dashboard/plans' %}active{% endif %}">
                 <i class="bi bi-credit-card"></i> Тарифы
             </a>
-            <a href="/gift" class="nav-link sidebar-nav-item {% if request.url.path.startswith('/gift') %}active{% endif %}">
-                <i class="bi bi-gift-fill"></i> Подарить подписку
-            </a>
             <a href="/dashboard/referral" class="nav-link sidebar-nav-item {% if '/dashboard/referral' in request.url.path %}active{% endif %}">
                 <i class="bi bi-gift"></i> Рефералы
                 {% if user and user.balance > 0 %}<span class="badge badge-neutral" style="margin-left:auto;">{{ user.balance }}₽</span>{% endif %}

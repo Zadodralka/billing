@@ -2,13 +2,13 @@ import re
 import logging
 from datetime import datetime
 from fastapi import APIRouter, Request, Depends, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from core.database import get_db
 from core.models import User, Payment, PaymentStatus, GiftCode, GiftCodeStatus
-from core.plans import get_active_plans, get_plan
+from core.plans import get_plan
 from core.yoomoney import yoomoney
 from core.rate_limit import check_rate_limit
 from core.version import APP_VERSION
@@ -28,10 +28,11 @@ GIFT_CREATE_RATE_LIMIT = 10
 GIFT_CREATE_RATE_WINDOW_SECONDS = 3600
 
 
-@router.get("", response_class=HTMLResponse)
-async def gift_page(request: Request, user: User = Depends(require_user), session: AsyncSession = Depends(get_db)):
-    plans = await get_active_plans(session)
-    return templates.TemplateResponse(request, "gift.html", {"user": user, "plans": plans})
+@router.get("")
+async def gift_page(request: Request):
+    # Страница /gift объединена с /dashboard/plans (переключатель "Себе / В подарок") -
+    # оставляем редирект, чтобы старые ссылки/закладки не превращались в 404.
+    return RedirectResponse("/dashboard/plans")
 
 
 @router.post("/create")
@@ -50,8 +51,10 @@ async def create_gift_payment(request: Request, user: User = Depends(require_use
     if not plan or not plan.get("is_active", True):
         raise HTTPException(400, "Invalid plan")
 
-    amount = plan["price"]
-    traffic_gb = plan.get("traffic_gb", 50)
+    # Трафик выбирается тем же переключателем, что и при покупке себе (см. plans.html) -
+    # логика цены совпадает с web.routers.payments.create_payment_web.
+    traffic_gb = data.get("traffic_gb", plan.get("traffic_gb", 50))
+    amount = plan["price"] + (plan.get("unlimited_extra", 0) if traffic_gb == 0 else 0)
 
     label = yoomoney.generate_label()
     payment = Payment(
