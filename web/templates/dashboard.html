@@ -193,10 +193,12 @@
 }
 .sub-strip-btn:hover { border-color: var(--accent); background: rgba(61,220,132,.08); }
 
-/* ── Строка выбора тарифа в модалке продления: план + переключатель трафика + цена.
-   Не весь ряд кликабелен (внутри есть свой переключатель), поэтому оборачиваем
-   в div, а не button, и даём содержимому перенос на узких экранах. ── */
-.renew-row { flex-wrap: wrap; row-gap: .5rem; cursor: default; }
+/* ── Строка выбора тарифа в модалке продления: весь ряд кликабелен и запускает
+   продление (как остальные sub-action-row в приложении) - переключатель трафика
+   внутри останавливает всплытие клика у себя, чтобы не запускать продление сразу
+   при выборе GB/Безлимит. div, а не button - button не может содержать вложенные
+   button (переключатель), это ломает разметку в браузере. ── */
+.renew-row { flex-wrap: wrap; row-gap: .5rem; }
 .renew-row .sub-action-text { flex: 1 1 130px; }
 .renew-traffic-toggle { display: flex; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 2px; flex-shrink: 0; }
 .renew-traffic-btn {
@@ -204,11 +206,7 @@
     padding: .4rem .65rem; border-radius: 6px; cursor: pointer; font-family: inherit; white-space: nowrap; transition: all .12s;
 }
 .renew-traffic-btn.active { background: var(--accent); color: #06140c; }
-.renew-go-btn {
-    background: none; border: none; color: var(--accent); font-weight: 700; font-size: .9rem; cursor: pointer;
-    font-family: inherit; flex-shrink: 0; padding: .4rem .2rem;
-}
-.renew-go-btn:hover { text-decoration: underline; }
+.renew-price { color: var(--accent); font-weight: 700; font-size: .9rem; flex-shrink: 0; padding: .4rem .2rem; }
 
 /* ── Модалка конфига ── */
 .config-row { display: flex; gap: .5rem; }
@@ -756,8 +754,15 @@ function openRenewModal(subId, currentPlanKey) {
         const priceLimited = plan.price;
         const priceUnlimited = plan.price + (plan.unlimited_extra || 0);
 
+        // Вся строка кликабельна и запускает продление (как остальные sub-action-row
+        // в приложении) - переключатель трафика внутри останавливает всплытие клика,
+        // чтобы переключение GB/Безлимит не срабатывало как выбор тарифа и наоборот.
+        let selectedTraffic = defaultTraffic;
+
         const row = document.createElement('div');
         row.className = 'sub-action-row renew-row';
+        row.setAttribute('role', 'button');
+        row.setAttribute('tabindex', '0');
         row.innerHTML = `
             <span class="sub-action-icon"><i class="bi bi-calendar-check"></i></span>
             <span class="sub-action-text">
@@ -768,21 +773,22 @@ function openRenewModal(subId, currentPlanKey) {
                 <button type="button" class="renew-traffic-btn active" data-traffic="${defaultTraffic}">${defaultTraffic} GB</button>
                 <button type="button" class="renew-traffic-btn" data-traffic="0">Безлимит</button>
             </div>
-            <button type="button" class="renew-go-btn">${priceLimited} ₽</button>`;
+            <span class="renew-price">${priceLimited} ₽</span>`;
 
-        const goBtn = row.querySelector('.renew-go-btn');
+        const priceEl = row.querySelector('.renew-price');
         row.querySelectorAll('.renew-traffic-btn').forEach(tb => {
-            tb.addEventListener('click', () => {
+            tb.addEventListener('click', (e) => {
+                e.stopPropagation();
                 row.querySelectorAll('.renew-traffic-btn').forEach(b => b.classList.remove('active'));
                 tb.classList.add('active');
-                const traffic = parseInt(tb.dataset.traffic, 10);
-                goBtn.textContent = (traffic === 0 ? priceUnlimited : priceLimited) + ' ₽';
+                selectedTraffic = parseInt(tb.dataset.traffic, 10);
+                priceEl.textContent = (selectedTraffic === 0 ? priceUnlimited : priceLimited) + ' ₽';
             });
         });
-        goBtn.addEventListener('click', () => {
-            const activeBtn = row.querySelector('.renew-traffic-btn.active');
-            const traffic = activeBtn ? parseInt(activeBtn.dataset.traffic, 10) : defaultTraffic;
-            startRenewPayment(subId, key, traffic);
+        const proceed = () => startRenewPayment(subId, key, selectedTraffic);
+        row.addEventListener('click', proceed);
+        row.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); proceed(); }
         });
         list.appendChild(row);
     }
