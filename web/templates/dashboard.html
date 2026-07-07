@@ -6,6 +6,25 @@
 .stat-card-link { transition: border-color .15s; }
 .stat-card-link:hover { border-color: var(--accent); }
 
+/* ── Компактный ряд статистики на телефоне: обычные stat-card слишком высокие
+   и вынуждают долго скроллить до списка подписок - схлопываем в ряд из 4
+   маленьких плашек с иконкой вместо полноразмерных карточек. ── */
+.dash-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.dash-stat-full { display: flex; justify-content: space-between; align-items: flex-start; }
+.dash-stat-compact { display: none; }
+@media (max-width: 600px) {
+    .dash-stats-grid { grid-template-columns: repeat(4, 1fr); gap: .4rem; }
+    .dash-stat-tile { padding: .1rem; }
+    .dash-stat-full { display: none; }
+    .dash-stat-compact {
+        display: flex; flex-direction: column; align-items: center; gap: .3rem;
+        padding: .6rem .1rem; text-align: center;
+    }
+    .dash-stat-compact .icon-badge { width: 28px; height: 28px; font-size: .82rem; border-radius: 8px; }
+    .dash-stat-compact .compact-value { font-size: .72rem; font-weight: 700; color: #fff; line-height: 1.1; white-space: nowrap; }
+    .dash-stat-compact .compact-label { font-size: .54rem; color: var(--muted); text-transform: uppercase; letter-spacing: .01em; white-space: nowrap; }
+}
+
 /* ── Сетка карточек ── */
 .subs-grid {
     display: grid;
@@ -221,15 +240,20 @@
 </div>
 {% endif %}
 
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1.5rem;">
-    <div class="card stat-card">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+<div class="dash-stats-grid">
+    <div class="card stat-card dash-stat-tile">
+        <div class="dash-stat-full">
             <div><div class="label">Активных подписок</div><div class="value">{{ active_subs|length }}</div></div>
             <div class="icon-badge" style="background:var(--accent-soft);color:var(--accent);"><i class="bi bi-broadcast"></i></div>
         </div>
+        <div class="dash-stat-compact">
+            <div class="icon-badge" style="background:var(--accent-soft);color:var(--accent);"><i class="bi bi-broadcast"></i></div>
+            <div class="compact-value">{{ active_subs|length }}</div>
+            <div class="compact-label">Подписки</div>
+        </div>
     </div>
-    <a href="/dashboard/referral" class="card stat-card stat-card-link" style="display:block;">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+    <a href="/dashboard/referral" class="card stat-card stat-card-link dash-stat-tile" style="display:block;">
+        <div class="dash-stat-full">
             <div>
                 <div class="label">Баланс</div>
                 <div class="value" style="color:var(--accent);">{{ user.balance }} ₽</div>
@@ -237,17 +261,32 @@
             </div>
             <div class="icon-badge" style="background:var(--gold-soft);color:var(--gold);"><i class="bi bi-wallet2"></i></div>
         </div>
+        <div class="dash-stat-compact">
+            <div class="icon-badge" style="background:var(--gold-soft);color:var(--gold);"><i class="bi bi-wallet2"></i></div>
+            <div class="compact-value" style="color:var(--accent);">{{ user.balance }}₽</div>
+            <div class="compact-label">Баланс</div>
+        </div>
     </a>
-    <div class="card stat-card">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+    <div class="card stat-card dash-stat-tile">
+        <div class="dash-stat-full">
             <div><div class="label">Потрачено всего</div><div class="value">{{ total_spent }} ₽</div></div>
             <div class="icon-badge" style="background:var(--blue-soft);color:var(--blue);"><i class="bi bi-cash-coin"></i></div>
         </div>
+        <div class="dash-stat-compact">
+            <div class="icon-badge" style="background:var(--blue-soft);color:var(--blue);"><i class="bi bi-cash-coin"></i></div>
+            <div class="compact-value">{{ total_spent }}₽</div>
+            <div class="compact-label">Потрачено</div>
+        </div>
     </div>
-    <div class="card stat-card">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+    <div class="card stat-card dash-stat-tile">
+        <div class="dash-stat-full">
             <div><div class="label">С нами с</div><div class="value" style="font-size:1.3rem;">{{ user.created_at.strftime('%d.%m.%Y') }}</div></div>
             <div class="icon-badge" style="background:var(--panel-3);color:var(--muted);"><i class="bi bi-calendar-heart"></i></div>
+        </div>
+        <div class="dash-stat-compact">
+            <div class="icon-badge" style="background:var(--panel-3);color:var(--muted);"><i class="bi bi-calendar-heart"></i></div>
+            <div class="compact-value">{{ user.created_at.strftime('%m.%y') }}</div>
+            <div class="compact-label">С нами</div>
         </div>
     </div>
 </div>
