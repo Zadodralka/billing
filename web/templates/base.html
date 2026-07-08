@@ -172,12 +172,17 @@
         .data-card {
             background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
             padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: .55rem;
+            cursor: pointer; transition: border-color .12s;
         }
+        .data-card:hover, .data-card:active { border-color: var(--accent); }
         .data-card-row { display: flex; justify-content: space-between; align-items: center; gap: .6rem; font-size: .85rem; }
         .data-card-row .k { color: var(--muted); flex-shrink: 0; }
         .data-card-row .v { color: #fff; font-weight: 500; text-align: right; min-width: 0; }
-        .data-card-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .3rem; padding-top: .6rem; border-top: 1px solid var(--border); }
-        .data-card-actions .btn { flex: 1; min-width: 90px; }
+        /* Кнопки действий карточки не рисуются на ней самой (раньше одинаковый набор
+           кнопок повторялся на каждой карточке и захламлял список) - они лежат в
+           <template class="data-card-actions-tpl"> внутри карточки и клонируются в
+           общую модалку #cardActionsModal при клике (см. openCardActions() в base.html). */
+        #cardActionsBody .btn { width: 100%; }
 
         .pagination { display: flex; gap: .35rem; list-style: none; padding: 0; margin: 1rem 0 0; }
         .page-link { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: .4rem .8rem; font-size: .85rem; cursor: pointer; display: block; }
@@ -311,6 +316,18 @@
     </div>
 </div>
 
+<!-- Модалка действий для карточки в мобильном списке (.data-card) - см. openCardActions().
+     Общая для всех страниц с .data-card, чтобы не дублировать разметку/JS в каждом шаблоне. -->
+<div class="modal-overlay" id="cardActionsModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Действия</h3>
+            <button type="button" class="modal-close" onclick="closeModal('cardActionsModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c" id="cardActionsBody" style="display:flex;flex-direction:column;gap:.5rem;"></div>
+    </div>
+</div>
+
 <script>
 function toggleSidebar(open) {
     document.getElementById('sidebar').classList.toggle('open', open);
@@ -327,12 +344,31 @@ document.querySelectorAll('.sidebar-nav-item').forEach(function(link) {
 });
 
 function openModal(id) {
+    // Закрываем остальные открытые модалки - иначе кнопка внутри cardActionsModal,
+    // открывающая следующую модалку (например "Изменить"), оставляла бы предыдущую
+    // висеть открытой позади неё.
+    document.querySelectorAll('.modal-overlay.show').forEach(function (m) {
+        if (m.id !== id) m.classList.remove('show');
+    });
     const el = document.getElementById(id);
     if (el) el.classList.add('show');
 }
 function closeModal(id) {
     const el = document.getElementById(id);
     if (el) el.classList.remove('show');
+}
+
+// Открывает общую модалку действий для карточки .data-card, склонировав её
+// скрытый <template class="data-card-actions-tpl"> - кнопки внутри сохраняют
+// те же классы/data-атрибуты (js-edit-btn и т.п.), так что делегированные
+// обработчики кликов на странице продолжают работать без изменений.
+function openCardActions(cardEl) {
+    const tpl = cardEl.querySelector('.data-card-actions-tpl');
+    if (!tpl) return;
+    const body = document.getElementById('cardActionsBody');
+    body.innerHTML = '';
+    body.appendChild(tpl.content.cloneNode(true));
+    openModal('cardActionsModal');
 }
 document.addEventListener('click', function(e) {
     if (e.target.classList.contains('modal-overlay')) {

@@ -75,19 +75,22 @@
 
 <div class="data-cards">
     {% for u in users %}
-    <div class="data-card" data-row-for="{{ u.id }}">
+    <div class="data-card" data-row-for="{{ u.id }}" onclick="openCardActions(this)">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.6rem;">
             <div style="min-width:0;">
                 <div style="color:#fff;font-weight:700;font-size:.92rem;">
                     #{{ u.id }}
-                    {% if u.telegram_username %}· <a href="https://t.me/{{ u.telegram_username }}" target="_blank">@{{ u.telegram_username }}</a>
+                    {% if u.telegram_username %}· <a href="https://t.me/{{ u.telegram_username }}" target="_blank" onclick="event.stopPropagation()">@{{ u.telegram_username }}</a>
                     {% elif u.telegram_id %}· <span class="mono" style="color:var(--muted);font-size:.82rem;">{{ u.telegram_id }}</span>{% endif %}
                 </div>
                 <div style="color:var(--muted);font-size:.8rem;margin-top:.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ u.email or '—' }}</div>
             </div>
-            {% if u.is_admin %}<span class="badge badge-neutral" style="color:var(--blue);flex-shrink:0;">Админ</span>
-            {% elif u.is_banned %}<span class="badge badge-off" style="flex-shrink:0;">Заблокирован</span>
-            {% else %}<span class="badge badge-on" style="flex-shrink:0;">Активен</span>{% endif %}
+            <div style="display:flex;align-items:center;gap:.5rem;flex-shrink:0;">
+                {% if u.is_admin %}<span class="badge badge-neutral" style="color:var(--blue);">Админ</span>
+                {% elif u.is_banned %}<span class="badge badge-off">Заблокирован</span>
+                {% else %}<span class="badge badge-on">Активен</span>{% endif %}
+                <i class="bi bi-chevron-right" style="color:var(--muted);"></i>
+            </div>
         </div>
         <div class="data-card-row">
             <span class="k">Подписки</span>
@@ -95,23 +98,23 @@
             <span class="v">{% if active %}{{ active|length }} активных{% else %}нет{% endif %}</span>
         </div>
         <div class="data-card-row"><span class="k">Регистрация</span><span class="v">{{ (u.created_at | localtime).strftime('%d.%m.%Y') }}</span></div>
-        <div class="data-card-actions">
+        <template class="data-card-actions-tpl">
             <button type="button" class="btn btn-sm btn-outline-1 js-edit-btn"
                 data-id="{{ u.id }}" data-email="{{ u.email or '' }}" data-isadmin="{{ 'true' if u.is_admin else 'false' }}">
                 <i class="bi bi-pencil"></i> Изменить
             </button>
             <button type="button" class="btn btn-sm btn-accent js-grant-btn"
                 data-id="{{ u.id }}" data-name="{{ u.display_name }}">
-                <i class="bi bi-gift"></i> Подписка
+                <i class="bi bi-gift"></i> Выдать подписку
             </button>
             <button type="button" class="btn btn-sm btn-outline-1 js-ban-btn" data-id="{{ u.id }}">
                 {% if u.is_banned %}Разблокировать{% else %}Заблокировать{% endif %}
             </button>
             <button type="button" class="btn btn-sm btn-danger-1 js-delete-btn"
                 data-id="{{ u.id }}" data-name="{{ u.display_name }}">
-                <i class="bi bi-trash"></i>
+                <i class="bi bi-trash"></i> Удалить
             </button>
-        </div>
+        </template>
     </div>
     {% else %}
     <div style="text-align:center;color:var(--muted);padding:2rem;">{% if q %}Ничего не найдено{% else %}Пользователей пока нет{% endif %}</div>

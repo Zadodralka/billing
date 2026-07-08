@@ -71,19 +71,22 @@
 
 <div class="data-cards">
     {% for sub in subscriptions %}
-    <div class="data-card" data-row-for="{{ sub.id }}">
+    <div class="data-card" data-row-for="{{ sub.id }}" onclick="openCardActions(this)">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.6rem;">
             <div style="min-width:0;">
                 <div style="color:#fff;font-weight:700;font-size:.92rem;">#{{ sub.id }} · {{ sub.user.display_name }}</div>
                 <div style="color:var(--muted);font-size:.8rem;margin-top:.15rem;">{{ plans.get(sub.plan_key, {}).get('name', sub.plan_key) }}</div>
             </div>
-            {% if sub.status.value == 'active' and sub.is_active %}<span class="badge badge-on" style="flex-shrink:0;">Активна</span>
-            {% elif sub.status.value == 'cancelled' %}<span class="badge badge-off" style="flex-shrink:0;">Остановлена</span>
-            {% else %}<span class="badge badge-neutral" style="flex-shrink:0;">{{ sub.status.value }}</span>{% endif %}
+            <div style="display:flex;align-items:center;gap:.5rem;flex-shrink:0;">
+                {% if sub.status.value == 'active' and sub.is_active %}<span class="badge badge-on">Активна</span>
+                {% elif sub.status.value == 'cancelled' %}<span class="badge badge-off">Остановлена</span>
+                {% else %}<span class="badge badge-neutral">{{ sub.status.value }}</span>{% endif %}
+                <i class="bi bi-chevron-right" style="color:var(--muted);"></i>
+            </div>
         </div>
         <div class="data-card-row"><span class="k">Начало</span><span class="v">{{ (sub.starts_at | localtime).strftime('%d.%m.%Y') if sub.starts_at else '—' }}</span></div>
         <div class="data-card-row"><span class="k">Окончание</span><span class="v">{{ (sub.expires_at | localtime).strftime('%d.%m.%Y') if sub.expires_at else '—' }}</span></div>
-        <div class="data-card-actions">
+        <template class="data-card-actions-tpl">
             <button type="button" class="btn btn-sm btn-outline-1 js-extend-btn" data-id="{{ sub.id }}">
                 <i class="bi bi-clock-history"></i> Продлить
             </button>
@@ -97,9 +100,9 @@
             </button>
             {% endif %}
             <button type="button" class="btn btn-sm btn-danger-1 js-delete-sub-btn" data-id="{{ sub.id }}">
-                <i class="bi bi-trash"></i>
+                <i class="bi bi-trash"></i> Удалить
             </button>
-        </div>
+        </template>
     </div>
     {% else %}
     <div style="text-align:center;color:var(--muted);padding:2rem;">{% if q or status %}Ничего не найдено{% else %}Подписок пока нет{% endif %}</div>
