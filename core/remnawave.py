@@ -189,8 +189,11 @@ class RemnawaveClient:
             unwrapped = self._unwrap_single(data)
             if unwrapped.get("uuid") or unwrapped.get("username"):
                 return direct_path
+        return await self._find_user_path_fallback(uuid)
 
-        # Резервные варианты (на случай другой версии API)
+    async def _find_user_path_fallback(self, uuid: str) -> str | None:
+        """Резервные форматы пути (на случай другой версии API) - без повторной
+        проверки прямого пути, её уже делает вызывающий код."""
         candidates = [
             f"/api/users/by-uuid/{uuid}",
             f"/api/users/uuid/{uuid}",
@@ -207,7 +210,19 @@ class RemnawaveClient:
         return None
 
     async def get_user(self, uuid: str) -> dict:
-        path = await self._find_user_path(uuid)
+        # Прямой путь - подтверждённый рабочий формат. Пробуем его сразу и используем
+        # уже полученный ответ, а не выбрасываем его и не делаем второй идентичный
+        # запрос - раньше get_traffic_usage_gb на каждый показ кабинета/рефералки
+        # дёргал панель дважды за одними и теми же данными.
+        direct_path = f"/api/users/{uuid}"
+        data = await self._try_request("GET", direct_path)
+        if data:
+            unwrapped = self._unwrap_single(data)
+            if unwrapped.get("uuid") or unwrapped.get("username"):
+                return unwrapped
+
+        # Резервные форматы - только если прямой путь не сработал (другая версия API)
+        path = await self._find_user_path_fallback(uuid)
         if not path:
             raise Exception(f"Пользователь с UUID {uuid} не найден ни по одному формату эндпоинта")
         data = await self._request("GET", path)
