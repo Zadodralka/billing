@@ -1,6 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Реферальная программа{% endblock %}
 
+{% block extra_head %}
+<style>
+@media (max-width: 480px) {
+    .referral-stats-grid { grid-template-columns: repeat(3, 1fr); gap: .5rem; }
+    .referral-stats-grid .stat-card { padding: .7rem .5rem; text-align: center; }
+    .referral-stats-grid .label { font-size: .6rem; }
+    .referral-stats-grid .value { font-size: 1.05rem; }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="topbar">
     <div>
@@ -29,7 +40,7 @@
 </div>
 
 <!-- Статистика -->
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;">
+<div class="referral-stats-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;">
     <div class="card stat-card">
         <div class="label">Баланс</div>
         <div class="value" style="color:var(--accent);">{{ user.balance }} ₽</div>
@@ -83,23 +94,20 @@
 <!-- История баланса -->
 {% if transactions %}
 <h2 class="section-title">История баланса</h2>
-<div class="table-card">
-    <div class="table-wrap">
-    <table>
-        <thead><tr><th>Дата</th><th>Операция</th><th>Сумма</th></tr></thead>
-        <tbody>
-            {% for tx in transactions %}
-            <tr>
-                <td class="mono" style="color:var(--muted);font-size:.78rem;">{{ (tx.created_at | localtime).strftime('%d.%m.%Y %H:%M') }}</td>
-                <td style="font-size:.85rem;">{{ tx.description }}</td>
-                <td class="mono" style="font-weight:600;{% if tx.amount > 0 %}color:var(--accent){% else %}color:#ef5b5b{% endif %};">
-                    {% if tx.amount > 0 %}+{% endif %}{{ tx.amount }} ₽
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="payments-list">
+    {% for tx in transactions %}
+    <div class="payment-row">
+        <div class="payment-row-main">
+            <div class="payment-row-plan">{{ tx.description }}</div>
+            <div class="payment-row-date">{{ (tx.created_at | localtime).strftime('%d.%m.%Y %H:%M') }}</div>
+        </div>
+        <div class="payment-row-side">
+            <div class="payment-row-amount" style="{% if tx.amount > 0 %}color:var(--accent){% else %}color:#ef5b5b{% endif %};">
+                {% if tx.amount > 0 %}+{% endif %}{{ tx.amount }} ₽
+            </div>
+        </div>
     </div>
+    {% endfor %}
 </div>
 {% endif %}
 {% endblock %}

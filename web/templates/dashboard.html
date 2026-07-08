@@ -250,24 +250,7 @@
 
 .sub-action-row:disabled { opacity: .55; cursor: default; }
 
-/* ── Компактная история платежей (список вместо широкой таблицы - на телефоне
-   не нужно скроллить вбок) ── */
-.payments-list { border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; }
-.payment-row {
-    display: flex; align-items: center; justify-content: space-between; gap: .75rem;
-    padding: .75rem 1.1rem; border-bottom: 1px solid var(--border); background: var(--panel);
-}
-.payment-row:last-child { border-bottom: none; }
-.payment-row:hover { background: rgba(255,255,255,.015); }
-.payment-row-main { min-width: 0; }
-.payment-row-plan { color: #fff; font-weight: 600; font-size: .87rem; }
-.payment-row-date { color: var(--muted); font-size: .73rem; margin-top: .1rem; }
-.payment-row-side { display: flex; align-items: center; gap: .55rem; flex-shrink: 0; }
-.payment-row-amount { font-family: 'JetBrains Mono', monospace; color: #fff; font-weight: 600; font-size: .87rem; white-space: nowrap; }
-@media (max-width: 480px) {
-    .payment-row { flex-wrap: wrap; padding: .7rem .9rem; }
-    .payment-row-side { width: 100%; justify-content: space-between; margin-top: .35rem; }
-}
+/* .payments-list/.payment-row - см. base.html (используется и в кабинете, и в рефералке) */
 </style>
 {% endblock %}
 

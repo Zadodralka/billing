@@ -143,6 +143,42 @@
         tbody tr:hover { background: rgba(255,255,255,.015); }
         .table-wrap { overflow-x: auto; }
 
+        /* ── Компактный список вместо широкой таблицы (платежи, история баланса -
+           на телефоне не нужно скроллить вбок за колонками) ── */
+        .payments-list { border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; }
+        .payment-row {
+            display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+            padding: .75rem 1.1rem; border-bottom: 1px solid var(--border); background: var(--panel);
+        }
+        .payment-row:last-child { border-bottom: none; }
+        .payment-row:hover { background: rgba(255,255,255,.015); }
+        .payment-row-main { min-width: 0; }
+        .payment-row-plan { color: #fff; font-weight: 600; font-size: .87rem; }
+        .payment-row-date { color: var(--muted); font-size: .73rem; margin-top: .1rem; }
+        .payment-row-side { display: flex; align-items: center; gap: .55rem; flex-shrink: 0; }
+        .payment-row-amount { font-family: 'JetBrains Mono', monospace; color: #fff; font-weight: 600; font-size: .87rem; white-space: nowrap; }
+        @media (max-width: 480px) {
+            .payment-row { flex-wrap: wrap; padding: .7rem .9rem; }
+            .payment-row-side { width: 100%; justify-content: space-between; margin-top: .35rem; }
+        }
+
+        /* ── Карточки вместо таблицы на узких экранах (админ-таблицы пользователей/
+           подписок - десятки колонок на телефоне не помещаются даже со скроллом) ── */
+        .data-cards { display: none; flex-direction: column; gap: .8rem; }
+        @media (max-width: 760px) {
+            .table-card { display: none; }
+            .data-cards { display: flex; }
+        }
+        .data-card {
+            background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+            padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: .55rem;
+        }
+        .data-card-row { display: flex; justify-content: space-between; align-items: center; gap: .6rem; font-size: .85rem; }
+        .data-card-row .k { color: var(--muted); flex-shrink: 0; }
+        .data-card-row .v { color: #fff; font-weight: 500; text-align: right; min-width: 0; }
+        .data-card-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .3rem; padding-top: .6rem; border-top: 1px solid var(--border); }
+        .data-card-actions .btn { flex: 1; min-width: 90px; }
+
         .pagination { display: flex; gap: .35rem; list-style: none; padding: 0; margin: 1rem 0 0; }
         .page-link { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: .4rem .8rem; font-size: .85rem; cursor: pointer; display: block; }
         .page-item.active .page-link { background: var(--accent); color: #06140c; border-color: var(--accent); }

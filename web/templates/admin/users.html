@@ -26,7 +26,7 @@
         </thead>
         <tbody id="usersBody">
             {% for u in users %}
-            <tr id="user-row-{{ u.id }}">
+            <tr id="user-row-{{ u.id }}" data-row-for="{{ u.id }}">
                 <td class="mono" style="color:var(--muted);font-size:.8rem;">#{{ u.id }}</td>
                 <td>
                     {% if u.telegram_username %}<a href="https://t.me/{{ u.telegram_username }}" target="_blank">@{{ u.telegram_username }}</a>
@@ -71,6 +71,51 @@
         </tbody>
     </table>
     </div>
+</div>
+
+<div class="data-cards">
+    {% for u in users %}
+    <div class="data-card" data-row-for="{{ u.id }}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.6rem;">
+            <div style="min-width:0;">
+                <div style="color:#fff;font-weight:700;font-size:.92rem;">
+                    #{{ u.id }}
+                    {% if u.telegram_username %}· <a href="https://t.me/{{ u.telegram_username }}" target="_blank">@{{ u.telegram_username }}</a>
+                    {% elif u.telegram_id %}· <span class="mono" style="color:var(--muted);font-size:.82rem;">{{ u.telegram_id }}</span>{% endif %}
+                </div>
+                <div style="color:var(--muted);font-size:.8rem;margin-top:.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ u.email or '—' }}</div>
+            </div>
+            {% if u.is_admin %}<span class="badge badge-neutral" style="color:var(--blue);flex-shrink:0;">Админ</span>
+            {% elif u.is_banned %}<span class="badge badge-off" style="flex-shrink:0;">Заблокирован</span>
+            {% else %}<span class="badge badge-on" style="flex-shrink:0;">Активен</span>{% endif %}
+        </div>
+        <div class="data-card-row">
+            <span class="k">Подписки</span>
+            {% set active = u.subscriptions | selectattr('is_active') | list %}
+            <span class="v">{% if active %}{{ active|length }} активных{% else %}нет{% endif %}</span>
+        </div>
+        <div class="data-card-row"><span class="k">Регистрация</span><span class="v">{{ (u.created_at | localtime).strftime('%d.%m.%Y') }}</span></div>
+        <div class="data-card-actions">
+            <button type="button" class="btn btn-sm btn-outline-1 js-edit-btn"
+                data-id="{{ u.id }}" data-email="{{ u.email or '' }}" data-isadmin="{{ 'true' if u.is_admin else 'false' }}">
+                <i class="bi bi-pencil"></i> Изменить
+            </button>
+            <button type="button" class="btn btn-sm btn-accent js-grant-btn"
+                data-id="{{ u.id }}" data-name="{{ u.display_name }}">
+                <i class="bi bi-gift"></i> Подписка
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-1 js-ban-btn" data-id="{{ u.id }}">
+                {% if u.is_banned %}Разблокировать{% else %}Заблокировать{% endif %}
+            </button>
+            <button type="button" class="btn btn-sm btn-danger-1 js-delete-btn"
+                data-id="{{ u.id }}" data-name="{{ u.display_name }}">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    </div>
+    {% else %}
+    <div style="text-align:center;color:var(--muted);padding:2rem;">{% if q %}Ничего не найдено{% else %}Пользователей пока нет{% endif %}</div>
+    {% endfor %}
 </div>
 
 {% if pages > 1 %}
@@ -287,8 +332,9 @@ document.addEventListener('click', async function(e) {
                 return;
             }
             if (data.ok) {
-                const row = document.getElementById('user-row-' + pendingDeleteId);
-                if (row) row.remove();
+                // Удаляем и строку таблицы, и мобильную карточку - обе есть в DOM
+                // одновременно, показывается только одна в зависимости от ширины экрана.
+                document.querySelectorAll('[data-row-for="' + pendingDeleteId + '"]').forEach(el => el.remove());
                 closeModal('deleteModal');
                 showSuccess('Пользователь удалён');
             } else {

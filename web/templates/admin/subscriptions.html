@@ -30,7 +30,7 @@
         <thead><tr><th>ID</th><th>Пользователь</th><th>Тариф</th><th>Статус</th><th>Начало</th><th>Окончание</th><th>Действия</th></tr></thead>
         <tbody id="subsBody">
             {% for sub in subscriptions %}
-            <tr id="sub-row-{{ sub.id }}">
+            <tr id="sub-row-{{ sub.id }}" data-row-for="{{ sub.id }}">
                 <td class="mono" style="color:var(--muted);font-size:.8rem;">#{{ sub.id }}</td>
                 <td>{{ sub.user.display_name }}</td>
                 <td>{{ plans.get(sub.plan_key, {}).get('name', sub.plan_key) }}</td>
@@ -67,6 +67,43 @@
         </tbody>
     </table>
     </div>
+</div>
+
+<div class="data-cards">
+    {% for sub in subscriptions %}
+    <div class="data-card" data-row-for="{{ sub.id }}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.6rem;">
+            <div style="min-width:0;">
+                <div style="color:#fff;font-weight:700;font-size:.92rem;">#{{ sub.id }} · {{ sub.user.display_name }}</div>
+                <div style="color:var(--muted);font-size:.8rem;margin-top:.15rem;">{{ plans.get(sub.plan_key, {}).get('name', sub.plan_key) }}</div>
+            </div>
+            {% if sub.status.value == 'active' and sub.is_active %}<span class="badge badge-on" style="flex-shrink:0;">Активна</span>
+            {% elif sub.status.value == 'cancelled' %}<span class="badge badge-off" style="flex-shrink:0;">Остановлена</span>
+            {% else %}<span class="badge badge-neutral" style="flex-shrink:0;">{{ sub.status.value }}</span>{% endif %}
+        </div>
+        <div class="data-card-row"><span class="k">Начало</span><span class="v">{{ (sub.starts_at | localtime).strftime('%d.%m.%Y') if sub.starts_at else '—' }}</span></div>
+        <div class="data-card-row"><span class="k">Окончание</span><span class="v">{{ (sub.expires_at | localtime).strftime('%d.%m.%Y') if sub.expires_at else '—' }}</span></div>
+        <div class="data-card-actions">
+            <button type="button" class="btn btn-sm btn-outline-1 js-extend-btn" data-id="{{ sub.id }}">
+                <i class="bi bi-clock-history"></i> Продлить
+            </button>
+            {% if sub.status.value == 'cancelled' %}
+            <button type="button" class="btn btn-sm btn-accent js-resume-btn" data-id="{{ sub.id }}">
+                <i class="bi bi-play-fill"></i> Возобновить
+            </button>
+            {% else %}
+            <button type="button" class="btn btn-sm btn-outline-1 js-pause-btn" data-id="{{ sub.id }}">
+                <i class="bi bi-pause-fill"></i> Остановить
+            </button>
+            {% endif %}
+            <button type="button" class="btn btn-sm btn-danger-1 js-delete-sub-btn" data-id="{{ sub.id }}">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    </div>
+    {% else %}
+    <div style="text-align:center;color:var(--muted);padding:2rem;">{% if q or status %}Ничего не найдено{% else %}Подписок пока нет{% endif %}</div>
+    {% endfor %}
 </div>
 
 {% if pages > 1 %}
@@ -199,7 +236,8 @@ document.addEventListener('click', async function(e) {
             const res = await fetch('/admin/subscriptions/' + pendingDeleteSubId + '/delete', { method: 'POST' });
             const data = await res.json();
             if (data.ok) {
-                document.getElementById('sub-row-' + pendingDeleteSubId).remove();
+                // Удаляем и строку таблицы, и мобильную карточку одновременно
+                document.querySelectorAll('[data-row-for="' + pendingDeleteSubId + '"]').forEach(el => el.remove());
                 closeModal('deleteSubModal');
             } else {
                 showError('Не удалось удалить: ' + (data.error || 'ошибка'));
