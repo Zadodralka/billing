@@ -10,6 +10,7 @@ from core.models import User, SupportTicket, SupportMessage, TicketStatus
 from core.support_notify import notify_admins_new_message
 from core.rate_limit import check_rate_limit
 from core.version import APP_VERSION
+from core.timezone import to_local
 from web.routers.auth import require_user
 
 logger = logging.getLogger("support")
@@ -17,6 +18,7 @@ logger = logging.getLogger("support")
 router = APIRouter(prefix="/dashboard/support")
 templates = Jinja2Templates(directory="web/templates")
 templates.env.globals["app_version"] = APP_VERSION
+templates.env.filters["localtime"] = to_local
 
 # Создание тикетов и ответы шлют уведомление всем админам в Telegram - без лимита
 # один аккаунт может завалить их сообщениями за секунды.

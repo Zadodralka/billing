@@ -44,7 +44,7 @@
                     {% elif p.status.value == 'pending' %}<span class="badge badge-mid">Ожидание</span>
                     {% else %}<span class="badge badge-neutral">Отменён</span>{% endif %}
                 </td>
-                <td class="mono" style="color:var(--muted);font-size:.78rem;">{{ p.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td class="mono" style="color:var(--muted);font-size:.78rem;">{{ (p.created_at | localtime).strftime('%d.%m.%Y %H:%M') }}</td>
                 <td>
                     {% if p.status.value != 'success' %}
                     <button class="btn btn-sm btn-danger-1" onclick="deletePayment({{ p.id }})"><i class="bi bi-trash"></i></button>

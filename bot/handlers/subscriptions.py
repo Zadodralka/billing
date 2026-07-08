@@ -14,6 +14,7 @@ from core.models import User, Subscription, SubscriptionStatus
 from core.plans import get_active_plans
 from core.remnawave import remnawave
 from core.config import settings
+from core.timezone import to_local
 from bot.keyboards.main import back_to_menu, subscription_actions_row
 
 router = Router()
@@ -54,7 +55,7 @@ async def _send_subscription_qr(target: Message, sub: Subscription, plan_name: s
         img.save(buf, format="PNG")
         buf.seek(0)
 
-        expires = sub.expires_at.strftime("%d.%m.%Y") if sub.expires_at else "—"
+        expires = to_local(sub.expires_at).strftime("%d.%m.%Y") if sub.expires_at else "—"
         await target.answer_photo(
             BufferedInputFile(buf.read(), filename="vpn_qr.png"),
             caption=(
@@ -99,7 +100,7 @@ async def cb_my_subs(callback: CallbackQuery, user: User, session: AsyncSession)
     buttons = []
     for i, (sub, used_gb) in enumerate(zip(active, usage_results), start=1):
         plan_name = plans.get(sub.plan_key, {}).get("name", sub.plan_key)
-        expires = sub.expires_at.strftime("%d.%m.%Y") if sub.expires_at else "—"
+        expires = to_local(sub.expires_at).strftime("%d.%m.%Y") if sub.expires_at else "—"
         traffic = "Безлимит" if sub.traffic_gb == 0 else f"{sub.traffic_gb} GB"
 
         usage_line = ""

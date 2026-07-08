@@ -90,7 +90,7 @@
         <tbody>
             {% for tx in transactions %}
             <tr>
-                <td class="mono" style="color:var(--muted);font-size:.78rem;">{{ tx.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td class="mono" style="color:var(--muted);font-size:.78rem;">{{ (tx.created_at | localtime).strftime('%d.%m.%Y %H:%M') }}</td>
                 <td style="font-size:.85rem;">{{ tx.description }}</td>
                 <td class="mono" style="font-weight:600;{% if tx.amount > 0 %}color:var(--accent){% else %}color:#ef5b5b{% endif %};">
                     {% if tx.amount > 0 %}+{% endif %}{{ tx.amount }} ₽

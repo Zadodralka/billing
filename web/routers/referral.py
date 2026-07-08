@@ -8,11 +8,13 @@ from core.models import User, BalanceTransaction
 from core.promo_referral import ensure_referral_code
 from core.config import settings
 from core.version import APP_VERSION
+from core.timezone import to_local
 from web.routers.auth import require_user
 
 router = APIRouter(prefix="/dashboard/referral")
 templates = Jinja2Templates(directory="web/templates")
 templates.env.globals["app_version"] = APP_VERSION
+templates.env.filters["localtime"] = to_local
 
 
 @router.get("", response_class=HTMLResponse)

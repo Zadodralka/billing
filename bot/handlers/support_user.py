@@ -9,6 +9,7 @@ from core.models import User, SupportTicket, SupportMessage, TicketStatus
 from core.support_notify import notify_admins_new_message
 from core.rate_limit import check_rate_limit
 from core.config import settings
+from core.timezone import to_local
 from bot.states import CreateTicket, ReplyToTicket
 from bot.keyboards.support import (
     support_menu_keyboard, ticket_list_keyboard,
@@ -52,7 +53,7 @@ def _format_ticket_thread(ticket: SupportTicket) -> str:
             lines.append("")
         for msg in messages:
             who = "🛡 <b>Поддержка</b>" if msg.is_from_admin else "👤 <b>Вы</b>"
-            time_str = msg.created_at.strftime("%d.%m %H:%M")
+            time_str = to_local(msg.created_at).strftime("%d.%m %H:%M")
             lines.append(f"{who} <i>{time_str}</i>")
             text = escape(msg.text[:500]) + ("…" if len(msg.text) > 500 else "")
             lines.append(text)

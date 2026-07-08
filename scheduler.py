@@ -19,6 +19,7 @@ from core.database import AsyncSessionLocal, init_db
 from core.models import Subscription, SubscriptionStatus, User, Payment, PaymentStatus
 from core.remnawave import remnawave
 from core.config import settings
+from core.timezone import to_local
 from aiogram import Bot
 
 logging.basicConfig(level=logging.INFO)
@@ -118,7 +119,7 @@ async def notify_expiring_soon():
                     await bot.send_message(
                         user.telegram_id,
                         f"⏳ <b>Подписка скоро истекает</b>\n\n"
-                        f"Осталось {days_left} дн. (до {sub.expires_at.strftime('%d.%m.%Y')}).\n"
+                        f"Осталось {days_left} дн. (до {to_local(sub.expires_at).strftime('%d.%m.%Y')}).\n"
                         "Продлите заранее, чтобы доступ к VPN не прерывался — "
                         "кнопка «🔁 Продлить» в разделе «Мои подписки» в боте.",
                         parse_mode="HTML",

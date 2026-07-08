@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     # Web
     webapp_url: str = "http://localhost:8000"
 
+    # Часовой пояс для отображения дат/времени пользователю (в БД всё хранится в UTC,
+    # конвертация только на вывод - см. core.timezone). Название - из базы IANA,
+    # например "Europe/Moscow", "Asia/Yekaterinburg", "Asia/Novosibirsk".
+    timezone: str = "UTC"
+
     # Plans (default prices)
     plan_1m_price: int = 149
     plan_3m_price: int = 399
@@ -48,6 +53,19 @@ class Settings(BaseSettings):
     plan_3m_unlimited_extra: int = 250
     plan_6m_unlimited_extra: int = 450
     plan_1y_unlimited_extra: int = 800
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, v):
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        try:
+            ZoneInfo(v)
+        except ZoneInfoNotFoundError:
+            raise ValueError(
+                f"Неизвестный часовой пояс TIMEZONE='{v}'. Используйте имя из базы IANA, "
+                "например Europe/Moscow или Asia/Yekaterinburg."
+            )
+        return v
 
     @field_validator("secret_key")
     @classmethod

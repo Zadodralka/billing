@@ -11,12 +11,14 @@ import traceback
 from core.database import get_db
 from core.models import Article
 from core.version import APP_VERSION
+from core.timezone import to_local
 from web.routers.auth import require_admin, User
 
 logger = logging.getLogger("admin.docs")
 router = APIRouter(prefix="/admin/docs")
 templates = Jinja2Templates(directory="web/templates")
 templates.env.globals["app_version"] = APP_VERSION
+templates.env.filters["localtime"] = to_local
 
 UPLOAD_DIR = "web/static/uploads/docs"
 ALLOWED_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}

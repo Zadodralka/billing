@@ -21,7 +21,7 @@
             <td class="mono" style="color:var(--accent);">-{{ p.discount_percent }}%</td>
             <td class="mono">{{ p.uses_count }}</td>
             <td class="mono" style="color:var(--muted);">{{ p.max_uses or '∞' }}</td>
-            <td class="mono" style="color:var(--muted);font-size:.78rem;">{{ p.expires_at.strftime('%d.%m.%Y') if p.expires_at else '—' }}</td>
+            <td class="mono" style="color:var(--muted);font-size:.78rem;">{{ (p.expires_at | localtime).strftime('%d.%m.%Y') if p.expires_at else '—' }}</td>
             <td style="color:var(--muted);font-size:.8rem;">{{ p.description or '—' }}</td>
             <td id="promo-status-{{ p.id }}">
                 {% if p.is_active %}<span class="badge badge-on">Активен</span>

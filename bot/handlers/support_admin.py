@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from core.models import User, SupportTicket, SupportMessage, TicketStatus
 from core.support_notify import notify_user_admin_replied
 from core.config import settings
+from core.timezone import to_local
 from bot.states import AdminReplyToTicket
 from bot.keyboards.support import (
     admin_ticket_keyboard, admin_reply_sent_keyboard, cancel_keyboard
@@ -39,7 +40,7 @@ def _format_ticket_for_admin(ticket: SupportTicket) -> str:
     ]
     for msg in (ticket.messages or [])[-5:]:
         who = "🛡 Поддержка" if msg.is_from_admin else "👤 Пользователь"
-        lines.append(f"<b>{who}</b> <i>{msg.created_at.strftime('%d.%m %H:%M')}</i>")
+        lines.append(f"<b>{who}</b> <i>{to_local(msg.created_at).strftime('%d.%m %H:%M')}</i>")
         lines.append(escape(msg.text[:400]) + ("…" if len(msg.text) > 400 else ""))
         lines.append("")
     return "\n".join(lines).strip()

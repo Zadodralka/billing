@@ -6,11 +6,13 @@ from sqlalchemy import select
 from core.database import get_db
 from core.models import Article
 from core.version import APP_VERSION
+from core.timezone import to_local
 from web.routers.auth import require_user, User
 
 router = APIRouter(prefix="/docs")
 templates = Jinja2Templates(directory="web/templates")
 templates.env.globals["app_version"] = APP_VERSION
+templates.env.filters["localtime"] = to_local
 
 
 @router.get("", response_class=HTMLResponse)

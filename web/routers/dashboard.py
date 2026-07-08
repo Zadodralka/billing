@@ -14,6 +14,7 @@ from core.models import User, Subscription, Payment, PaymentStatus, Subscription
 from core.plans import get_active_plans, get_all_plans
 from core.remnawave import remnawave
 from core.version import APP_VERSION
+from core.timezone import to_local
 from core.telegram_login import create_token as create_tg_login_token, get_token_data as get_tg_login_data, consume_token as consume_tg_login_token
 from web.routers.auth import require_user, get_bot_username, _check_login_email_rate_limit
 
@@ -24,6 +25,7 @@ EXPIRING_SOON_DAYS = 3  # тот же порог, что и у напомина�
 router = APIRouter(prefix="/dashboard")
 templates = Jinja2Templates(directory="web/templates")
 templates.env.globals["app_version"] = APP_VERSION
+templates.env.filters["localtime"] = to_local
 
 
 @router.get("", response_class=HTMLResponse)

@@ -57,7 +57,7 @@
             <div style="display:flex;justify-content:space-between;align-items:center;padding:.55rem 0;{% if not loop.last %}border-bottom:1px solid var(--border);{% endif %}">
                 <div style="min-width:0;">
                     <div style="color:#fff;font-size:.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.user.display_name if p.user else '—' }}</div>
-                    <div style="color:var(--muted);font-size:.72rem;">{{ p.created_at.strftime('%d.%m %H:%M') }} · {{ plans.get(p.plan_key, {}).get('name', p.plan_key) }}</div>
+                    <div style="color:var(--muted);font-size:.72rem;">{{ (p.created_at | localtime).strftime('%d.%m %H:%M') }} · {{ plans.get(p.plan_key, {}).get('name', p.plan_key) }}</div>
                 </div>
                 <div style="text-align:right;flex-shrink:0;margin-left:.6rem;">
                     <div class="mono" style="color:#fff;font-size:.85rem;">{{ p.amount }} ₽</div>
@@ -81,7 +81,7 @@
             {% for u in recent_users %}
             <div style="display:flex;justify-content:space-between;align-items:center;padding:.55rem 0;{% if not loop.last %}border-bottom:1px solid var(--border);{% endif %}">
                 <div style="color:#fff;font-size:.85rem;font-weight:600;">{{ u.display_name }}</div>
-                <div style="color:var(--muted);font-size:.75rem;">{{ u.created_at.strftime('%d.%m.%Y') }}</div>
+                <div style="color:var(--muted);font-size:.75rem;">{{ (u.created_at | localtime).strftime('%d.%m.%Y') }}</div>
             </div>
             {% endfor %}
             {% else %}

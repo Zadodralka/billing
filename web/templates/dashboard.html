@@ -291,7 +291,7 @@
                 {% if expiring_soon|length == 1 %}
                 {% set exp_sub = expiring_soon[0] %}
                 <div style="color:#fff;font-weight:700;font-size:.92rem;">
-                    Подписка «{{ all_plans.get(exp_sub.plan_key, {}).get('name', exp_sub.plan_key) }}» истекает {{ exp_sub.expires_at.strftime('%d.%m.%Y') }}
+                    Подписка «{{ all_plans.get(exp_sub.plan_key, {}).get('name', exp_sub.plan_key) }}» истекает {{ (exp_sub.expires_at | localtime).strftime('%d.%m.%Y') }}
                 </div>
                 {% else %}
                 <div style="color:#fff;font-weight:700;font-size:.92rem;">{{ expiring_soon|length }} подписки скоро истекают</div>
@@ -348,12 +348,12 @@
     </div>
     <div class="card stat-card dash-stat-tile">
         <div class="dash-stat-full">
-            <div><div class="label">С нами с</div><div class="value" style="font-size:1.3rem;">{{ user.created_at.strftime('%d.%m.%Y') }}</div></div>
+            <div><div class="label">С нами с</div><div class="value" style="font-size:1.3rem;">{{ (user.created_at | localtime).strftime('%d.%m.%Y') }}</div></div>
             <div class="icon-badge" style="background:var(--panel-3);color:var(--muted);"><i class="bi bi-calendar-heart"></i></div>
         </div>
         <div class="dash-stat-compact">
             <div class="icon-badge" style="background:var(--panel-3);color:var(--muted);"><i class="bi bi-calendar-heart"></i></div>
-            <div class="compact-value">{{ user.created_at.strftime('%m.%y') }}</div>
+            <div class="compact-value">{{ (user.created_at | localtime).strftime('%m.%y') }}</div>
             <div class="compact-label">С нами</div>
         </div>
     </div>
@@ -453,7 +453,7 @@
             {% if sub.expires_at %}
             <div class="sub-info-row">
                 <span class="k">Действует до</span>
-                <span class="v">{{ sub.expires_at.strftime('%d.%m.%Y') }}</span>
+                <span class="v">{{ (sub.expires_at | localtime).strftime('%d.%m.%Y') }}</span>
             </div>
             {% endif %}
             {% set usage = usage_map.get(sub.remnawave_sub_id) if card_state == 'active' else none %}
@@ -501,7 +501,7 @@
         {% elif card_state == 'expired' %}
         <div class="sub-status-banner expired">
             <i class="bi bi-clock"></i>
-            Подписка истекла {{ sub.expires_at.strftime('%d.%m.%Y') if sub.expires_at else '' }}
+            Подписка истекла {{ (sub.expires_at | localtime).strftime('%d.%m.%Y') if sub.expires_at else '' }}
         </div>
         {% endif %}
 
@@ -556,7 +556,7 @@
                 <div class="sub-strip-title">
                     <span class="sub-strip-status">Активна</span>
                     <span class="sub-strip-name">{{ all_plans.get(sub.plan_key, {}).get('name', sub.plan_key) }}</span>
-                    {% if sub.expires_at %}<span class="sub-strip-sub">до {{ sub.expires_at.strftime('%d.%m.%Y') }}</span>{% endif %}
+                    {% if sub.expires_at %}<span class="sub-strip-sub">до {{ (sub.expires_at | localtime).strftime('%d.%m.%Y') }}</span>{% endif %}
                 </div>
             </div>
 
@@ -612,7 +612,7 @@
                 <div class="connect-info-row"><span class="k">Тариф</span><span class="v">{{ all_plans.get(sub.plan_key, {}).get('name', sub.plan_key) }}</span></div>
                 <div class="connect-info-row"><span class="k">Трафик</span><span class="v">{% if sub.traffic_gb == 0 %}Безлимит{% else %}{{ sub.traffic_gb }} GB{% endif %}</span></div>
                 {% if sub.expires_at %}
-                <div class="connect-info-row"><span class="k">Действует до</span><span class="v">{{ sub.expires_at.strftime('%d.%m.%Y %H:%M') }}</span></div>
+                <div class="connect-info-row"><span class="k">Действует до</span><span class="v">{{ (sub.expires_at | localtime).strftime('%d.%m.%Y %H:%M') }}</span></div>
                 {% endif %}
 
                 <div class="connect-steps">
@@ -668,7 +668,7 @@
     <div class="payment-row" id="payment-row-{{ payment.id }}">
         <div class="payment-row-main">
             <div class="payment-row-plan">{{ all_plans.get(payment.plan_key, {}).get('name', payment.plan_key) }}</div>
-            <div class="payment-row-date">{{ payment.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+            <div class="payment-row-date">{{ (payment.created_at | localtime).strftime('%d.%m.%Y %H:%M') }}</div>
         </div>
         <div class="payment-row-side">
             <div class="payment-row-amount">{{ payment.amount }} ₽</div>

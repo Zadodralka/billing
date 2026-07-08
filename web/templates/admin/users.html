@@ -39,7 +39,7 @@
                     {% if active %}<span class="badge badge-on">{{ active|length }} активных</span>
                     {% else %}<span style="color:var(--muted);font-size:.82rem;">нет</span>{% endif %}
                 </td>
-                <td class="mono" style="color:var(--muted);font-size:.8rem;">{{ u.created_at.strftime('%d.%m.%Y') }}</td>
+                <td class="mono" style="color:var(--muted);font-size:.8rem;">{{ (u.created_at | localtime).strftime('%d.%m.%Y') }}</td>
                 <td id="status-{{ u.id }}">
                     {% if u.is_admin %}<span class="badge badge-neutral" style="color:var(--blue);">Админ</span>
                     {% elif u.is_banned %}<span class="badge badge-off">Заблокирован</span>

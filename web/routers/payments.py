@@ -9,6 +9,7 @@ from core.models import User, Payment, PaymentStatus
 from core.yoomoney import yoomoney
 from core.config import settings
 from core.version import APP_VERSION
+from core.timezone import to_local
 from aiogram import Bot
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payment")
 templates = Jinja2Templates(directory="web/templates")
 templates.env.globals["app_version"] = APP_VERSION
+templates.env.filters["localtime"] = to_local
 
 
 @router.post("/webhook/yoomoney")
@@ -89,7 +91,7 @@ async def yoomoney_webhook(request: Request, session: AsyncSession = Depends(get
                     parse_mode="HTML",
                 )
             else:
-                expires = subscription.expires_at.strftime("%d.%m.%Y")
+                expires = to_local(subscription.expires_at).strftime("%d.%m.%Y")
                 await bot.send_message(
                     user.telegram_id,
                     f"✅ <b>Оплата получена!</b>\n\n"

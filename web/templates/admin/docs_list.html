@@ -37,7 +37,7 @@
                     <span class="badge badge-neutral">Черновик</span>
                     {% endif %}
                 </td>
-                <td class="mono" style="color:var(--muted);font-size:.78rem;">{{ art.updated_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td class="mono" style="color:var(--muted);font-size:.78rem;">{{ (art.updated_at | localtime).strftime('%d.%m.%Y %H:%M') }}</td>
                 <td>
                     <div style="display:flex;gap:.4rem;">
                         <a href="/docs/{{ art.slug }}" target="_blank" class="btn btn-sm btn-outline-1" title="Просмотр">

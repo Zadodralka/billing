@@ -29,7 +29,7 @@
     <div class="ticket-row" onclick="location.href='/dashboard/support/{{ t.id }}'">
         <div>
             <div class="ticket-subject">{{ t.subject }}</div>
-            <div class="ticket-meta">Обновлён {{ t.updated_at.strftime('%d.%m.%Y %H:%M') }}</div>
+            <div class="ticket-meta">Обновлён {{ (t.updated_at | localtime).strftime('%d.%m.%Y %H:%M') }}</div>
         </div>
         <div>
             {% if t.status.value == 'open' %}<span class="badge badge-mid">Ожидает ответа</span>

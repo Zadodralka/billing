@@ -61,7 +61,7 @@
         <div class="msg {% if msg.is_from_admin %}msg-admin{% else %}msg-user{% endif %}">
             {% if msg.is_from_admin %}<div class="msg-author">{{ msg.author_name or 'Поддержка' }}</div>{% endif %}
             {{ msg.text }}
-            <div class="msg-meta">{{ msg.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+            <div class="msg-meta">{{ (msg.created_at | localtime).strftime('%d.%m.%Y %H:%M') }}</div>
         </div>
         {% endfor %}
     </div>

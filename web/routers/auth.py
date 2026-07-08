@@ -11,6 +11,7 @@ from core.models import User, EmailToken
 from core.email import send_magic_link
 from core.config import settings
 from core.version import APP_VERSION
+from core.timezone import to_local
 from core.telegram_login import create_token as create_tg_login_token, get_token_data as get_tg_login_data, consume_token as consume_tg_login_token
 
 logger = logging.getLogger("auth")
@@ -18,6 +19,7 @@ logger = logging.getLogger("auth")
 router = APIRouter(prefix="/auth")
 templates = Jinja2Templates(directory="web/templates")
 templates.env.globals["app_version"] = APP_VERSION
+templates.env.filters["localtime"] = to_local
 
 _bot_username_cache = {"value": None}
 _redis_client = None

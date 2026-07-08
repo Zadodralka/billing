@@ -39,8 +39,8 @@
                     {% elif sub.status.value == 'cancelled' %}<span class="badge badge-off">Остановлена</span>
                     {% else %}<span class="badge badge-neutral">{{ sub.status.value }}</span>{% endif %}
                 </td>
-                <td class="mono" style="color:var(--muted);font-size:.8rem;">{{ sub.starts_at.strftime('%d.%m.%Y') if sub.starts_at else '—' }}</td>
-                <td class="mono" style="color:var(--muted);font-size:.8rem;" id="sub-expires-{{ sub.id }}">{{ sub.expires_at.strftime('%d.%m.%Y') if sub.expires_at else '—' }}</td>
+                <td class="mono" style="color:var(--muted);font-size:.8rem;">{{ (sub.starts_at | localtime).strftime('%d.%m.%Y') if sub.starts_at else '—' }}</td>
+                <td class="mono" style="color:var(--muted);font-size:.8rem;" id="sub-expires-{{ sub.id }}">{{ (sub.expires_at | localtime).strftime('%d.%m.%Y') if sub.expires_at else '—' }}</td>
                 <td>
                     <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
                         <button type="button" class="btn btn-sm btn-outline-1 js-extend-btn" data-id="{{ sub.id }}" title="Продлить">

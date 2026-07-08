@@ -12,6 +12,7 @@ from core.plans import get_plan
 from core.yoomoney import yoomoney
 from core.rate_limit import check_rate_limit
 from core.version import APP_VERSION
+from core.timezone import to_local
 from web.routers.auth import require_user, get_current_user
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/gift")
 templates = Jinja2Templates(directory="web/templates")
 templates.env.globals["app_version"] = APP_VERSION
+templates.env.filters["localtime"] = to_local
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 

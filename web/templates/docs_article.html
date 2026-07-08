@@ -168,7 +168,7 @@
     <div class="article-header">
         <h1 class="article-title">{{ article.title }}</h1>
         <div class="article-meta">
-            <span><i class="bi bi-calendar3"></i> {{ article.updated_at.strftime('%d.%m.%Y') }}</span>
+            <span><i class="bi bi-calendar3"></i> {{ (article.updated_at | localtime).strftime('%d.%m.%Y') }}</span>
             {% if article.excerpt %}
             <span style="color:#6b7689;">{{ article.excerpt }}</span>
             {% endif %}
