@@ -323,6 +323,24 @@
     </div>
 </div>
 
+<!-- Общая модалка подтверждения - см. confirmAction() ниже. Заменяет нативный confirm(),
+     который на мобильных выглядит чужеродно и не стилизуется. -->
+<div class="modal-overlay" id="confirmActionModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3 id="confirmActionTitle">Подтвердите действие</h3>
+            <button type="button" class="modal-close" onclick="closeModal('confirmActionModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c">
+            <p id="confirmActionText" style="color:#9aa5ba;font-size:.9rem;"></p>
+        </div>
+        <div class="modal-foot">
+            <button type="button" class="btn btn-outline-1" id="confirmActionCancelBtn">Отмена</button>
+            <button type="button" class="btn btn-danger-1" id="confirmActionOkBtn">Подтвердить</button>
+        </div>
+    </div>
+</div>
+
 <script>
 function toggleSidebar(open) {
     document.getElementById('sidebar').classList.toggle('open', open);
@@ -379,6 +397,43 @@ function openModal(id) {
 function closeModal(id) {
     const el = document.getElementById(id);
     if (el) el.classList.remove('show');
+}
+
+// Промис-версия confirm() поверх общей модалки #confirmActionModal - вызывать как
+// `if (!(await confirmAction('Удалить запись?'))) return;` внутри async-обработчика.
+// opts: { title, okText, danger } - danger по умолчанию true (кнопка красная).
+function confirmAction(message, opts) {
+    opts = opts || {};
+    const modal = document.getElementById('confirmActionModal');
+    const okBtn = document.getElementById('confirmActionOkBtn');
+    const cancelBtn = document.getElementById('confirmActionCancelBtn');
+    document.getElementById('confirmActionTitle').textContent = opts.title || 'Подтвердите действие';
+    document.getElementById('confirmActionText').textContent = message;
+    okBtn.textContent = opts.okText || 'Подтвердить';
+    okBtn.className = 'btn ' + (opts.danger === false ? 'btn-accent' : 'btn-danger-1');
+    return new Promise(function (resolve) {
+        let settled = false;
+        function finish(result) {
+            if (settled) return;
+            settled = true;
+            observer.disconnect();
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            resolve(result);
+        }
+        function onOk() { closeModal('confirmActionModal'); finish(true); }
+        function onCancel() { closeModal('confirmActionModal'); finish(false); }
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        // Модалку можно закрыть кликом по оверлею, крестиком или Escape - все три пути
+        // просто убирают класс .show напрямую, минуя onOk/onCancel, поэтому статус
+        // "отменено" отслеживаем через MutationObserver, иначе промис повиснет навсегда.
+        const observer = new MutationObserver(function () {
+            if (!modal.classList.contains('show')) finish(false);
+        });
+        observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
+        openModal('confirmActionModal');
+    });
 }
 
 // Открывает общую модалку действий для карточки .data-card, склонировав её

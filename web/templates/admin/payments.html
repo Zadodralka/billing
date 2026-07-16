@@ -71,7 +71,7 @@
 {% block extra_scripts %}
 <script>
 async function deletePayment(id) {
-    if (!confirm('Удалить этот платёж навсегда?')) return;
+    if (!(await confirmAction('Удалить этот платёж навсегда?', { okText: 'Удалить' }))) return;
     try {
         const res = await fetch('/admin/payments/' + id + '/delete', { method: 'POST' });
         const data = await res.json();
@@ -86,7 +86,7 @@ async function deletePayment(id) {
 }
 
 async function cleanupPending() {
-    if (!confirm('Удалить все платежи в статусе ожидание старше 1 часа?')) return;
+    if (!(await confirmAction('Удалить все платежи в статусе ожидание старше 1 часа?', { okText: 'Удалить' }))) return;
     await fetch('/admin/payments/cleanup', { method: 'POST' });
     location.reload();
 }

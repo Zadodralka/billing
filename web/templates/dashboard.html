@@ -908,7 +908,7 @@ async function submitLinkEmail() {
 document.addEventListener('click', async function(e) {
     const cancelBtn = e.target.closest('.js-cancel-payment-btn');
     if (!cancelBtn) return;
-    if (!confirm('Отменить этот платёж? Если вы уже оплатили — не отменяйте, подписка активируется автоматически.')) return;
+    if (!(await confirmAction('Отменить этот платёж? Если вы уже оплатили — не отменяйте, подписка активируется автоматически.', { okText: 'Отменить платёж' }))) return;
 
     cancelBtn.disabled = true;
     const paymentId = cancelBtn.dataset.id;

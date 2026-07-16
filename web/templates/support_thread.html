@@ -130,7 +130,7 @@ if (sendBtn) {
 }
 
 async function closeTicket() {
-    if (!confirm('Закрыть тикет?')) return;
+    if (!(await confirmAction('Закрыть тикет?', { okText: 'Закрыть', danger: false }))) return;
     const res = await fetch(closeUrl, { method: 'POST' });
     const data = await res.json();
     if (data.ok) location.reload();

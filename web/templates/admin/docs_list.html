@@ -105,7 +105,7 @@ document.addEventListener('click', async function(e) {
 
     const deleteBtn = e.target.closest('.js-delete-btn');
     if (deleteBtn) {
-        if (!confirm(`Удалить статью "${deleteBtn.dataset.title}"?`)) return;
+        if (!(await confirmAction(`Удалить статью "${deleteBtn.dataset.title}"?`, { okText: 'Удалить' }))) return;
         deleteBtn.disabled = true;
         const res = await fetch(`/admin/docs/${deleteBtn.dataset.id}/delete`, { method: 'POST' });
         const data = await res.json();

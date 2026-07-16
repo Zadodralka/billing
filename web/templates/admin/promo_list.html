@@ -110,7 +110,7 @@ document.addEventListener('click', async function(e) {
     }
     const del = e.target.closest('.js-delete-promo');
     if (del) {
-        if (!confirm('Удалить промокод ' + del.dataset.code + '?')) return;
+        if (!(await confirmAction('Удалить код ' + del.dataset.code + '?', { okText: 'Удалить' }))) return;
         del.disabled = true;
         const res = await fetch('/admin/promo/' + del.dataset.id + '/delete', {method:'POST'});
         const data = await res.json();

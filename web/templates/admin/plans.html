@@ -171,7 +171,7 @@ document.addEventListener('click', async function(e) {
 
     const deleteBtn = e.target.closest('.js-delete-plan-btn');
     if (deleteBtn) {
-        if (!confirm('Удалить тариф "' + deleteBtn.dataset.name + '"? Уже купленные подписки не пострадают.')) return;
+        if (!(await confirmAction('Удалить тариф "' + deleteBtn.dataset.name + '"? Уже купленные подписки не пострадают.', { okText: 'Удалить' }))) return;
         pendingDeletePlanId = deleteBtn.dataset.id;
         try {
             const res = await fetch('/admin/plans/' + pendingDeletePlanId + '/delete', { method: 'POST' });
