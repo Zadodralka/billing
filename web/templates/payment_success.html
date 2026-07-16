@@ -4,6 +4,8 @@
 {% block extra_head %}
 <style>
     .icon { font-size: 3rem; }
+    .icon.success { color: var(--accent); }
+    .icon.pending { color: var(--gold); }
     .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--panel-2); border-top-color: var(--accent); animation: spin .7s linear infinite; margin: 0 auto; }
     @keyframes spin { to { transform: rotate(360deg); } }
 </style>
@@ -20,14 +22,14 @@
     </div>
 
     <div id="stateDone" style="display:none;">
-        <div class="icon">✅</div>
+        <div class="icon success"><i class="bi bi-check-circle-fill"></i></div>
         <h1>Оплата подтверждена!</h1>
         <p class="subtitle">Подписка уже активна — конфиг для подключения ждёт в личном кабинете (и придёт в Telegram, если он привязан).</p>
         <a href="/dashboard" class="btn">Перейти в кабинет</a>
     </div>
 
     <div id="stateSlow" style="display:none;">
-        <div class="icon">⏳</div>
+        <div class="icon pending"><i class="bi bi-hourglass-split"></i></div>
         <h1>Почти готово</h1>
         <p class="subtitle">Оплата обрабатывается чуть дольше обычного. Как только банк подтвердит платёж, подписка появится в личном кабинете автоматически — обновите страницу кабинета через минуту.</p>
         <a href="/dashboard" class="btn">Перейти в кабинет</a>
