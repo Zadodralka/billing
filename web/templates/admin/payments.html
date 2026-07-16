@@ -14,8 +14,6 @@
     {% endif %}
 </div>
 
-<div id="errorBanner" style="display:none;background:var(--danger-soft);color:var(--danger);padding:.8rem 1rem;border-radius:10px;margin-bottom:1rem;font-size:.85rem;"></div>
-
 <form method="GET" style="display:flex;gap:.6rem;margin-bottom:1.2rem;max-width:560px;flex-wrap:wrap;">
     <input type="text" name="q" value="{{ q }}" placeholder="Поиск по пользователю или ID…" style="flex:1;min-width:220px;">
     <select name="status" style="width:auto;">
@@ -72,13 +70,6 @@
 
 {% block extra_scripts %}
 <script>
-function showError(msg) {
-    const banner = document.getElementById('errorBanner');
-    banner.textContent = msg;
-    banner.style.display = 'block';
-    setTimeout(() => banner.style.display = 'none', 6000);
-}
-
 async function deletePayment(id) {
     if (!confirm('Удалить этот платёж навсегда?')) return;
     try {

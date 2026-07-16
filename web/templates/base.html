@@ -157,6 +157,28 @@
            общую модалку #cardActionsModal при клике (см. openCardActions() в base.html). */
         #cardActionsBody .btn { width: 100%; }
 
+        /* ── Тосты (showError/showSuccess) - раньше на 6 admin-страницах был свой
+           #errorBanner/#successBanner div + копия showError/showSuccess в каждом
+           файле, сдвигающая контент вниз. Один плавающий контейнер здесь, функции
+           с теми же именами - вызовы на страницах менять не пришлось. ── */
+        .toast-container {
+            position: fixed; top: 1rem; right: 1rem; z-index: 2000;
+            display: flex; flex-direction: column; gap: .6rem; width: min(360px, calc(100vw - 2rem));
+        }
+        .toast {
+            padding: .8rem 1rem; border-radius: 10px; font-size: .85rem; font-weight: 500;
+            box-shadow: 0 10px 30px rgba(0,0,0,.4); display: flex; align-items: flex-start; gap: .55rem;
+            animation: toastIn .18s ease; backdrop-filter: blur(6px);
+        }
+        .toast i { flex-shrink: 0; margin-top: .1rem; }
+        .toast-error { background: var(--danger-soft); color: var(--danger); border: 1px solid rgba(239,91,91,.25); }
+        .toast-success { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(61,220,132,.25); }
+        @keyframes toastIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .toast.hide { opacity: 0; transform: translateY(-10px); transition: opacity .18s ease, transform .18s ease; }
+        @media (max-width: 480px) {
+            .toast-container { left: 1rem; right: 1rem; width: auto; top: .75rem; }
+        }
+
         .pagination { display: flex; gap: .35rem; list-style: none; padding: 0; margin: 1rem 0 0; }
         .page-link { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: .4rem .8rem; font-size: .85rem; cursor: pointer; display: block; }
         .page-item.active .page-link { background: var(--accent); color: #06140c; border-color: var(--accent); }
@@ -315,6 +337,34 @@ document.querySelectorAll('.sidebar-nav-item').forEach(function(link) {
         }
     });
 });
+
+// Плавающий тост вместо инлайн-баннера, сдвигающего контент. showError/showSuccess -
+// публичный API (эти имена уже вызываются на десятке страниц), showToast - общая реализация.
+function showToast(message, type) {
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toastContainer';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-' + type;
+    const icon = document.createElement('i');
+    icon.className = 'bi ' + (type === 'error' ? 'bi-exclamation-circle' : 'bi-check-circle');
+    const text = document.createElement('span');
+    text.textContent = message;  // textContent, не innerHTML - сообщение может прийти с сервера
+    toast.appendChild(icon);
+    toast.appendChild(text);
+    container.appendChild(toast);
+
+    setTimeout(function () {
+        toast.classList.add('hide');
+        setTimeout(function () { toast.remove(); }, 200);
+    }, type === 'error' ? 7000 : 4000);
+}
+function showError(msg) { console.error(msg); showToast(msg, 'error'); }
+function showSuccess(msg) { showToast(msg, 'success'); }
 
 function openModal(id) {
     // Закрываем остальные открытые модалки - иначе кнопка внутри cardActionsModal,

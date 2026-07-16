@@ -9,9 +9,6 @@
     </div>
 </div>
 
-<div id="errorBanner" style="display:none;background:var(--danger-soft);color:var(--danger);padding:.8rem 1rem;border-radius:10px;margin-bottom:1rem;font-size:.85rem;"></div>
-<div id="successBanner" style="display:none;background:var(--accent-soft);color:var(--accent);padding:.8rem 1rem;border-radius:10px;margin-bottom:1rem;font-size:.85rem;"></div>
-
 <form method="GET" style="display:flex;gap:.6rem;margin-bottom:1.2rem;max-width:420px;">
     <input type="text" name="q" value="{{ q }}" placeholder="Поиск по email, telegram или ID…" style="flex:1;">
     <button type="submit" class="btn btn-outline-1"><i class="bi bi-search"></i></button>
@@ -201,22 +198,6 @@
 
 {% block extra_scripts %}
 <script>
-function showError(msg) {
-    console.error('[admin/users]', msg);
-    const banner = document.getElementById('errorBanner');
-    banner.textContent = msg;
-    banner.style.display = 'block';
-    document.getElementById('successBanner').style.display = 'none';
-    setTimeout(() => banner.style.display = 'none', 7000);
-}
-function showSuccess(msg) {
-    const banner = document.getElementById('successBanner');
-    banner.textContent = msg;
-    banner.style.display = 'block';
-    document.getElementById('errorBanner').style.display = 'none';
-    setTimeout(() => banner.style.display = 'none', 4000);
-}
-
 let pendingDeleteId = null;
 let pendingGrantId = null;
 

@@ -10,9 +10,6 @@
     <a href="/admin/docs/new" class="btn btn-accent"><i class="bi bi-plus-lg"></i> Новая статья</a>
 </div>
 
-<div id="errorBanner" style="display:none;background:var(--danger-soft);color:var(--danger);padding:.8rem 1rem;border-radius:10px;margin-bottom:1rem;font-size:.85rem;"></div>
-<div id="successBanner" style="display:none;background:var(--accent-soft);color:var(--accent);padding:.8rem 1rem;border-radius:10px;margin-bottom:1rem;font-size:.85rem;"></div>
-
 {% if articles %}
 <div class="table-card">
     <div class="table-wrap">
@@ -81,17 +78,6 @@
 
 {% block extra_scripts %}
 <script>
-function showError(msg) {
-    const b = document.getElementById('errorBanner');
-    b.textContent = msg; b.style.display = 'block';
-    setTimeout(() => b.style.display = 'none', 7000);
-}
-function showSuccess(msg) {
-    const b = document.getElementById('successBanner');
-    b.textContent = msg; b.style.display = 'block';
-    setTimeout(() => b.style.display = 'none', 4000);
-}
-
 document.addEventListener('click', async function(e) {
     const toggleBtn = e.target.closest('.js-toggle-btn');
     if (toggleBtn) {
