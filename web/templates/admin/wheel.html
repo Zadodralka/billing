@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% block title %}Колесо фортуны — Админ{% endblock %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>Колесо фортуны</h1>
+        <div class="sub">{{ prizes|length }} призов в каталоге</div>
+    </div>
+    <button class="btn btn-accent" onclick="openCreateModal()"><i class="bi bi-plus-lg"></i> Создать приз</button>
+</div>
+
+<div class="table-card has-mobile-cards">
+    <div class="table-wrap">
+    <table>
+        <thead><tr><th>Название</th><th>Тип</th><th>Значение</th><th>Вес</th><th>Цвет</th><th>Статус</th><th></th></tr></thead>
+        <tbody>
+        {% for p in prizes %}
+        <tr id="prize-row-{{ p.id }}" data-row-for="{{ p.id }}">
+            <td style="color:#fff;font-weight:600;">{{ p.label }}</td>
+            <td class="mono" style="color:var(--muted);font-size:.8rem;">{{ p.prize_type }}</td>
+            <td class="mono">{{ p.value }}</td>
+            <td class="mono" style="color:var(--muted);">{{ p.weight }}</td>
+            <td><span style="display:inline-block;width:18px;height:18px;border-radius:5px;background:{{ p.color }};border:1px solid var(--border);vertical-align:middle;"></span></td>
+            <td>
+                {% if p.is_active %}<span class="badge badge-on">Активен</span>
+                {% else %}<span class="badge badge-neutral">Отключён</span>{% endif %}
+            </td>
+            <td>
+                <div style="display:flex;gap:.4rem;">
+                    <button type="button" class="btn btn-sm btn-outline-1 js-edit-prize-btn"
+                        data-id="{{ p.id }}" data-label="{{ p.label }}" data-type="{{ p.prize_type }}"
+                        data-value="{{ p.value }}" data-weight="{{ p.weight }}" data-color="{{ p.color }}">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-1 js-toggle-prize-btn" data-id="{{ p.id }}" title="Вкл/Выкл">
+                        {% if p.is_active %}<i class="bi bi-pause-fill"></i>{% else %}<i class="bi bi-play-fill"></i>{% endif %}
+                    </button>
+                    <button type="button" class="btn btn-sm btn-danger-1 js-delete-prize-btn" data-id="{{ p.id }}" data-label="{{ p.label }}">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:2rem;">Призов пока нет</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<div class="data-cards">
+    {% for p in prizes %}
+    <div class="data-card" data-row-for="{{ p.id }}" onclick="openCardActions(this)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.6rem;">
+            <div style="min-width:0;display:flex;align-items:center;gap:.5rem;">
+                <span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:{{ p.color }};border:1px solid var(--border);flex-shrink:0;"></span>
+                <div style="color:#fff;font-weight:700;font-size:.92rem;">{{ p.label }}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.5rem;flex-shrink:0;">
+                {% if p.is_active %}<span class="badge badge-on">Активен</span>
+                {% else %}<span class="badge badge-neutral">Отключён</span>{% endif %}
+                <i class="bi bi-chevron-right" style="color:var(--muted);"></i>
+            </div>
+        </div>
+        <div class="data-card-row"><span class="k">Тип</span><span class="v mono">{{ p.prize_type }}</span></div>
+        <div class="data-card-row"><span class="k">Значение</span><span class="v">{{ p.value }}</span></div>
+        <div class="data-card-row"><span class="k">Вес</span><span class="v">{{ p.weight }}</span></div>
+        <template class="data-card-actions-tpl">
+            <button type="button" class="btn btn-sm btn-outline-1 js-edit-prize-btn"
+                data-id="{{ p.id }}" data-label="{{ p.label }}" data-type="{{ p.prize_type }}"
+                data-value="{{ p.value }}" data-weight="{{ p.weight }}" data-color="{{ p.color }}">
+                <i class="bi bi-pencil"></i> Изменить
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-1 js-toggle-prize-btn" data-id="{{ p.id }}">
+                {% if p.is_active %}<i class="bi bi-pause-fill"></i> Отключить{% else %}<i class="bi bi-play-fill"></i> Включить{% endif %}
+            </button>
+            <button type="button" class="btn btn-sm btn-danger-1 js-delete-prize-btn" data-id="{{ p.id }}" data-label="{{ p.label }}">
+                <i class="bi bi-trash"></i> Удалить
+            </button>
+        </template>
+    </div>
+    {% else %}
+    <div style="text-align:center;color:var(--muted);padding:2rem;">Призов пока нет</div>
+    {% endfor %}
+</div>
+
+<h2 class="section-title" style="margin-top:2rem;">Последние кручения</h2>
+{% if spins %}
+<div class="table-card">
+    <div class="table-wrap">
+    <table>
+        <thead><tr><th>Пользователь</th><th>Приз</th><th>Значение</th><th>Когда</th></tr></thead>
+        <tbody>
+        {% for s in spins %}
+        <tr>
+            <td>{{ s.user.display_name if s.user else '#' + s.user_id|string }}</td>
+            <td>{{ s.prize_label }}</td>
+            <td class="mono" style="color:var(--muted);">{{ s.prize_value }}</td>
+            <td class="mono" style="color:var(--muted);font-size:.78rem;">{{ (s.created_at | localtime).strftime('%d.%m.%Y %H:%M') }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div style="text-align:center;color:var(--muted);padding:2rem;">Кручений пока не было</div>
+</div>
+{% endif %}
+
+<div class="modal-overlay" id="prizeModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3 id="prizeModalTitle">Новый приз</h3>
+            <button type="button" class="modal-close" onclick="closeModal('prizeModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c">
+            <label class="form-label">Название (видит пользователь)</label>
+            <input type="text" id="prizeLabel" placeholder="+3 дня подписки" style="margin-bottom:.9rem;">
+
+            <label class="form-label">Тип приза</label>
+            <select id="prizeType" style="margin-bottom:.9rem;">
+                <option value="empty">Пусто (ничего не начисляется)</option>
+                <option value="days">Дни подписки</option>
+                <option value="traffic_gb">GB трафика</option>
+                <option value="balance">Баланс, ₽</option>
+                <option value="promo">Скидочный код, %</option>
+            </select>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:.9rem;">
+                <div>
+                    <label class="form-label">Значение</label>
+                    <input type="number" id="prizeValue" min="0" value="0">
+                </div>
+                <div>
+                    <label class="form-label">Вес (шанс выпадения)</label>
+                    <input type="number" id="prizeWeight" min="0" value="1">
+                </div>
+            </div>
+
+            <label class="form-label">Цвет сектора</label>
+            <input type="color" id="prizeColor" value="#3ddc84" style="height:42px;padding:.3rem;">
+            <p style="color:var(--muted);font-size:.78rem;margin-top:.6rem;">
+                Вес - относительный: не обязан суммироваться в 100, берётся доля от суммы весов всех активных призов.
+                Секторы на колесе всегда одинакового размера - вес влияет только на вероятность, не на визуал.
+            </p>
+        </div>
+        <div class="modal-foot">
+            <button type="button" class="btn btn-outline-1" onclick="closeModal('prizeModal')">Отмена</button>
+            <button type="button" class="btn btn-accent" id="confirmPrizeBtn">Сохранить</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let pendingPrizeId = null;  // null = создание нового, иначе id редактируемого
+
+function openCreateModal() {
+    pendingPrizeId = null;
+    document.getElementById('prizeModalTitle').textContent = 'Новый приз';
+    document.getElementById('prizeLabel').value = '';
+    document.getElementById('prizeType').value = 'empty';
+    document.getElementById('prizeValue').value = 0;
+    document.getElementById('prizeWeight').value = 1;
+    document.getElementById('prizeColor').value = '#3ddc84';
+    openModal('prizeModal');
+}
+
+function openEditModal(btn) {
+    pendingPrizeId = btn.dataset.id;
+    document.getElementById('prizeModalTitle').textContent = 'Редактировать приз';
+    document.getElementById('prizeLabel').value = btn.dataset.label;
+    document.getElementById('prizeType').value = btn.dataset.type;
+    document.getElementById('prizeValue').value = btn.dataset.value;
+    document.getElementById('prizeWeight').value = btn.dataset.weight;
+    document.getElementById('prizeColor').value = btn.dataset.color;
+    openModal('prizeModal');
+}
+
+document.addEventListener('click', async function(e) {
+    const editBtn = e.target.closest('.js-edit-prize-btn');
+    if (editBtn) { openEditModal(editBtn); return; }
+
+    const toggleBtn = e.target.closest('.js-toggle-prize-btn');
+    if (toggleBtn) {
+        toggleBtn.disabled = true;
+        try {
+            const res = await fetch('/admin/wheel/' + toggleBtn.dataset.id + '/toggle', { method: 'POST' });
+            const data = await res.json();
+            // Как и на других страницах с карточками - статус виден сразу в 3 местах
+            // (строка, карточка, шторка действий), проще перезагрузить, чем патчить все три.
+            if (data.ok) location.reload();
+            else { showError('Не удалось изменить статус: ' + (data.error || 'ошибка')); toggleBtn.disabled = false; }
+        } catch (err) { showError('Сетевая ошибка: ' + err.message); toggleBtn.disabled = false; }
+        return;
+    }
+
+    const deleteBtn = e.target.closest('.js-delete-prize-btn');
+    if (deleteBtn) {
+        if (!(await confirmAction('Удалить приз "' + deleteBtn.dataset.label + '"? Уже выданные призы в истории кручений останутся.', { okText: 'Удалить' }))) return;
+        deleteBtn.disabled = true;
+        try {
+            const res = await fetch('/admin/wheel/' + deleteBtn.dataset.id + '/delete', { method: 'POST' });
+            const data = await res.json();
+            if (data.ok) {
+                document.querySelectorAll('[data-row-for="' + deleteBtn.dataset.id + '"]').forEach(el => el.remove());
+                showSuccess('Приз удалён');
+            } else {
+                showError('Не удалось удалить: ' + (data.error || 'ошибка'));
+                deleteBtn.disabled = false;
+            }
+        } catch (err) { showError('Сетевая ошибка: ' + err.message); deleteBtn.disabled = false; }
+        return;
+    }
+
+    const confirmBtn = e.target.closest('#confirmPrizeBtn');
+    if (confirmBtn) {
+        const label = document.getElementById('prizeLabel').value.trim();
+        if (!label) { showError('Укажите название приза'); return; }
+
+        confirmBtn.disabled = true;
+        try {
+            const fd = new FormData();
+            fd.append('label', label);
+            fd.append('prize_type', document.getElementById('prizeType').value);
+            fd.append('value', document.getElementById('prizeValue').value || 0);
+            fd.append('weight', document.getElementById('prizeWeight').value || 1);
+            fd.append('color', document.getElementById('prizeColor').value);
+
+            const url = pendingPrizeId ? '/admin/wheel/' + pendingPrizeId + '/update' : '/admin/wheel/create';
+            const res = await fetch(url, { method: 'POST', body: fd });
+            const data = await res.json();
+            if (data.ok) {
+                closeModal('prizeModal');
+                showSuccess(pendingPrizeId ? 'Приз обновлён' : 'Приз создан');
+                setTimeout(() => location.reload(), 800);
+            } else {
+                showError('Не удалось сохранить: ' + (data.error || 'ошибка'));
+            }
+        } catch (err) { showError('Сетевая ошибка: ' + err.message); }
+        confirmBtn.disabled = false;
+        return;
+    }
+});
+</script>
+{% endblock %}
