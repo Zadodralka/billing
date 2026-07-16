@@ -51,16 +51,30 @@
 </div>
 
 <h2 class="section-title">Пользователи панели ({{ stats.total_users }})</h2>
-<div class="table-card">
+
+<!--
+    Клиентский поиск по username, без похода на бэкенд: данные уже приходят
+    сюда целиком одним запросом к Remnawave API (эндпоинт ничего не пагинирует
+    и не фильтрует), так что фильтрация - это просто скрытие/показ уже
+    отрисованных строк через JS. Это самая широкая таблица в админке (7 колонок
+    технических данных, включая UUID), и на большом списке юзеров искать
+    нужного скроллом было неудобно.
+-->
+<div style="max-width:360px;margin-bottom:1rem;">
+    <input type="text" id="rwSearchInput" placeholder="Поиск по username…" oninput="filterRwUsers(this.value)">
+</div>
+
+<div class="table-card has-mobile-cards">
     <div class="table-wrap">
     <table>
         <thead><tr><th>Username</th><th>Статус</th><th>Истекает</th><th>Трафик</th><th>Всего</th><th>Последний раз онлайн</th><th>UUID</th></tr></thead>
         <tbody>
             {% for u in rw_users %}
             {% set uid = u.get('uuid', '') %}
+            {% set username = u.get('username', '—') %}
             {% set online_at = online_at_map.get(uid) %}
-            <tr>
-                <td class="mono" style="font-size:.83rem;">{{ u.get('username', '—') }}</td>
+            <tr class="rw-row" data-username="{{ username|lower }}">
+                <td class="mono" style="font-size:.83rem;">{{ username }}</td>
                 <td>
                     {% if u.get('status') == 'ACTIVE' %}<span class="badge badge-on">Активен</span>
                     {% else %}<span class="badge badge-off">{{ u.get('status', '—') }}</span>{% endif %}
@@ -87,5 +101,67 @@
     </table>
     </div>
 </div>
+
+<!-- Мобильные карточки - те же 7 полей построчно. В отличие от остальных
+     страниц с карточками, здесь нет ни одного действия (страница только
+     показывает live-данные из Remnawave, ничего не редактирует), поэтому
+     карточка не кликабельна и openCardActions() тут не нужен. -->
+<div class="data-cards">
+    {% for u in rw_users %}
+    {% set uid = u.get('uuid', '') %}
+    {% set username = u.get('username', '—') %}
+    {% set online_at = online_at_map.get(uid) %}
+    <div class="data-card rw-row" data-username="{{ username|lower }}">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:.6rem;">
+            <div class="mono" style="color:#fff;font-weight:700;font-size:.9rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ username }}</div>
+            {% if u.get('status') == 'ACTIVE' %}<span class="badge badge-on">Активен</span>
+            {% else %}<span class="badge badge-off">{{ u.get('status', '—') }}</span>{% endif %}
+        </div>
+        <div class="data-card-row"><span class="k">Истекает</span><span class="v">{{ u.get('expireAt', '—')[:10] if u.get('expireAt') else '—' }}</span></div>
+        <div class="data-card-row">
+            <span class="k">Трафик</span>
+            {% set t = traffic_map.get(uid, 0) %}
+            <span class="v">{% if t >= 1000 %}{{ (t / 1024) | round(2) }} TB{% else %}{{ t | round(2) }} GB{% endif %}</span>
+        </div>
+        <div class="data-card-row">
+            <span class="k">Всего</span>
+            {% set lt = lifetime_traffic_map.get(uid, 0) %}
+            <span class="v">{% if lt >= 1000 %}{{ (lt / 1024) | round(2) }} TB{% else %}{{ lt | round(2) }} GB{% endif %}</span>
+        </div>
+        <div class="data-card-row"><span class="k">Онлайн</span><span class="v">{% if online_at %}{{ online_at[:16].replace('T', ' ') }}{% else %}никогда{% endif %}</span></div>
+        <div class="data-card-row"><span class="k">UUID</span><span class="v mono" style="font-size:.72rem;">{{ uid[:13] }}…</span></div>
+    </div>
+    {% else %}
+    <div style="text-align:center;color:var(--muted);padding:2rem;">Пользователи не найдены</div>
+    {% endfor %}
+</div>
+
+<!-- Показывается через JS, когда поиск не дал совпадений (в отличие от
+     блоков выше - те закрывают случай "юзеров нет вообще", это разные вещи). -->
+<div id="rwNoResults" style="display:none;text-align:center;color:var(--muted);padding:2rem;">Ничего не найдено по запросу</div>
 {% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Число юзеров, отрисованных сервером - нужно, чтобы отличить "поиск ничего
+// не нашёл" (rwUserCount > 0, но после фильтра ни одной .rw-row не видно) от
+// "юзеров нет вообще" (rwUserCount === 0) - второй случай уже закрыт веткой
+// пустого списка внутри циклов таблицы и карточек, rwNoResults ему не нужен.
+const rwUserCount = {{ rw_users|length if rw_users else 0 }};
+
+function filterRwUsers(query) {
+    const q = query.trim().toLowerCase();
+    let anyVisible = false;
+    document.querySelectorAll('.rw-row').forEach(function (row) {
+        const isMatch = !q || row.dataset.username.includes(q);
+        // Пустая строка сбрасывает inline-стиль к значению по умолчанию из CSS
+        // (table-row для <tr>, flex для .data-card) - не нужно хардкодить,
+        // какой это display у каждого из двух типов узлов.
+        row.style.display = isMatch ? '' : 'none';
+        if (isMatch) anyVisible = true;
+    });
+    document.getElementById('rwNoResults').style.display = (rwUserCount > 0 && !anyVisible) ? 'block' : 'none';
+}
+</script>
 {% endblock %}
