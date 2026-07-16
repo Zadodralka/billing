@@ -6,6 +6,7 @@
     .ticket-row {
         display: flex; justify-content: space-between; align-items: center;
         padding: 1rem 1.2rem; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .12s;
+        color: inherit; text-decoration: none;
     }
     .ticket-row:last-child { border-bottom: none; }
     .ticket-row:hover { background: var(--panel-2); }
@@ -38,7 +39,7 @@
 {% if tickets %}
 <div class="table-card">
     {% for t in tickets %}
-    <div class="ticket-row" onclick="location.href='/admin/support/{{ t.id }}'">
+    <a class="ticket-row" href="/admin/support/{{ t.id }}">
         <div>
             <div class="ticket-subject">{{ t.subject }}</div>
             <div class="ticket-meta">{{ t.user.display_name }} · обновлён {{ (t.updated_at | localtime).strftime('%d.%m.%Y %H:%M') }}</div>
@@ -48,7 +49,7 @@
             {% elif t.status.value == 'answered' %}<span class="badge badge-on">Отвечено</span>
             {% else %}<span class="badge badge-neutral">Закрыт</span>{% endif %}
         </div>
-    </div>
+    </a>
     {% endfor %}
 </div>
 {% else %}
