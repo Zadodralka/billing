@@ -7,13 +7,13 @@
     <button class="btn btn-accent" onclick="openModal('createPromoModal')"><i class="bi bi-plus-lg"></i> Создать</button>
 </div>
 
-<div class="table-card">
+<div class="table-card has-mobile-cards">
     <div class="table-wrap">
     <table>
         <thead><tr><th>Код</th><th>Скидка</th><th>Использований</th><th>Макс.</th><th>Истекает</th><th>Описание</th><th>Статус</th><th></th></tr></thead>
         <tbody>
         {% for p in promos %}
-        <tr id="promo-row-{{ p.id }}">
+        <tr id="promo-row-{{ p.id }}" data-row-for="{{ p.id }}">
             <td class="mono" style="font-weight:700;color:#fff;letter-spacing:.05em;">{{ p.code }}</td>
             <td class="mono" style="color:var(--accent);">-{{ p.discount_percent }}%</td>
             <td class="mono">{{ p.uses_count }}</td>
@@ -41,6 +41,43 @@
         </tbody>
     </table>
     </div>
+</div>
+
+<!-- Мобильные карточки - те же 6 полей построчно вместо 8 колонок таблицы,
+     которые на узком экране не помещались бы без горизонтального скролла.
+     Действия (тоггл/удалить) - через общую шторку openCardActions(), как
+     на других страницах с 2+ действиями на строку. -->
+<div class="data-cards">
+    {% for p in promos %}
+    <div class="data-card" data-row-for="{{ p.id }}" onclick="openCardActions(this)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.6rem;">
+            <div style="min-width:0;">
+                <div class="mono" style="color:#fff;font-weight:700;font-size:.95rem;letter-spacing:.05em;">{{ p.code }}</div>
+                <div style="color:var(--accent);font-size:.83rem;margin-top:.15rem;">-{{ p.discount_percent }}%</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.5rem;flex-shrink:0;">
+                {% if p.is_active %}<span class="badge badge-on">Активен</span>
+                {% else %}<span class="badge badge-neutral">Отключён</span>{% endif %}
+                <i class="bi bi-chevron-right" style="color:var(--muted);"></i>
+            </div>
+        </div>
+        <div class="data-card-row"><span class="k">Использований</span><span class="v">{{ p.uses_count }} / {{ p.max_uses or '∞' }}</span></div>
+        <div class="data-card-row"><span class="k">Истекает</span><span class="v">{{ (p.expires_at | localtime).strftime('%d.%m.%Y') if p.expires_at else '—' }}</span></div>
+        {% if p.description %}
+        <div class="data-card-row"><span class="k">Описание</span><span class="v">{{ p.description }}</span></div>
+        {% endif %}
+        <template class="data-card-actions-tpl">
+            <button type="button" class="btn btn-sm btn-outline-1 js-toggle-promo" data-id="{{ p.id }}">
+                {% if p.is_active %}<i class="bi bi-pause-fill"></i> Отключить{% else %}<i class="bi bi-play-fill"></i> Включить{% endif %}
+            </button>
+            <button type="button" class="btn btn-sm btn-danger-1 js-delete-promo" data-id="{{ p.id }}" data-code="{{ p.code }}">
+                <i class="bi bi-trash"></i> Удалить
+            </button>
+        </template>
+    </div>
+    {% else %}
+    <div style="text-align:center;color:var(--muted);padding:2rem;">Промокодов пока нет</div>
+    {% endfor %}
 </div>
 
 <div class="modal-overlay" id="createPromoModal">
@@ -114,7 +151,12 @@ document.addEventListener('click', async function(e) {
         del.disabled = true;
         const res = await fetch('/admin/promo/' + del.dataset.id + '/delete', {method:'POST'});
         const data = await res.json();
-        if (data.ok) { document.getElementById('promo-row-' + del.dataset.id).remove(); showSuccess('Удалён'); }
+        if (data.ok) {
+            // Как и на других страницах с мобильными карточками - у записи два DOM-узла
+            // (строка таблицы + карточка) с одинаковым data-row-for, удаляем оба разом.
+            document.querySelectorAll('[data-row-for="' + del.dataset.id + '"]').forEach(el => el.remove());
+            showSuccess('Удалён');
+        }
         else { showError('Ошибка: ' + (data.error||'?')); del.disabled=false; }
     }
 });
