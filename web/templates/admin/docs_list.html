@@ -11,7 +11,7 @@
 </div>
 
 {% if articles %}
-<div class="table-card">
+<div class="table-card has-mobile-cards">
     <div class="table-wrap">
     <table>
         <thead>
@@ -19,7 +19,7 @@
         </thead>
         <tbody>
             {% for art in articles %}
-            <tr id="art-row-{{ art.id }}">
+            <tr id="art-row-{{ art.id }}" data-row-for="{{ art.id }}">
                 <td class="mono" style="color:var(--muted);font-size:.8rem;width:60px;">{{ art.sort_order }}</td>
                 <td>
                     <div style="font-weight:600;color:#fff;">{{ art.title }}</div>
@@ -64,6 +64,47 @@
     </table>
     </div>
 </div>
+
+<!-- Мобильные карточки. Просмотр/редактирование - обычные <a href>, они
+     прекрасно переживают клонирование из <template> в openCardActions()
+     (это просто DOM-узлы, никакой особой магии). Тоггл и удаление - через
+     fetch, как и в таблице выше. -->
+<div class="data-cards">
+    {% for art in articles %}
+    <div class="data-card" data-row-for="{{ art.id }}" onclick="openCardActions(this)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.6rem;">
+            <div style="min-width:0;">
+                <div style="color:#fff;font-weight:700;font-size:.92rem;">{{ art.title }}</div>
+                {% if art.excerpt %}
+                <div style="color:var(--muted);font-size:.8rem;margin-top:.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ art.excerpt[:80] }}{% if art.excerpt|length > 80 %}…{% endif %}</div>
+                {% endif %}
+            </div>
+            <div style="display:flex;align-items:center;gap:.5rem;flex-shrink:0;">
+                {% if art.is_published %}<span class="badge badge-on">Опубликована</span>
+                {% else %}<span class="badge badge-neutral">Черновик</span>{% endif %}
+                <i class="bi bi-chevron-right" style="color:var(--muted);"></i>
+            </div>
+        </div>
+        <div class="data-card-row"><span class="k">Порядок</span><span class="v">{{ art.sort_order }}</span></div>
+        <div class="data-card-row"><span class="k">Обновлено</span><span class="v">{{ (art.updated_at | localtime).strftime('%d.%m.%Y %H:%M') }}</span></div>
+        <template class="data-card-actions-tpl">
+            <a href="/docs/{{ art.slug }}" target="_blank" class="btn btn-sm btn-outline-1">
+                <i class="bi bi-eye"></i> Просмотр
+            </a>
+            <a href="/admin/docs/{{ art.id }}/edit" class="btn btn-sm btn-outline-1">
+                <i class="bi bi-pencil"></i> Изменить
+            </a>
+            <button type="button" class="btn btn-sm btn-outline-1 js-toggle-btn" data-id="{{ art.id }}">
+                {% if art.is_published %}<i class="bi bi-eye-slash"></i> Снять с публикации
+                {% else %}<i class="bi bi-check2-circle"></i> Опубликовать{% endif %}
+            </button>
+            <button type="button" class="btn btn-sm btn-danger-1 js-delete-btn" data-id="{{ art.id }}" data-title="{{ art.title }}">
+                <i class="bi bi-trash"></i> Удалить
+            </button>
+        </template>
+    </div>
+    {% endfor %}
+</div>
 {% else %}
 <div class="card">
     <div style="text-align:center;padding:3.5rem 1.5rem;">
@@ -83,23 +124,26 @@ document.addEventListener('click', async function(e) {
     if (toggleBtn) {
         const id = toggleBtn.dataset.id;
         toggleBtn.disabled = true;
-        const res = await fetch(`/admin/docs/${id}/toggle-publish`, { method: 'POST' });
-        const data = await res.json();
-        if (data.ok) {
-            const statusEl = document.getElementById('art-status-' + id);
-            if (data.is_published) {
-                statusEl.innerHTML = '<span class="badge badge-on">Опубликована</span>';
-                toggleBtn.innerHTML = '<i class="bi bi-eye-slash"></i>';
-                toggleBtn.title = 'Снять с публикации';
+        try {
+            const res = await fetch(`/admin/docs/${id}/toggle-publish`, { method: 'POST' });
+            const data = await res.json();
+            if (data.ok) {
+                // Раньше статус патчился на месте только в таблице (id="art-status-N").
+                // После добавления мобильных карточек у статуса появилось три места
+                // отображения одновременно: бейдж в строке таблицы, бейдж на самой
+                // карточке и текст кнопки внутри <template> шторки действий. Патчить
+                // все три через JS вручную - источник рассинхронизации; проще и
+                // надёжнее перезапросить страницу с сервера. Тот же выбор сделан в
+                // plans.html и promo_list.html при добавлении туда карточек.
+                location.reload();
             } else {
-                statusEl.innerHTML = '<span class="badge badge-neutral">Черновик</span>';
-                toggleBtn.innerHTML = '<i class="bi bi-check2-circle"></i>';
-                toggleBtn.title = 'Опубликовать';
+                showError('Ошибка: ' + (data.error || 'неизвестная'));
+                toggleBtn.disabled = false;
             }
-        } else {
-            showError('Ошибка: ' + (data.error || 'неизвестная'));
+        } catch (err) {
+            showError('Сетевая ошибка: ' + err.message);
+            toggleBtn.disabled = false;
         }
-        toggleBtn.disabled = false;
         return;
     }
 
@@ -110,7 +154,9 @@ document.addEventListener('click', async function(e) {
         const res = await fetch(`/admin/docs/${deleteBtn.dataset.id}/delete`, { method: 'POST' });
         const data = await res.json();
         if (data.ok) {
-            document.getElementById('art-row-' + deleteBtn.dataset.id).remove();
+            // data-row-for одинаковый у строки таблицы и у мобильной карточки -
+            // убираем обе одним запросом, а не только table-строку, как было раньше.
+            document.querySelectorAll('[data-row-for="' + deleteBtn.dataset.id + '"]').forEach(el => el.remove());
             showSuccess('Статья удалена');
         } else {
             showError('Не удалось удалить: ' + (data.error || 'ошибка'));
