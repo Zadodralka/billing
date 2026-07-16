@@ -10,7 +10,7 @@
     <button class="btn btn-accent" onclick="openModal('createPlanModal')"><i class="bi bi-plus-lg"></i> Новый тариф</button>
 </div>
 
-<div class="table-card">
+<div class="table-card has-mobile-cards">
     <div class="table-wrap">
     <table>
         <thead>
@@ -18,7 +18,7 @@
         </thead>
         <tbody id="plansBody">
             {% for plan in plans %}
-            <tr id="plan-row-{{ plan.id }}">
+            <tr id="plan-row-{{ plan.id }}" data-row-for="{{ plan.id }}">
                 <td class="mono" style="color:var(--muted);font-size:.8rem;">{{ plan.plan_key }}</td>
                 <td>{{ plan.name }}</td>
                 <td class="mono">{{ plan.days }} дн.</td>
@@ -42,6 +42,16 @@
                             data-featured="{{ 'true' if plan.is_featured else 'false' }}">
                             <i class="bi bi-pencil"></i>
                         </button>
+                        <!-- Быстрый тоггл видимости - раньше единственный способ был открыть
+                             модалку "Редактировать" и там переключить чекбокс, что на фоне
+                             promo/docs (у которых уже была тут одна кнопка) выглядело как
+                             лишний шаг. Дергает /admin/plans/{id}/toggle и перезагружает
+                             страницу - см. комментарий у обработчика ниже про то, почему
+                             не обновляем DOM на месте. -->
+                        <button type="button" class="btn btn-sm btn-outline-1 js-toggle-plan-btn" data-id="{{ plan.id }}"
+                            title="{% if plan.is_active %}Скрыть с сайта{% else %}Показать на сайте{% endif %}">
+                            {% if plan.is_active %}<i class="bi bi-eye-slash"></i>{% else %}<i class="bi bi-check2-circle"></i>{% endif %}
+                        </button>
                         <button type="button" class="btn btn-sm btn-danger-1 js-delete-plan-btn" data-id="{{ plan.id }}" data-name="{{ plan.name }}">
                             <i class="bi bi-trash"></i>
                         </button>
@@ -54,6 +64,52 @@
         </tbody>
     </table>
     </div>
+</div>
+
+<!-- Мобильные карточки - тот же набор данных и тех же три действия (изменить/
+     тоггл/удалить), что и в таблице выше, но действия спрятаны за общей шторкой
+     openCardActions() (см. base.html), а не разложены по кнопкам - на узком
+     экране три кнопки в ряд не помещаются по ширине без переноса. -->
+<div class="data-cards">
+    {% for plan in plans %}
+    <div class="data-card" data-row-for="{{ plan.id }}" onclick="openCardActions(this)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.6rem;">
+            <div style="min-width:0;">
+                <div style="color:#fff;font-weight:700;font-size:.92rem;">{{ plan.name }}</div>
+                <div class="mono" style="color:var(--muted);font-size:.8rem;margin-top:.15rem;">{{ plan.plan_key }}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.5rem;flex-shrink:0;">
+                {% if plan.is_active %}<span class="badge badge-on">Активен</span>
+                {% else %}<span class="badge badge-neutral">Скрыт</span>{% endif %}
+                <i class="bi bi-chevron-right" style="color:var(--muted);"></i>
+            </div>
+        </div>
+        <div class="data-card-row"><span class="k">Срок</span><span class="v">{{ plan.days }} дн.</span></div>
+        <div class="data-card-row"><span class="k">Цена</span><span class="v">{{ plan.price }} ₽</span></div>
+        <div class="data-card-row"><span class="k">Трафик</span><span class="v">{% if plan.traffic_gb == 0 %}Безлимит{% else %}{{ plan.traffic_gb }} GB{% endif %}</span></div>
+        <template class="data-card-actions-tpl">
+            <button type="button" class="btn btn-sm btn-outline-1 js-edit-plan-btn"
+                data-id="{{ plan.id }}"
+                data-name="{{ plan.name }}"
+                data-days="{{ plan.days }}"
+                data-price="{{ plan.price }}"
+                data-traffic="{{ plan.traffic_gb }}"
+                data-extra="{{ plan.unlimited_extra }}"
+                data-active="{{ 'true' if plan.is_active else 'false' }}"
+                data-featured="{{ 'true' if plan.is_featured else 'false' }}">
+                <i class="bi bi-pencil"></i> Изменить
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-1 js-toggle-plan-btn" data-id="{{ plan.id }}">
+                {% if plan.is_active %}<i class="bi bi-eye-slash"></i> Скрыть с сайта{% else %}<i class="bi bi-check2-circle"></i> Показать на сайте{% endif %}
+            </button>
+            <button type="button" class="btn btn-sm btn-danger-1 js-delete-plan-btn" data-id="{{ plan.id }}" data-name="{{ plan.name }}">
+                <i class="bi bi-trash"></i> Удалить
+            </button>
+        </template>
+    </div>
+    {% else %}
+    <div style="text-align:center;color:var(--muted);padding:2rem;">Тарифов пока нет</div>
+    {% endfor %}
 </div>
 
 <!-- Edit plan modal -->
@@ -177,12 +233,40 @@ document.addEventListener('click', async function(e) {
             const res = await fetch('/admin/plans/' + pendingDeletePlanId + '/delete', { method: 'POST' });
             const data = await res.json();
             if (data.ok) {
-                document.getElementById('plan-row-' + pendingDeletePlanId).remove();
+                // data-row-for одинаковый у <tr> в таблице и у .data-card в мобильном
+                // блоке - оба существуют в разметке всегда, виден только один (решает
+                // CSS media-query), поэтому чистим сразу оба через querySelectorAll.
+                document.querySelectorAll('[data-row-for="' + pendingDeletePlanId + '"]').forEach(el => el.remove());
                 showSuccess('Тариф удалён');
             } else {
                 showError('Не удалось удалить: ' + (data.error || 'ошибка'));
             }
         } catch (err) { showError('Сетевая ошибка: ' + err.message); }
+        return;
+    }
+
+    const toggleBtn = e.target.closest('.js-toggle-plan-btn');
+    if (toggleBtn) {
+        toggleBtn.disabled = true;
+        try {
+            const res = await fetch('/admin/plans/' + toggleBtn.dataset.id + '/toggle', { method: 'POST' });
+            const data = await res.json();
+            if (data.ok) {
+                // Полная перезагрузка, а не точечное обновление DOM - у статуса тарифа
+                // три независимых визуальных представления одновременно (бейдж в строке
+                // таблицы, бейдж на карточке, текст кнопки внутри <template> шторки
+                // действий), и держать их в ручной синхронизации через JS сложнее и
+                // хрупче, чем просто перерисовать страницу с сервера. Тот же подход
+                // уже используется в promo_list.html.
+                location.reload();
+            } else {
+                showError('Не удалось изменить статус: ' + (data.error || 'ошибка'));
+                toggleBtn.disabled = false;
+            }
+        } catch (err) {
+            showError('Сетевая ошибка: ' + err.message);
+            toggleBtn.disabled = false;
+        }
         return;
     }
 

@@ -636,6 +636,23 @@ async def update_plan(
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
+@router.post("/plans/{plan_id}/toggle")
+async def toggle_plan(plan_id: int, admin: User = Depends(require_admin), session: AsyncSession = Depends(get_db)):
+    # Быстрый тоггл видимости тарифа без модалки редактирования - тот же паттерн,
+    # что и у /admin/promo/{id}/toggle и /admin/docs/{id}/toggle-publish. Раньше
+    # это был единственный список в админке, где даже одно поле нельзя было
+    # переключить без открытия формы редактирования и заполнения всех остальных
+    # обязательных полей (update_plan требует name/days/price/traffic_gb).
+    result = await session.execute(select(PlanSetting).where(PlanSetting.id == plan_id))
+    plan = result.scalar_one_or_none()
+    if not plan:
+        return JSONResponse({"ok": False, "error": "Тариф не найден"}, status_code=404)
+    plan.is_active = not plan.is_active
+    await session.commit()
+    logger.info(f"Admin {admin.id} toggled plan {plan.plan_key} active={plan.is_active}")
+    return JSONResponse({"ok": True, "is_active": plan.is_active})
+
+
 @router.post("/plans/create")
 async def create_plan(
     admin: User = Depends(require_admin),

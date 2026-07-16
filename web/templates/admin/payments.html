@@ -26,13 +26,13 @@
     {% if q or status %}<a href="/admin/payments" class="btn btn-outline-1" title="Сбросить"><i class="bi bi-x-lg"></i></a>{% endif %}
 </form>
 
-<div class="table-card">
+<div class="table-card has-mobile-cards">
     <div class="table-wrap">
     <table>
         <thead><tr><th>ID</th><th>Пользователь</th><th>Тариф</th><th>Сумма</th><th>Статус</th><th>Дата</th><th></th></tr></thead>
         <tbody id="paymentsBody">
             {% for p in payments %}
-            <tr id="payment-row-{{ p.id }}">
+            <tr id="payment-row-{{ p.id }}" data-row-for="{{ p.id }}">
                 <td class="mono" style="color:var(--muted);font-size:.8rem;">#{{ p.id }}</td>
                 <td>{{ p.user.display_name }}</td>
                 <td>{{ plans.get(p.plan_key, {}).get('name', p.plan_key) }}</td>
@@ -57,6 +57,44 @@
     </div>
 </div>
 
+<!--
+    Мобильные карточки для этой же выборки платежей (.table-card прячется через
+    has-mobile-cards ниже, .data-cards - наоборот, показывается только на узких
+    экранах, см. media-query в base.html). Оба блока рендерятся одновременно на
+    сервере, чтобы не делать второй запрос данных - переключение видимости чисто
+    по CSS от ширины экрана.
+
+    В отличие от users.html/subscriptions.html здесь карточка НЕ кликабельна
+    целиком (нет onclick="openCardActions(this)") - там на карточке всегда есть
+    несколько действий, и тап открывает шторку с их списком. У платежа действие
+    только одно (удалить) и оно есть не всегда (у "Оплачен" его нет вовсе),
+    поэтому кнопка удаления просто лежит на карточке открыто, без лишнего тапа.
+-->
+<div class="data-cards">
+    {% for p in payments %}
+    <div class="data-card" data-row-for="{{ p.id }}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.6rem;">
+            <div style="min-width:0;">
+                <div style="color:#fff;font-weight:700;font-size:.92rem;">#{{ p.id }} · {{ p.user.display_name }}</div>
+                <div style="color:var(--muted);font-size:.8rem;margin-top:.15rem;">{{ plans.get(p.plan_key, {}).get('name', p.plan_key) }}</div>
+            </div>
+            {% if p.status.value == 'success' %}<span class="badge badge-on">Оплачен</span>
+            {% elif p.status.value == 'pending' %}<span class="badge badge-mid">Ожидание</span>
+            {% else %}<span class="badge badge-neutral">Отменён</span>{% endif %}
+        </div>
+        <div class="data-card-row"><span class="k">Сумма</span><span class="v">{{ p.amount }} ₽</span></div>
+        <div class="data-card-row"><span class="k">Дата</span><span class="v">{{ (p.created_at | localtime).strftime('%d.%m.%Y %H:%M') }}</span></div>
+        {% if p.status.value != 'success' %}
+        <button type="button" class="btn btn-sm btn-danger-1" style="width:100%;margin-top:.6rem;" onclick="deletePayment({{ p.id }})">
+            <i class="bi bi-trash"></i> Удалить
+        </button>
+        {% endif %}
+    </div>
+    {% else %}
+    <div style="text-align:center;color:var(--muted);padding:2rem;">{% if q or status %}Ничего не найдено{% else %}Платежей пока нет{% endif %}</div>
+    {% endfor %}
+</div>
+
 {% if pages > 1 %}
 <nav>
     <ul class="pagination">
@@ -76,7 +114,10 @@ async function deletePayment(id) {
         const res = await fetch('/admin/payments/' + id + '/delete', { method: 'POST' });
         const data = await res.json();
         if (data.ok) {
-            document.getElementById('payment-row-' + id).remove();
+            // Строка таблицы и карточка для мобильного вида - это два разных DOM-узла
+            // с одинаковым data-row-for, оба существуют в разметке одновременно
+            // (CSS решает, какой показать), поэтому удаляем оба через querySelectorAll.
+            document.querySelectorAll('[data-row-for="' + id + '"]').forEach(el => el.remove());
         } else {
             showError('Не удалось удалить: ' + (data.error || 'неизвестная ошибка'));
         }
