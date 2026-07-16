@@ -49,11 +49,6 @@ async def validate_promo_code(code: str, user_id: int, session: AsyncSession) ->
     if not promo:
         return {"valid": False, "error": "Промокод не найден или недействителен"}
 
-    # Персональный код (например приз колеса фортуны, core/wheel.py) - им может
-    # воспользоваться только владелец, иначе смысл "личного" приза теряется.
-    if promo.owner_user_id is not None and promo.owner_user_id != user_id:
-        return {"valid": False, "error": "Этот промокод предназначен другому пользователю"}
-
     if promo.expires_at and promo.expires_at < datetime.utcnow():
         return {"valid": False, "error": "Срок действия промокода истёк"}
 

@@ -134,19 +134,6 @@ class RemnawaveClient:
             "status": "ACTIVE",
         })
 
-    async def add_traffic_gb(self, uuid: str, extra_gb: int) -> dict | None:
-        """Добавляет extra_gb к текущему лимиту трафика пользователя (приз колеса
-        фортуны - см. core/wheel.py). Если лимит уже 0 (безлимит в терминах
-        create_user - см. trafficLimitBytes выше), добавлять нечего - возвращает
-        None, вызывающий код должен считать это no-op, а не ошибкой."""
-        user = await self.get_user(uuid)
-        current_bytes = user.get("trafficLimitBytes")
-        if not current_bytes:
-            logger.info(f"add_traffic_gb: uuid={uuid} already unlimited (trafficLimitBytes={current_bytes}), nothing to add")
-            return None
-        new_bytes = current_bytes + extra_gb * 1024 ** 3
-        return await self._update_user(uuid, {"trafficLimitBytes": new_bytes})
-
     _update_method_cache = None  # кэш формата (method, build_path_fn, use_body_uuid) после первого успешного запроса
 
     async def _update_user(self, uuid: str, fields: dict) -> dict:

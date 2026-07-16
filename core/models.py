@@ -23,14 +23,6 @@ class GiftCodeStatus(str, enum.Enum):
     REDEEMED = "redeemed"  # получатель уже активировал подписку по коду
 
 
-class WheelPrizeType(str, enum.Enum):
-    EMPTY = "empty"              # пусто - ничего не начисляется
-    DAYS = "days"                # +N дней к подписке
-    TRAFFIC_GB = "traffic_gb"    # +N GB трафика к подписке (не имеет смысла при безлимите)
-    BALANCE = "balance"          # +N рублей на баланс
-    PROMO = "promo"              # персональный промокод на N% скидки, одноразовый
-
-
 class User(Base):
     __tablename__ = "users"
 
@@ -243,12 +235,6 @@ class PromoCode(Base):
     description: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    # None (по умолчанию) - обычный код из админки, им может воспользоваться любой.
-    # Задан - персональный код (например приз колеса фортуны из core/wheel.py):
-    # проверяется в promo_referral.validate_promo_code(), чтобы код нельзя было
-    # передать/подсмотреть и применить чужому аккаунту.
-    owner_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
-
     usages: Mapped[list["PromoCodeUsage"]] = relationship(back_populates="promo_code")
 
 
@@ -304,52 +290,3 @@ class GiftCode(Base):
     subscription_id: Mapped[int | None] = mapped_column(ForeignKey("subscriptions.id", ondelete="SET NULL"), nullable=True)
 
     buyer: Mapped["User"] = relationship(foreign_keys=[buyer_user_id])
-
-
-# ───────────── Колесо фортуны ─────────────
-
-class WheelPrize(Base):
-    """
-    Редактируемый из админки каталог призов колеса (по аналогии с PlanSetting).
-    value - смысл зависит от prize_type: дни / GB / рубли / % скидки, для EMPTY
-    игнорируется. weight - относительный вес при взвешенном случайном выборе
-    (не обязан суммироваться в 100 - берётся доля от суммы весов активных призов).
-    """
-    __tablename__ = "wheel_prizes"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    label: Mapped[str] = mapped_column(String(100))  # то, что видит пользователь на секторе и в результате
-    # Строка, а не SAEnum - см. комментарий у GiftCode.status выше про рассинхрон
-    # нативного Postgres ENUM с моделью при добавлении новых значений без миграции ENUM.
-    prize_type: Mapped[str] = mapped_column(String(20), default=WheelPrizeType.EMPTY.value)
-    value: Mapped[int] = mapped_column(Integer, default=0)
-    weight: Mapped[int] = mapped_column(Integer, default=1)
-    color: Mapped[str] = mapped_column(String(9), default="#3ddc84")  # hex-цвет сектора на колесе
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    sort_order: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
-class WheelSpin(Base):
-    """
-    Лог каждого кручения - источник правды для кулдауна (последняя запись
-    пользователя) и для лимита бесплатных призов (сумма value по prize_type
-    у пользователей без единой успешной оплаты, см. core/wheel.py).
-
-    prize_id - SET NULL, а не CASCADE: удаление приза из каталога не должно
-    стирать историю того, что реально было выдано - для этого дублируем
-    label/prize_type/value снимком на момент выдачи (prize_id остаётся для
-    точных случаев, когда приз ещё существует, снимок - для читаемости лога
-    и когда его уже удалили/отредактировали).
-    """
-    __tablename__ = "wheel_spins"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    prize_id: Mapped[int | None] = mapped_column(ForeignKey("wheel_prizes.id", ondelete="SET NULL"), nullable=True)
-    prize_label: Mapped[str] = mapped_column(String(100))
-    prize_type: Mapped[str] = mapped_column(String(20))
-    prize_value: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
-
-    user: Mapped["User"] = relationship()
