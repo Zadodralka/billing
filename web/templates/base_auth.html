@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Unlock VPN{% endblock %}</title>
+    {% include "_head_common.html" %}
+    <style>
+        /* Лёгкий layout для страниц вне дашборда (вход, погашение подарка, статус
+           оплаты) - центрированная карточка на точечном фоне, без сайдбара. */
+        body {
+            display: flex; align-items: center; justify-content: center;
+            padding: 1.5rem; position: relative; overflow: hidden;
+        }
+        body::before {
+            content: ''; position: absolute; inset: 0;
+            background-image: linear-gradient(rgba(61,220,132,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(61,220,132,.04) 1px, transparent 1px);
+            background-size: 42px 42px;
+            mask-image: radial-gradient(ellipse 60% 50% at 50% 40%, black, transparent);
+        }
+        .auth-card {
+            background: var(--panel); border: 1px solid var(--border); border-radius: 18px;
+            padding: 2.4rem 2.2rem; width: 100%; max-width: 420px; position: relative; z-index: 1;
+            box-shadow: 0 30px 60px rgba(0,0,0,.45); text-align: center;
+        }
+        .auth-logo {
+            width: 56px; height: 56px; border-radius: 16px; overflow: hidden;
+            margin: 0 auto 1.1rem; box-shadow: 0 0 0 1px var(--border);
+        }
+        .auth-logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .auth-card h1 { font-size: 1.3rem; font-weight: 700; color: #fff; margin: 0 0 .3rem; text-align: center; }
+        .auth-card .subtitle { color: var(--muted); font-size: .87rem; margin-bottom: 1.6rem; line-height: 1.5; text-align: center; }
+        .alert { padding: .75rem .9rem; border-radius: 10px; font-size: .85rem; margin-bottom: 1.2rem; text-align: left; }
+        .alert-success { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(61,220,132,.25); }
+        .alert-danger { background: var(--danger-soft); color: var(--danger); border: 1px solid rgba(239,91,91,.25); }
+        .auth-card button, .auth-card a.btn {
+            display: inline-block; width: 100%; background: var(--accent); color: #06140c; border: none; border-radius: 10px;
+            padding: .75rem; font-size: .92rem; font-weight: 600; cursor: pointer; font-family: inherit;
+            transition: background .12s; text-decoration: none;
+        }
+        .auth-card button:hover, .auth-card a.btn:hover { background: #34c878; }
+        .auth-card button:disabled { opacity: .6; cursor: not-allowed; }
+        .hint { text-align: center; color: var(--muted); font-size: .78rem; margin-top: .9rem; line-height: 1.5; }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+{% block content %}{% endblock %}
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

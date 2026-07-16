@@ -1,59 +1,17 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Оплата — Unlock VPN</title>
-    <link rel="icon" href="/static/img/logo.jpg">
-    <link rel="apple-touch-icon" href="/static/img/logo.jpg">
-    <meta name="theme-color" content="#0a0e14">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg: #0a0e14; --panel: #12161f; --panel-2: #161b26;
-            --border: #232a38; --text: #e2e8f0; --muted: #6b7689; --accent: #3ddc84;
-        }
-        * { box-sizing: border-box; }
-        body {
-            background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif;
-            margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-            padding: 1.5rem; position: relative; overflow: hidden;
-        }
-        body::before {
-            content: ''; position: absolute; inset: 0;
-            background-image: linear-gradient(rgba(61,220,132,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(61,220,132,.04) 1px, transparent 1px);
-            background-size: 42px 42px;
-            mask-image: radial-gradient(ellipse 60% 50% at 50% 40%, black, transparent);
-        }
-        .card {
-            background: var(--panel); border: 1px solid var(--border); border-radius: 18px;
-            padding: 2.4rem 2.2rem; width: 100%; max-width: 420px; position: relative; z-index: 1;
-            box-shadow: 0 30px 60px rgba(0,0,0,.45); text-align: center;
-        }
-        .logo {
-            width: 56px; height: 56px; border-radius: 16px; overflow: hidden;
-            margin: 0 auto 1.1rem; box-shadow: 0 0 0 1px var(--border);
-        }
-        .logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-        h1 { font-family: 'Space Grotesk', sans-serif; font-size: 1.3rem; font-weight: 700; color: #fff; margin: .9rem 0 .4rem; }
-        .subtitle { color: var(--muted); font-size: .87rem; margin-bottom: 1.6rem; line-height: 1.5; }
-        .icon { font-size: 3rem; }
-        .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--panel-2); border-top-color: var(--accent); animation: spin .7s linear infinite; margin: 0 auto; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        a.btn, button.btn {
-            display: inline-block; width: 100%; background: var(--accent); color: #06140c; border: none; border-radius: 10px;
-            padding: .75rem; font-size: .92rem; font-weight: 600; cursor: pointer; font-family: inherit; transition: background .12s;
-            text-decoration: none; margin-top: .4rem;
-        }
-        a.btn:hover, button.btn:hover { background: #34c878; }
-        .hint { text-align: center; color: var(--muted); font-size: .78rem; margin-top: 1rem; line-height: 1.5; }
-    </style>
-</head>
-<body>
-<div class="card">
-    <div class="logo"><img src="/static/img/logo.jpg" alt="Unlock VPN"></div>
+{% extends "base_auth.html" %}
+{% block title %}Оплата — Unlock VPN{% endblock %}
+
+{% block extra_head %}
+<style>
+    .icon { font-size: 3rem; }
+    .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--panel-2); border-top-color: var(--accent); animation: spin .7s linear infinite; margin: 0 auto; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-card">
+    <div class="auth-logo"><img src="/static/img/logo.jpg" alt="Unlock VPN"></div>
 
     <div id="stateWait">
         <div class="spinner"></div>
@@ -75,7 +33,9 @@
         <a href="/dashboard" class="btn">Перейти в кабинет</a>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_scripts %}
 {% if label %}
 <script>
 const label = {{ label | tojson }};
@@ -106,5 +66,4 @@ const poll = setInterval(async () => {
 {% else %}
 <script>document.getElementById('stateWait').style.display = 'none'; document.getElementById('stateSlow').style.display = 'block';</script>
 {% endif %}
-</body>
-</html>
+{% endblock %}
