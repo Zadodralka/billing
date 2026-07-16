@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from core.database import get_db
 from core.models import Article
+from core.markdown_render import render_article_markdown
 from core.version import APP_VERSION
 from core.timezone import to_local
 from web.routers.auth import require_user, User
@@ -51,4 +52,5 @@ async def docs_article(
     return templates.TemplateResponse(request, "docs_article.html", {
         "user": user,
         "article": article,
+        "article_html": render_article_markdown(article.content),
     })
