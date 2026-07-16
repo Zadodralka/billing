@@ -127,6 +127,17 @@ if (sendBtn) {
             sendBtn.click();
         }
     });
+
+    // Авто-рост textarea по мере ввода, вместо фиксированной высоты с
+    // внутренним скроллом с первой же строки. Растёт до CSS max-height
+    // (140px, см. extra_head выше) - дальше появляется обычный скролл
+    // textarea. height:auto перед измерением обязателен: без сброса
+    // scrollHeight остаётся равным уже увеличенной высоте, и поле только
+    // растёт, но не уменьшается обратно при удалении текста.
+    textarea.addEventListener('input', function() {
+        textarea.style.height = 'auto';
+        textarea.style.height = textarea.scrollHeight + 'px';
+    });
 }
 
 async function closeTicket() {
