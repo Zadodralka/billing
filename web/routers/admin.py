@@ -25,6 +25,93 @@ templates.env.globals["app_version"] = APP_VERSION
 templates.env.filters["localtime"] = to_local
 
 
+async def _dashboard_analytics(session: AsyncSession) -> dict:
+    """Метрики динамики для админ-дашборда. Агрегация по дням сделана в Python,
+    а не в SQL: выборка ограничена 30 днями (сотни строк максимум), зато даты
+    группируются той же самой to_local-конвертацией, что и всё отображение дат
+    в системе - вместо дублирования логики таймзоны через AT TIME ZONE."""
+    now = datetime.utcnow()
+    days_window = 30
+    window_start = now - timedelta(days=days_window - 1)
+    # Начало окна - полночь ЛОКАЛЬНОГО дня, иначе первый день графика был бы неполным
+    local_window_start_date = to_local(window_start).date()
+
+    paid_rows = (await session.execute(
+        select(Payment.paid_at, Payment.amount, Payment.renew_subscription_id)
+        .where(Payment.status == PaymentStatus.SUCCESS, Payment.paid_at.is_not(None), Payment.paid_at >= window_start - timedelta(days=1))
+    )).all()
+    user_rows = (await session.execute(
+        select(User.created_at).where(User.created_at >= window_start - timedelta(days=1))
+    )).all()
+
+    day_labels, revenue_by_day, users_by_day = [], [], []
+    revenue_map, users_map = {}, {}
+    for paid_at, amount, _renew in paid_rows:
+        d = to_local(paid_at).date()
+        revenue_map[d] = revenue_map.get(d, 0) + amount
+    for (created_at,) in user_rows:
+        d = to_local(created_at).date()
+        users_map[d] = users_map.get(d, 0) + 1
+    for i in range(days_window):
+        d = local_window_start_date + timedelta(days=i)
+        day_labels.append(d.strftime("%d.%m"))
+        revenue_by_day.append(revenue_map.get(d, 0))
+        users_by_day.append(users_map.get(d, 0))
+
+    # Месяц-к-месяцу - по локальным календарным месяцам
+    local_today = to_local(now).date()
+    cur_month_start = local_today.replace(day=1)
+    prev_month_end = cur_month_start - timedelta(days=1)
+    prev_month_start = prev_month_end.replace(day=1)
+
+    # Для сравнения месяцев берём все успешные платежи за 2 месяца одним запросом
+    two_months_rows = (await session.execute(
+        select(Payment.paid_at, Payment.amount, Payment.renew_subscription_id)
+        .where(
+            Payment.status == PaymentStatus.SUCCESS,
+            Payment.paid_at.is_not(None),
+            # +-1 день запаса на сдвиг таймзоны, точная фильтрация ниже по локальной дате
+            Payment.paid_at >= datetime.combine(prev_month_start, datetime.min.time()) - timedelta(days=1),
+        )
+    )).all()
+    revenue_cur = revenue_prev = payments_cur = renewals_cur = 0
+    for paid_at, amount, renew_id in two_months_rows:
+        d = to_local(paid_at).date()
+        if d >= cur_month_start:
+            revenue_cur += amount
+            payments_cur += 1
+            if renew_id:
+                renewals_cur += 1
+        elif prev_month_start <= d <= prev_month_end:
+            revenue_prev += amount
+
+    # Конверсия "зарегистрировался -> хоть раз оплатил" за всё время
+    total_users_cnt = (await session.execute(select(func.count(User.id)))).scalar() or 0
+    paying_users_cnt = (await session.execute(
+        select(func.count(func.distinct(Payment.user_id))).where(Payment.status == PaymentStatus.SUCCESS)
+    )).scalar() or 0
+    conversion_pct = round(paying_users_cnt / total_users_cnt * 100, 1) if total_users_cnt else 0.0
+
+    revenue_delta_pct = None
+    if revenue_prev > 0:
+        revenue_delta_pct = round((revenue_cur - revenue_prev) / revenue_prev * 100)
+
+    return {
+        "day_labels": day_labels,
+        "revenue_by_day": revenue_by_day,
+        "users_by_day": users_by_day,
+        "revenue_30d": sum(revenue_by_day),
+        "users_30d": sum(users_by_day),
+        "revenue_cur_month": revenue_cur,
+        "revenue_prev_month": revenue_prev,
+        "revenue_delta_pct": revenue_delta_pct,
+        "payments_cur_month": payments_cur,
+        "renewals_cur_month": renewals_cur,
+        "conversion_pct": conversion_pct,
+        "paying_users_cnt": paying_users_cnt,
+    }
+
+
 @router.get("", response_class=HTMLResponse)
 async def admin_index(request: Request, admin: User = Depends(require_admin), session: AsyncSession = Depends(get_db)):
     total_users = (await session.execute(select(func.count(User.id)))).scalar()
@@ -54,6 +141,8 @@ async def admin_index(request: Request, admin: User = Depends(require_admin), se
         .order_by(SupportTicket.updated_at.desc()).limit(5)
     )).scalars().all()
 
+    analytics = await _dashboard_analytics(session)
+
     from core.config import PLANS
     return templates.TemplateResponse(request, "admin/index.html", {
         "user": admin,
@@ -67,6 +156,7 @@ async def admin_index(request: Request, admin: User = Depends(require_admin), se
         "recent_users": recent_users,
         "recent_tickets": recent_tickets,
         "plans": PLANS,
+        "analytics": analytics,
     })
 
 

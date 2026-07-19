@@ -1,6 +1,40 @@
 {% extends "base.html" %}
 {% block title %}Админ — Дашборд{% endblock %}
 
+{% block extra_head %}
+<style>
+    /* Столбиковые мини-графики на CSS: тонкие бары, скруглённый верх (data-end),
+       2px зазор между барами, приглушённая сетка. Без внешних библиотек. */
+    .mini-chart { display: flex; align-items: flex-end; gap: 2px; height: 120px; position: relative; }
+    .mini-chart .bar {
+        flex: 1; min-width: 2px; border-radius: 4px 4px 0 0; position: relative;
+        transition: opacity .1s;
+    }
+    .mini-chart .bar:hover { opacity: .75; }
+    /* Нулевые дни - едва заметная "подложка" 2px, чтобы день был виден и наводим */
+    .mini-chart .bar.zero { height: 2px !important; background: var(--panel-3) !important; }
+    .chart-axis { display: flex; justify-content: space-between; color: var(--muted); font-size: .68rem; margin-top: .45rem; }
+    .chart-max { color: var(--muted); font-size: .68rem; position: absolute; top: -2px; right: 0; }
+    .chart-title { color: #fff; font-weight: 700; font-size: .95rem; }
+    .chart-sub { color: var(--muted); font-size: .78rem; margin-top: .1rem; }
+
+    .stat-delta-up { color: var(--accent); font-size: .78rem; font-weight: 600; }
+    .stat-delta-down { color: var(--danger); font-size: .78rem; font-weight: 600; }
+
+    /* Общий тултип для обоих графиков, позиционируется JS-ом */
+    #chartTooltip {
+        position: fixed; z-index: 50; pointer-events: none; display: none;
+        background: var(--panel-3); border: 1px solid var(--border); border-radius: 8px;
+        padding: .4rem .65rem; font-size: .76rem; color: var(--text); white-space: nowrap;
+        box-shadow: 0 4px 14px rgba(0,0,0,.4);
+    }
+    .visually-hidden {
+        position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+        overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="topbar">
     <div>
@@ -47,6 +81,88 @@
         </div>
     </div>
 </div>
+
+<h2 class="section-title">Динамика</h2>
+
+<!-- Сравнение месяц-к-месяцу и конверсия -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1rem;">
+    <div class="card stat-card">
+        <div class="label">Выручка в этом месяце</div>
+        <div class="value" style="font-size:1.5rem;">{{ analytics.revenue_cur_month }} ₽</div>
+        {% if analytics.revenue_delta_pct is not none %}
+        <div class="{% if analytics.revenue_delta_pct >= 0 %}stat-delta-up{% else %}stat-delta-down{% endif %}" style="margin-top:.25rem;">
+            <i class="bi {% if analytics.revenue_delta_pct >= 0 %}bi-arrow-up-right{% else %}bi-arrow-down-right{% endif %}"></i>
+            {{ analytics.revenue_delta_pct }}% к прошлому месяцу ({{ analytics.revenue_prev_month }} ₽)
+        </div>
+        {% else %}
+        <div style="color:var(--muted);font-size:.78rem;margin-top:.25rem;">В прошлом месяце оплат не было</div>
+        {% endif %}
+    </div>
+    <div class="card stat-card">
+        <div class="label">Оплат в этом месяце</div>
+        <div class="value" style="font-size:1.5rem;">{{ analytics.payments_cur_month }}</div>
+        <div style="color:var(--muted);font-size:.78rem;margin-top:.25rem;">из них продлений: {{ analytics.renewals_cur_month }}</div>
+    </div>
+    <div class="card stat-card">
+        <div class="label">Выручка за 30 дней</div>
+        <div class="value" style="font-size:1.5rem;">{{ analytics.revenue_30d }} ₽</div>
+        <div style="color:var(--muted);font-size:.78rem;margin-top:.25rem;">новых пользователей: {{ analytics.users_30d }}</div>
+    </div>
+    <div class="card stat-card">
+        <div class="label">Конверсия в оплату</div>
+        <div class="value" style="font-size:1.5rem;">{{ analytics.conversion_pct }}%</div>
+        <div style="color:var(--muted);font-size:.78rem;margin-top:.25rem;">{{ analytics.paying_users_cnt }} из {{ total_users }} платили хоть раз</div>
+    </div>
+</div>
+
+<!-- Графики по дням. Высота бара - от максимума в своём окне; нулевые дни
+     показываются 2px-подложкой, чтобы ось не рвалась и день ловил hover. -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-bottom:2rem;">
+    <div class="card">
+        <div class="card-body">
+            <div class="chart-title">Выручка по дням</div>
+            <div class="chart-sub">за последние 30 дней, ₽</div>
+            {% set max_rev = analytics.revenue_by_day | max %}
+            <div class="mini-chart" style="margin-top:1.4rem;" role="img" aria-label="Столбиковый график выручки по дням за 30 дней">
+                {% if max_rev > 0 %}<span class="chart-max">макс {{ max_rev }} ₽</span>{% endif %}
+                {% for v in analytics.revenue_by_day %}
+                <div class="bar {% if v == 0 %}zero{% endif %}"
+                     style="height:{{ (v / max_rev * 100) | round(1) if max_rev else 0 }}%;background:var(--accent);"
+                     data-tip="{{ analytics.day_labels[loop.index0] }} — {{ v }} ₽"></div>
+                {% endfor %}
+            </div>
+            <div class="chart-axis"><span>{{ analytics.day_labels[0] }}</span><span>{{ analytics.day_labels[-1] }}</span></div>
+            <table class="visually-hidden">
+                <caption>Выручка по дням, ₽</caption>
+                <tr>{% for d in analytics.day_labels %}<th scope="col">{{ d }}</th>{% endfor %}</tr>
+                <tr>{% for v in analytics.revenue_by_day %}<td>{{ v }}</td>{% endfor %}</tr>
+            </table>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-body">
+            <div class="chart-title">Новые пользователи по дням</div>
+            <div class="chart-sub">за последние 30 дней</div>
+            {% set max_users = analytics.users_by_day | max %}
+            <div class="mini-chart" style="margin-top:1.4rem;" role="img" aria-label="Столбиковый график регистраций по дням за 30 дней">
+                {% if max_users > 0 %}<span class="chart-max">макс {{ max_users }}</span>{% endif %}
+                {% for v in analytics.users_by_day %}
+                <div class="bar {% if v == 0 %}zero{% endif %}"
+                     style="height:{{ (v / max_users * 100) | round(1) if max_users else 0 }}%;background:var(--blue);"
+                     data-tip="{{ analytics.day_labels[loop.index0] }} — {{ v }} чел."></div>
+                {% endfor %}
+            </div>
+            <div class="chart-axis"><span>{{ analytics.day_labels[0] }}</span><span>{{ analytics.day_labels[-1] }}</span></div>
+            <table class="visually-hidden">
+                <caption>Новые пользователи по дням</caption>
+                <tr>{% for d in analytics.day_labels %}<th scope="col">{{ d }}</th>{% endfor %}</tr>
+                <tr>{% for v in analytics.users_by_day %}<td>{{ v }}</td>{% endfor %}</tr>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="chartTooltip"></div>
 
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem;">
     <div class="card">
@@ -113,4 +229,34 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Один общий тултип на оба графика - следит за курсором над барами.
+// mouseover/mouseout с делегированием, а не mouseenter на каждый бар:
+// баров 60 штук, вешать 120 слушателей незачем.
+const chartTip = document.getElementById('chartTooltip');
+document.addEventListener('mouseover', function (e) {
+    const bar = e.target.closest('.mini-chart .bar');
+    if (!bar) return;
+    chartTip.textContent = bar.dataset.tip;
+    chartTip.style.display = 'block';
+});
+document.addEventListener('mousemove', function (e) {
+    if (chartTip.style.display !== 'block') return;
+    // Не даём тултипу вылезти за правый край окна
+    const pad = 12;
+    let x = e.clientX + pad;
+    const tipW = chartTip.offsetWidth;
+    if (x + tipW > window.innerWidth - 8) x = e.clientX - tipW - pad;
+    chartTip.style.left = x + 'px';
+    chartTip.style.top = (e.clientY - 32) + 'px';
+});
+document.addEventListener('mouseout', function (e) {
+    if (e.target.closest && e.target.closest('.mini-chart .bar')) {
+        chartTip.style.display = 'none';
+    }
+});
+</script>
 {% endblock %}
