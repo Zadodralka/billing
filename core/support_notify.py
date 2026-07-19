@@ -1,9 +1,8 @@
 """Утилиты для уведомлений о тикетах поддержки через Telegram и email"""
 import logging
-from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from core.config import settings
 from core.models import User
+from core.notify import send_telegram, send_telegram_to_admins
 
 logger = logging.getLogger("support.notify")
 
@@ -25,31 +24,13 @@ def _user_reply_keyboard(ticket_id: int) -> InlineKeyboardMarkup:
 
 async def notify_admins_new_message(ticket_id: int, subject: str, user_display_name: str, text_preview: str):
     """Уведомляет всех админов о новом тикете/сообщении от пользователя"""
-    if not settings.admin_ids:
-        return
-
-    message = (
+    await send_telegram_to_admins(
         f"🎫 <b>Новое сообщение — #{ticket_id}</b>\n\n"
         f"👤 От: {user_display_name}\n"
         f"📋 Тема: {subject}\n\n"
-        f"«{text_preview[:300]}»"
+        f"«{text_preview[:300]}»",
+        reply_markup=_admin_ticket_keyboard(ticket_id),
     )
-
-    try:
-        bot = Bot(token=settings.bot_token)
-        for admin_id in settings.admin_ids:
-            try:
-                await bot.send_message(
-                    admin_id,
-                    message,
-                    parse_mode="HTML",
-                    reply_markup=_admin_ticket_keyboard(ticket_id),
-                )
-            except Exception as e:
-                logger.warning(f"Could not notify admin {admin_id}: {e}")
-        await bot.session.close()
-    except Exception as e:
-        logger.error(f"notify_admins_new_message failed: {e}")
 
 
 async def notify_user_admin_replied(user: User, ticket_id: int, subject: str, text_preview: str):
@@ -57,22 +38,13 @@ async def notify_user_admin_replied(user: User, ticket_id: int, subject: str, te
     и на email (если есть), независимо друг от друга: у пользователя может быть
     привязан только один из способов входа, а уведомление важно не пропустить."""
     if user.telegram_id:
-        message = (
+        await send_telegram(
+            user.telegram_id,
             f"💬 <b>Ответ по тикету #{ticket_id}</b>\n\n"
             f"📋 {subject}\n\n"
-            f"«{text_preview[:400]}»"
+            f"«{text_preview[:400]}»",
+            reply_markup=_user_reply_keyboard(ticket_id),
         )
-        try:
-            bot = Bot(token=settings.bot_token)
-            await bot.send_message(
-                user.telegram_id,
-                message,
-                parse_mode="HTML",
-                reply_markup=_user_reply_keyboard(ticket_id),
-            )
-            await bot.session.close()
-        except Exception as e:
-            logger.warning(f"notify_user_admin_replied (telegram) failed for {user.telegram_id}: {e}")
 
     if user.email:
         try:

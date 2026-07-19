@@ -168,20 +168,14 @@ async def _notify_bonus(user: User, amount: int, reason_text: str):
     и только в Telegram - приглашённый пользователь о своём бонусе не узнавал вовсе,
     а реферер без привязанного Telegram не узнавал о начислении никак."""
     if user.telegram_id:
-        try:
-            from aiogram import Bot
-            bot = Bot(token=settings.bot_token)
-            await bot.send_message(
-                user.telegram_id,
-                f"🎉 <b>Начислен бонус на баланс!</b>\n\n"
-                f"{reason_text}\n"
-                f"Вам начислено <b>{amount} ₽</b> на баланс.\n\n"
-                f"💰 Текущий баланс: <b>{user.balance} ₽</b>",
-                parse_mode="HTML",
-            )
-            await bot.session.close()
-        except Exception as e:
-            logger.warning(f"_notify_bonus (telegram) failed for {user.telegram_id}: {e}")
+        from core.notify import send_telegram
+        await send_telegram(
+            user.telegram_id,
+            f"🎉 <b>Начислен бонус на баланс!</b>\n\n"
+            f"{reason_text}\n"
+            f"Вам начислено <b>{amount} ₽</b> на баланс.\n\n"
+            f"💰 Текущий баланс: <b>{user.balance} ₽</b>",
+        )
 
     if user.email:
         try:

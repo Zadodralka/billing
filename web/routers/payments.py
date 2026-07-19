@@ -10,7 +10,6 @@ from core.yoomoney import yoomoney
 from core.config import settings
 from core.version import APP_VERSION
 from core.timezone import to_local
-from aiogram import Bot
 
 logger = logging.getLogger(__name__)
 
@@ -80,30 +79,24 @@ async def yoomoney_webhook(request: Request, session: AsyncSession = Depends(get
     )
 
     if user.telegram_id:
-        try:
-            bot = Bot(token=settings.bot_token)
-            if payment.is_gift:
-                await bot.send_message(
-                    user.telegram_id,
-                    f"✅ <b>Оплата получена!</b>\n\n"
-                    f"🎁 Подарок оформлен и отправлен на email "
-                    f"<code>{payment.gift_recipient_email}</code>.",
-                    parse_mode="HTML",
-                )
-            else:
-                expires = to_local(subscription.expires_at).strftime("%d.%m.%Y")
-                await bot.send_message(
-                    user.telegram_id,
-                    f"✅ <b>Оплата получена!</b>\n\n"
-                    f"📦 Тариф: {plan.get('name', payment.plan_key)}\n"
-                    f"📅 Активна до: {expires}\n\n"
-                    f"🔑 Ваш конфиг:\n<code>{config_link}</code>\n\n"
-                    f"Или откройте раздел <b>🔑 Мои конфиги</b> в боте.",
-                    parse_mode="HTML",
-                )
-            await bot.session.close()
-        except Exception as e:
-            logger.warning(f"Failed to notify user {user.telegram_id}: {e}")
+        from core.notify import send_telegram
+        if payment.is_gift:
+            await send_telegram(
+                user.telegram_id,
+                f"✅ <b>Оплата получена!</b>\n\n"
+                f"🎁 Подарок оформлен и отправлен на email "
+                f"<code>{payment.gift_recipient_email}</code>.",
+            )
+        else:
+            expires = to_local(subscription.expires_at).strftime("%d.%m.%Y")
+            await send_telegram(
+                user.telegram_id,
+                f"✅ <b>Оплата получена!</b>\n\n"
+                f"📦 Тариф: {plan.get('name', payment.plan_key)}\n"
+                f"📅 Активна до: {expires}\n\n"
+                f"🔑 Ваш конфиг:\n<code>{config_link}</code>\n\n"
+                f"Или откройте раздел <b>🔑 Мои конфиги</b> в боте.",
+            )
 
     return Response(status_code=200)
 

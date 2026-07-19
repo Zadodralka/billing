@@ -20,7 +20,7 @@ from core.models import Subscription, SubscriptionStatus, User, Payment, Payment
 from core.remnawave import remnawave
 from core.config import settings
 from core.timezone import to_local
-from aiogram import Bot
+from core.notify import send_telegram
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -66,22 +66,15 @@ async def disable_expired_subscriptions():
             sub.status = SubscriptionStatus.EXPIRED
             disabled_count += 1
 
-            # Уведомление в Telegram (если есть)
             result = await session.execute(select(User).where(User.id == sub.user_id))
             user = result.scalar_one_or_none()
             if user and user.telegram_id:
-                try:
-                    bot = Bot(token=settings.bot_token)
-                    await bot.send_message(
-                        user.telegram_id,
-                        "⚠️ <b>Подписка истекла</b>\n\n"
-                        "Доступ к VPN заблокирован.\n"
-                        "Зайдите в личный кабинет, чтобы продлить подписку.",
-                        parse_mode="HTML",
-                    )
-                    await bot.session.close()
-                except Exception as e:
-                    logger.warning(f"Failed to notify user {user.telegram_id}: {e}")
+                await send_telegram(
+                    user.telegram_id,
+                    "⚠️ <b>Подписка истекла</b>\n\n"
+                    "Доступ к VPN заблокирован.\n"
+                    "Зайдите в личный кабинет, чтобы продлить подписку.",
+                )
 
         if disabled_count:
             await session.commit()
@@ -114,19 +107,13 @@ async def notify_expiring_soon():
 
             if user and user.telegram_id:
                 days_left = (sub.expires_at - now).days
-                try:
-                    bot = Bot(token=settings.bot_token)
-                    await bot.send_message(
-                        user.telegram_id,
-                        f"⏳ <b>Подписка скоро истекает</b>\n\n"
-                        f"Осталось {days_left} дн. (до {to_local(sub.expires_at).strftime('%d.%m.%Y')}).\n"
-                        "Продлите заранее, чтобы доступ к VPN не прерывался — "
-                        "кнопка «🔁 Продлить» в разделе «Мои подписки» в боте.",
-                        parse_mode="HTML",
-                    )
-                    await bot.session.close()
-                except Exception as e:
-                    logger.warning(f"Failed to send expiry reminder to {user.telegram_id}: {e}")
+                await send_telegram(
+                    user.telegram_id,
+                    f"⏳ <b>Подписка скоро истекает</b>\n\n"
+                    f"Осталось {days_left} дн. (до {to_local(sub.expires_at).strftime('%d.%m.%Y')}).\n"
+                    "Продлите заранее, чтобы доступ к VPN не прерывался — "
+                    "кнопка «🔁 Продлить» в разделе «Мои подписки» в боте.",
+                )
             count += 1
 
         if count:
@@ -178,19 +165,13 @@ async def notify_zero_traffic_subscriptions():
             plan_name = plan["name"] if plan else sub.plan_key
 
             if user.telegram_id:
-                try:
-                    bot = Bot(token=settings.bot_token)
-                    await bot.send_message(
-                        user.telegram_id,
-                        f"📡 <b>Не видим активности по подписке «{plan_name}»</b>\n\n"
-                        "Похоже, конфиг ещё не подключён — трафик по подписке пока нулевой.\n"
-                        "Если не получается подключиться — напишите в поддержку, поможем.\n"
-                        "Если ещё не приступали — конфиг ждёт в разделе «🔑 QR-код подключения».",
-                        parse_mode="HTML",
-                    )
-                    await bot.session.close()
-                except Exception as e:
-                    logger.warning(f"Failed to send zero-traffic notice to {user.telegram_id}: {e}")
+                await send_telegram(
+                    user.telegram_id,
+                    f"📡 <b>Не видим активности по подписке «{plan_name}»</b>\n\n"
+                    "Похоже, конфиг ещё не подключён — трафик по подписке пока нулевой.\n"
+                    "Если не получается подключиться — напишите в поддержку, поможем.\n"
+                    "Если ещё не приступали — конфиг ждёт в разделе «🔑 QR-код подключения».",
+                )
 
             if user.email:
                 try:
