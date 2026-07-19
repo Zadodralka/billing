@@ -532,3 +532,53 @@ async def send_balance_bonus_email(recipient_email: str, amount: int, reason_tex
         ),
     )
     await send_email(recipient_email, "🎉 Начислен бонус на баланс — Unlock VPN", html)
+
+
+async def send_expiry_reminder_email(recipient_email: str, plan_name: str, days_left: int, expires_str: str):
+    """Письмо-напоминание о скором истечении подписки. Раньше напоминание уходило
+    только в Telegram - пользователи, вошедшие по email без привязанного Telegram,
+    не узнавали об истечении вовсе и молча теряли доступ."""
+    body_html = f"""
+    <p style="color: #4b5565; font-size: 15px; line-height: 1.6; margin-bottom: 24px;">
+      Ваша подписка <strong style="color: #14181f;">«{escape(plan_name)}»</strong> истекает
+      через <strong style="color: #14181f;">{days_left} дн.</strong> ({escape(expires_str)}).
+      Продлите заранее, чтобы доступ к VPN не прерывался — после истечения
+      подключение блокируется автоматически.
+    </p>
+    """
+    html = _simple_notice_html(
+        emoji="⏳",
+        title="Подписка скоро истекает",
+        body_html=body_html,
+        cta_text="Продлить подписку",
+        cta_url=f"{settings.webapp_url}/dashboard",
+        footer_note=(
+            "Это письмо отправлено автоматически по вашей подписке на "
+            f"<a href='{settings.webapp_url}' style='color: #97a1b0; text-decoration: underline;'>{settings.webapp_url}</a>."
+        ),
+    )
+    await send_email(recipient_email, f"⏳ Подписка истекает через {days_left} дн. — Unlock VPN", html)
+
+
+async def send_subscription_expired_email(recipient_email: str, plan_name: str):
+    """Письмо о том, что подписка истекла и доступ заблокирован. Пара к
+    send_expiry_reminder_email - тот же случай пользователей без Telegram."""
+    body_html = f"""
+    <p style="color: #4b5565; font-size: 15px; line-height: 1.6; margin-bottom: 24px;">
+      Срок действия подписки <strong style="color: #14181f;">«{escape(plan_name)}»</strong> закончился,
+      и доступ к VPN по ней заблокирован. Продлите подписку в личном кабинете —
+      доступ восстановится сразу после оплаты, на том же конфиге.
+    </p>
+    """
+    html = _simple_notice_html(
+        emoji="⚠️",
+        title="Подписка истекла",
+        body_html=body_html,
+        cta_text="Продлить подписку",
+        cta_url=f"{settings.webapp_url}/dashboard",
+        footer_note=(
+            "Это письмо отправлено автоматически по вашей подписке на "
+            f"<a href='{settings.webapp_url}' style='color: #97a1b0; text-decoration: underline;'>{settings.webapp_url}</a>."
+        ),
+    )
+    await send_email(recipient_email, "⚠️ Подписка истекла — доступ заблокирован — Unlock VPN", html)

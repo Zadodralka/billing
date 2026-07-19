@@ -66,6 +66,9 @@ async def disable_expired_subscriptions():
             sub.status = SubscriptionStatus.EXPIRED
             disabled_count += 1
 
+            # Уведомляем и в Telegram, и на email независимо - у пользователя может
+            # быть привязан только один из способов входа, а пропущенное уведомление
+            # об истечении почти наверняка означает непродлённую подписку.
             result = await session.execute(select(User).where(User.id == sub.user_id))
             user = result.scalar_one_or_none()
             if user and user.telegram_id:
@@ -75,6 +78,14 @@ async def disable_expired_subscriptions():
                     "Доступ к VPN заблокирован.\n"
                     "Зайдите в личный кабинет, чтобы продлить подписку.",
                 )
+            if user and user.email:
+                try:
+                    from core.plans import get_plan
+                    from core.email import send_subscription_expired_email
+                    plan = await get_plan(session, sub.plan_key)
+                    await send_subscription_expired_email(user.email, plan["name"] if plan else sub.plan_key)
+                except Exception as e:
+                    logger.warning(f"Failed to send expiry email to {user.email}: {e}")
 
         if disabled_count:
             await session.commit()
@@ -105,15 +116,27 @@ async def notify_expiring_soon():
             user = user_result.scalar_one_or_none()
             sub.expiry_reminder_sent = True
 
+            days_left = (sub.expires_at - now).days
+            expires_str = to_local(sub.expires_at).strftime('%d.%m.%Y')
+            # Оба канала независимо - см. комментарий в disable_expired_subscriptions
             if user and user.telegram_id:
-                days_left = (sub.expires_at - now).days
                 await send_telegram(
                     user.telegram_id,
                     f"⏳ <b>Подписка скоро истекает</b>\n\n"
-                    f"Осталось {days_left} дн. (до {to_local(sub.expires_at).strftime('%d.%m.%Y')}).\n"
+                    f"Осталось {days_left} дн. (до {expires_str}).\n"
                     "Продлите заранее, чтобы доступ к VPN не прерывался — "
                     "кнопка «🔁 Продлить» в разделе «Мои подписки» в боте.",
                 )
+            if user and user.email:
+                try:
+                    from core.plans import get_plan
+                    from core.email import send_expiry_reminder_email
+                    plan = await get_plan(session, sub.plan_key)
+                    await send_expiry_reminder_email(
+                        user.email, plan["name"] if plan else sub.plan_key, days_left, expires_str,
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to send expiry reminder email to {user.email}: {e}")
             count += 1
 
         if count:
