@@ -620,6 +620,33 @@ async def delete_subscription(sub_id: int, admin: User = Depends(require_admin),
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
+def _payments_filter(q: str, status: str, date_from: str, date_to: str):
+    """Общий построитель фильтра платежей для HTML-списка и CSV-экспорта -
+    один набор условий, чтобы экспорт всегда выгружал ровно то, что видно
+    в отфильтрованном списке. Возвращает (conditions, needs_user_join)."""
+    from core.timezone import local_date_to_utc_start
+    conditions = []
+    needs_join = False
+    if q:
+        needs_join = True
+        user_cond = [User.email.ilike(f"%{q}%"), User.telegram_username.ilike(f"%{q}%")]
+        if q.isdigit():
+            user_cond += [Payment.id == int(q), User.id == int(q)]
+        conditions.append(or_(*user_cond))
+    if status and status in PaymentStatus._value2member_map_:
+        conditions.append(Payment.status == PaymentStatus(status))
+    if date_from:
+        start = local_date_to_utc_start(date_from)
+        if start:
+            conditions.append(Payment.created_at >= start)
+    if date_to:
+        # Правая граница включительно: начало СЛЕДУЮЩЕГО локального дня, строго меньше
+        end_start = local_date_to_utc_start(date_to)
+        if end_start:
+            conditions.append(Payment.created_at < end_start + timedelta(days=1))
+    return conditions, needs_join
+
+
 @router.get("/payments", response_class=HTMLResponse)
 async def admin_payments(
     request: Request,
@@ -628,26 +655,21 @@ async def admin_payments(
     page: int = 1,
     q: str = "",
     status: str = "",
+    date_from: str = "",
+    date_to: str = "",
 ):
     per_page = 25
     offset = (page - 1) * per_page
-    q = q.strip()
-    status = status.strip()
+    q, status = q.strip(), status.strip()
+    date_from, date_to = date_from.strip(), date_to.strip()
 
     query = select(Payment).options(selectinload(Payment.user))
     count_query = select(func.count(Payment.id))
 
-    conditions = []
-    if q:
+    conditions, needs_join = _payments_filter(q, status, date_from, date_to)
+    if needs_join:
         query = query.join(User, Payment.user_id == User.id)
         count_query = count_query.join(User, Payment.user_id == User.id)
-        user_cond = [User.email.ilike(f"%{q}%"), User.telegram_username.ilike(f"%{q}%")]
-        if q.isdigit():
-            user_cond += [Payment.id == int(q), User.id == int(q)]
-        conditions.append(or_(*user_cond))
-    if status and status in PaymentStatus._value2member_map_:
-        conditions.append(Payment.status == PaymentStatus(status))
-
     if conditions:
         filter_ = and_(*conditions)
         query = query.where(filter_)
@@ -674,8 +696,62 @@ async def admin_payments(
         "pending_count": pending_count,
         "q": q,
         "status": status,
+        "date_from": date_from,
+        "date_to": date_to,
         "statuses": list(PaymentStatus),
     })
+
+
+@router.get("/payments/export.csv")
+async def admin_payments_export(
+    admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_db),
+    q: str = "",
+    status: str = "",
+    date_from: str = "",
+    date_to: str = "",
+):
+    """CSV-выгрузка платежей с теми же фильтрами, что и список (без пагинации).
+    UTF-8 с BOM - иначе Excel на Windows открывает кириллицу кракозябрами."""
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse
+
+    query = select(Payment).options(selectinload(Payment.user))
+    conditions, needs_join = _payments_filter(q.strip(), status.strip(), date_from.strip(), date_to.strip())
+    if needs_join:
+        query = query.join(User, Payment.user_id == User.id)
+    if conditions:
+        query = query.where(and_(*conditions))
+
+    payments = (await session.execute(query.order_by(Payment.created_at.desc()))).scalars().all()
+
+    from core.config import PLANS
+    buf = io.StringIO()
+    writer = csv.writer(buf, delimiter=";")  # ; - разделитель, который русский Excel понимает по умолчанию
+    writer.writerow(["ID", "Пользователь", "Email", "Telegram", "Тариф", "Сумма (руб)",
+                     "Статус", "Создан", "Оплачен", "Скидка кода (руб)", "Списано с баланса (руб)"])
+    for p in payments:
+        writer.writerow([
+            p.id,
+            p.user.display_name if p.user else "",
+            (p.user.email or "") if p.user else "",
+            (p.user.telegram_username or "") if p.user else "",
+            PLANS.get(p.plan_key, {}).get("name", p.plan_key),
+            p.amount,
+            p.status.value,
+            to_local(p.created_at).strftime("%d.%m.%Y %H:%M") if p.created_at else "",
+            to_local(p.paid_at).strftime("%d.%m.%Y %H:%M") if p.paid_at else "",
+            p.promo_discount,
+            p.balance_spent,
+        ])
+
+    filename = f"payments_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.csv"
+    return StreamingResponse(
+        iter(["\ufeff" + buf.getvalue()]),  # BOM для Excel
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/payments/{payment_id}/delete")

@@ -14,7 +14,7 @@
     {% endif %}
 </div>
 
-<form method="GET" style="display:flex;gap:.6rem;margin-bottom:1.2rem;max-width:560px;flex-wrap:wrap;">
+<form method="GET" style="display:flex;gap:.6rem;margin-bottom:1.2rem;max-width:860px;flex-wrap:wrap;align-items:center;">
     <input type="text" name="q" value="{{ q }}" placeholder="Поиск по пользователю или ID…" style="flex:1;min-width:220px;">
     <select name="status" style="width:auto;">
         <option value="">Все статусы</option>
@@ -22,8 +22,16 @@
         <option value="{{ s.value }}" {% if status == s.value %}selected{% endif %}>{{ s.value }}</option>
         {% endfor %}
     </select>
+    <input type="date" name="date_from" value="{{ date_from }}" title="С даты" style="width:auto;">
+    <span style="color:var(--muted);">—</span>
+    <input type="date" name="date_to" value="{{ date_to }}" title="По дату (включительно)" style="width:auto;">
     <button type="submit" class="btn btn-outline-1"><i class="bi bi-search"></i></button>
-    {% if q or status %}<a href="/admin/payments" class="btn btn-outline-1" title="Сбросить"><i class="bi bi-x-lg"></i></a>{% endif %}
+    {% if q or status or date_from or date_to %}<a href="/admin/payments" class="btn btn-outline-1" title="Сбросить"><i class="bi bi-x-lg"></i></a>{% endif %}
+    <!-- Экспорт уносит ТЕКУЩИЕ фильтры формы - выгружается ровно то, что видно в списке -->
+    <a href="/admin/payments/export.csv?q={{ q|urlencode }}&status={{ status }}&date_from={{ date_from }}&date_to={{ date_to }}"
+       class="btn btn-outline-1" title="Выгрузить отфильтрованный список в CSV">
+        <i class="bi bi-download"></i> CSV
+    </a>
 </form>
 
 <div class="table-card has-mobile-cards">
@@ -99,7 +107,7 @@
 <nav>
     <ul class="pagination">
         {% for p in range(1, pages+1) %}
-        <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="?page={{ p }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if status %}&status={{ status }}{% endif %}">{{ p }}</a></li>
+        <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="?page={{ p }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">{{ p }}</a></li>
         {% endfor %}
     </ul>
 </nav>
