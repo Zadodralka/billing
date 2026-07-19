@@ -201,6 +201,73 @@ async def admin_users(
     })
 
 
+@router.get("/users/{user_id}", response_class=HTMLResponse)
+async def admin_user_detail(
+    user_id: int,
+    request: Request,
+    admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_db),
+):
+    """Карточка пользователя: всё про одного человека на одной странице
+    (подписки, платежи, тикеты, баланс, рефералы) - раньше для разбора одного
+    обращения приходилось искать его в трёх разных разделах админки."""
+    result = await session.execute(
+        select(User).options(selectinload(User.subscriptions)).where(User.id == user_id)
+    )
+    target = result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(404, "Пользователь не найден")
+
+    payments = (await session.execute(
+        select(Payment).where(Payment.user_id == user_id)
+        .order_by(Payment.created_at.desc()).limit(20)
+    )).scalars().all()
+
+    from core.models import SupportTicket, BalanceTransaction
+    tickets = (await session.execute(
+        select(SupportTicket).where(SupportTicket.user_id == user_id)
+        .order_by(SupportTicket.updated_at.desc()).limit(10)
+    )).scalars().all()
+
+    balance_txs = (await session.execute(
+        select(BalanceTransaction).where(BalanceTransaction.user_id == user_id)
+        .order_by(BalanceTransaction.created_at.desc()).limit(20)
+    )).scalars().all()
+
+    referrals = (await session.execute(
+        select(User).where(User.referred_by_id == user_id)
+        .order_by(User.created_at.desc()).limit(10)
+    )).scalars().all()
+    referrals_total = (await session.execute(
+        select(func.count(User.id)).where(User.referred_by_id == user_id)
+    )).scalar() or 0
+
+    referrer = None
+    if target.referred_by_id:
+        referrer = (await session.execute(
+            select(User).where(User.id == target.referred_by_id)
+        )).scalar_one_or_none()
+
+    total_paid = (await session.execute(
+        select(func.coalesce(func.sum(Payment.amount), 0))
+        .where(Payment.user_id == user_id, Payment.status == PaymentStatus.SUCCESS)
+    )).scalar()
+
+    from core.config import PLANS
+    return templates.TemplateResponse(request, "admin/user_detail.html", {
+        "user": admin,
+        "target": target,
+        "payments": payments,
+        "tickets": tickets,
+        "balance_txs": balance_txs,
+        "referrals": referrals,
+        "referrals_total": referrals_total,
+        "referrer": referrer,
+        "total_paid": total_paid,
+        "plans": PLANS,
+    })
+
+
 @router.post("/users/{user_id}/ban")
 async def ban_user(user_id: int, admin: User = Depends(require_admin), session: AsyncSession = Depends(get_db)):
     try:

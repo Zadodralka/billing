@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+{% block title %}{{ target.display_name }} — Админ{% endblock %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <a href="/admin/users" style="color:var(--muted);font-size:.82rem;text-decoration:none;display:inline-flex;align-items:center;gap:.35rem;margin-bottom:.4rem;">
+            <i class="bi bi-arrow-left"></i> К списку пользователей
+        </a>
+        <h1 style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;">
+            {{ target.display_name }}
+            {% if target.is_admin %}<span class="badge badge-neutral" style="color:var(--blue);">Админ</span>
+            {% elif target.is_banned %}<span class="badge badge-off">Заблокирован</span>
+            {% else %}<span class="badge badge-on">Активен</span>{% endif %}
+        </h1>
+        <div class="sub mono">#{{ target.id }} · зарегистрирован {{ (target.created_at | localtime).strftime('%d.%m.%Y %H:%M') }}</div>
+    </div>
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
+        <button type="button" class="btn btn-outline-1 js-edit-btn"
+            data-id="{{ target.id }}" data-email="{{ target.email or '' }}" data-isadmin="{{ 'true' if target.is_admin else 'false' }}">
+            <i class="bi bi-pencil"></i> Изменить
+        </button>
+        <button type="button" class="btn btn-accent js-grant-btn" data-id="{{ target.id }}" data-name="{{ target.display_name }}">
+            <i class="bi bi-gift"></i> Выдать подписку
+        </button>
+        <button type="button" class="btn btn-outline-1 js-ban-btn" data-id="{{ target.id }}">
+            {% if target.is_banned %}Разблокировать{% else %}Заблокировать{% endif %}
+        </button>
+        <button type="button" class="btn btn-danger-1 js-delete-btn" data-id="{{ target.id }}" data-name="{{ target.display_name }}">
+            <i class="bi bi-trash"></i> Удалить
+        </button>
+    </div>
+</div>
+
+<!-- Сводка -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1rem;margin-bottom:1.5rem;">
+    <div class="card stat-card">
+        <div class="label">Telegram</div>
+        <div class="value" style="font-size:1rem;">
+            {% if target.telegram_username %}<a href="https://t.me/{{ target.telegram_username }}" target="_blank">@{{ target.telegram_username }}</a>
+            {% elif target.telegram_id %}<span class="mono">{{ target.telegram_id }}</span>
+            {% else %}<span style="color:var(--muted);">не привязан</span>{% endif %}
+        </div>
+    </div>
+    <div class="card stat-card">
+        <div class="label">Email</div>
+        <div class="value" style="font-size:1rem;overflow:hidden;text-overflow:ellipsis;">{{ target.email or '—' }}</div>
+    </div>
+    <div class="card stat-card">
+        <div class="label">Баланс</div>
+        <div class="value" style="font-size:1.3rem;color:var(--accent);">{{ target.balance }} ₽</div>
+    </div>
+    <div class="card stat-card">
+        <div class="label">Оплачено всего</div>
+        <div class="value" style="font-size:1.3rem;">{{ total_paid }} ₽</div>
+    </div>
+    <div class="card stat-card">
+        <div class="label">Приглашён</div>
+        <div class="value" style="font-size:1rem;">
+            {% if referrer %}<a href="/admin/users/{{ referrer.id }}">{{ referrer.display_name }}</a>
+            {% else %}<span style="color:var(--muted);">сам пришёл</span>{% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Подписки -->
+<h2 class="section-title">Подписки ({{ target.subscriptions|length }})</h2>
+{% if target.subscriptions %}
+<div class="table-card" style="margin-bottom:1.5rem;">
+    <div class="table-wrap">
+    <table>
+        <thead><tr><th>ID</th><th>Тариф</th><th>Статус</th><th>Начало</th><th>Окончание</th><th>Трафик</th></tr></thead>
+        <tbody>
+        {% for sub in target.subscriptions | sort(attribute='created_at', reverse=True) %}
+        <tr>
+            <td class="mono" style="color:var(--muted);font-size:.8rem;">
+                <a href="/admin/subscriptions?q={{ target.display_name | urlencode }}">#{{ sub.id }}</a>
+            </td>
+            <td>{{ plans.get(sub.plan_key, {}).get('name', sub.plan_key) }}</td>
+            <td>
+                {% if sub.status.value == 'active' and sub.is_active %}<span class="badge badge-on">Активна</span>
+                {% elif sub.status.value == 'cancelled' %}<span class="badge badge-off">Остановлена</span>
+                {% else %}<span class="badge badge-neutral">{{ sub.status.value }}</span>{% endif %}
+            </td>
+            <td class="mono" style="color:var(--muted);font-size:.8rem;">{{ (sub.starts_at | localtime).strftime('%d.%m.%Y') if sub.starts_at else '—' }}</td>
+            <td class="mono" style="color:var(--muted);font-size:.8rem;">{{ (sub.expires_at | localtime).strftime('%d.%m.%Y') if sub.expires_at else '—' }}</td>
+            <td class="mono" style="font-size:.8rem;">{% if sub.traffic_gb == 0 %}Безлимит{% else %}{{ sub.traffic_gb }} GB{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% else %}
+<div class="card" style="margin-bottom:1.5rem;"><div style="text-align:center;color:var(--muted);padding:1.6rem;">Подписок нет</div></div>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;align-items:start;">
+    <!-- Платежи -->
+    <div class="card">
+        <div class="card-body">
+            <h3 style="color:#fff;font-weight:700;margin-bottom:1rem;font-size:1rem;">Платежи (последние {{ payments|length }})</h3>
+            {% for p in payments %}
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:.55rem 0;{% if not loop.last %}border-bottom:1px solid var(--border);{% endif %}">
+                <div style="min-width:0;">
+                    <div style="color:#fff;font-size:.85rem;font-weight:600;">{{ plans.get(p.plan_key, {}).get('name', p.plan_key) }}{% if p.renew_subscription_id %} · продление{% endif %}{% if p.is_gift %} · подарок{% endif %}</div>
+                    <div style="color:var(--muted);font-size:.72rem;">{{ (p.created_at | localtime).strftime('%d.%m.%Y %H:%M') }}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0;margin-left:.6rem;">
+                    <div class="mono" style="color:#fff;font-size:.85rem;">{{ p.amount }} ₽</div>
+                    {% if p.status.value == 'success' %}<span class="badge badge-on" style="font-size:.68rem;">Оплачен</span>
+                    {% elif p.status.value == 'pending' %}<span class="badge badge-mid" style="font-size:.68rem;">Ожидание</span>
+                    {% else %}<span class="badge badge-neutral" style="font-size:.68rem;">Отменён</span>{% endif %}
+                </div>
+            </div>
+            {% else %}
+            <p style="color:var(--muted);font-size:.85rem;margin:0;">Платежей нет</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- История баланса -->
+    <div class="card">
+        <div class="card-body">
+            <h3 style="color:#fff;font-weight:700;margin-bottom:1rem;font-size:1rem;">История баланса</h3>
+            {% for tx in balance_txs %}
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:.55rem 0;{% if not loop.last %}border-bottom:1px solid var(--border);{% endif %}">
+                <div style="min-width:0;">
+                    <div style="color:#fff;font-size:.83rem;">{{ tx.description or tx.type }}</div>
+                    <div style="color:var(--muted);font-size:.72rem;">{{ (tx.created_at | localtime).strftime('%d.%m.%Y %H:%M') }}</div>
+                </div>
+                <div class="mono" style="flex-shrink:0;margin-left:.6rem;font-size:.85rem;{% if tx.amount > 0 %}color:var(--accent){% else %}color:var(--danger){% endif %};">
+                    {% if tx.amount > 0 %}+{% endif %}{{ tx.amount }} ₽
+                </div>
+            </div>
+            {% else %}
+            <p style="color:var(--muted);font-size:.85rem;margin:0;">Операций не было</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Тикеты -->
+    <div class="card">
+        <div class="card-body">
+            <h3 style="color:#fff;font-weight:700;margin-bottom:1rem;font-size:1rem;">Тикеты поддержки</h3>
+            {% for t in tickets %}
+            <a href="/admin/support/{{ t.id }}" style="display:flex;justify-content:space-between;align-items:center;padding:.55rem 0;{% if not loop.last %}border-bottom:1px solid var(--border);{% endif %}text-decoration:none;color:inherit;">
+                <div style="min-width:0;">
+                    <div style="color:#fff;font-size:.85rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;">{{ t.subject }}</div>
+                    <div style="color:var(--muted);font-size:.72rem;">обновлён {{ (t.updated_at | localtime).strftime('%d.%m.%Y %H:%M') }}</div>
+                </div>
+                {% if t.status.value == 'open' %}<span class="badge badge-mid" style="font-size:.68rem;flex-shrink:0;">Ожидает</span>
+                {% elif t.status.value == 'answered' %}<span class="badge badge-on" style="font-size:.68rem;flex-shrink:0;">Отвечен</span>
+                {% else %}<span class="badge badge-neutral" style="font-size:.68rem;flex-shrink:0;">Закрыт</span>{% endif %}
+            </a>
+            {% else %}
+            <p style="color:var(--muted);font-size:.85rem;margin:0;">Обращений не было</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Рефералы -->
+    <div class="card">
+        <div class="card-body">
+            <h3 style="color:#fff;font-weight:700;margin-bottom:1rem;font-size:1rem;">Приглашённые ({{ referrals_total }})</h3>
+            {% for r in referrals %}
+            <a href="/admin/users/{{ r.id }}" style="display:flex;justify-content:space-between;align-items:center;padding:.55rem 0;{% if not loop.last %}border-bottom:1px solid var(--border);{% endif %}text-decoration:none;color:inherit;">
+                <div style="color:#fff;font-size:.85rem;font-weight:600;">{{ r.display_name }}</div>
+                <div style="display:flex;align-items:center;gap:.5rem;">
+                    {% if r.referral_bonus_paid %}<span class="badge badge-on" style="font-size:.68rem;">Оплатил</span>{% endif %}
+                    <span style="color:var(--muted);font-size:.75rem;">{{ (r.created_at | localtime).strftime('%d.%m.%Y') }}</span>
+                </div>
+            </a>
+            {% else %}
+            <p style="color:var(--muted);font-size:.85rem;margin:0;">Никого не приглашал</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Модалки действий - те же, что на списке пользователей (users.html), с теми же
+     id элементов: JS-обработчики ниже написаны под них 1-в-1, чтобы поведение
+     кнопок на карточке и в списке никогда не расходилось. -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal-box">
+        <form method="POST" id="editForm">
+            <div class="modal-head">
+                <h3>Редактировать пользователя</h3>
+                <button type="button" class="modal-close" onclick="closeModal('editModal')"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div class="modal-body-c">
+                <label class="form-label">Email</label>
+                <input type="email" name="email" id="editEmail" style="margin-bottom:1rem;">
+                <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;color:#9aa5ba;font-size:.88rem;">
+                    <input type="checkbox" name="is_admin" id="editIsAdmin" value="true" style="width:auto;">
+                    Права администратора
+                </label>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn btn-outline-1" onclick="closeModal('editModal')">Отмена</button>
+                <button type="submit" class="btn btn-accent">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal-overlay" id="grantModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Выдать подписку</h3>
+            <button type="button" class="modal-close" onclick="closeModal('grantModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c">
+            <p style="color:#9aa5ba;font-size:.88rem;margin-bottom:1rem;">Выдать подписку для <strong id="grantUserName" style="color:#fff;"></strong></p>
+            <label class="form-label">Тарифный план</label>
+            <select id="grantPlanSelect" style="margin-bottom:.9rem;">
+                {% for key, plan in plans.items() %}
+                <option value="{{ key }}">{{ plan.name }} — {{ plan.days }} дней</option>
+                {% endfor %}
+            </select>
+            <label class="form-label">Лимит трафика</label>
+            <select id="grantTrafficSelect" style="margin-bottom:.3rem;">
+                <option value="50">50 GB</option>
+                <option value="0">Безлимит</option>
+            </select>
+            <p style="color:var(--muted);font-size:.78rem;margin-top:.5rem;">Будет создан новый независимый VPN-аккаунт — отдельный от других подписок этого пользователя.</p>
+        </div>
+        <div class="modal-foot">
+            <button type="button" class="btn btn-outline-1" onclick="closeModal('grantModal')">Отмена</button>
+            <button type="button" class="btn btn-accent" id="confirmGrantBtn">Выдать</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="deleteModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Удалить пользователя?</h3>
+            <button type="button" class="modal-close" onclick="closeModal('deleteModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c">
+            <p style="color:#9aa5ba;font-size:.9rem;line-height:1.5;">Вы собираетесь удалить <strong id="deleteUserName" style="color:#fff;"></strong>. Это действие необратимо: будут удалены все подписки, платежи и аккаунт в Remnawave.</p>
+        </div>
+        <div class="modal-foot">
+            <button type="button" class="btn btn-outline-1" onclick="closeModal('deleteModal')">Отмена</button>
+            <button type="button" class="btn btn-danger-1" id="confirmDeleteBtn">Удалить навсегда</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let pendingDeleteId = null;
+let pendingGrantId = null;
+
+document.addEventListener('click', async function(e) {
+    const editBtn = e.target.closest('.js-edit-btn');
+    if (editBtn) {
+        document.getElementById('editForm').action = '/admin/users/' + editBtn.dataset.id + '/edit';
+        document.getElementById('editEmail').value = editBtn.dataset.email || '';
+        document.getElementById('editIsAdmin').checked = editBtn.dataset.isadmin === 'true';
+        openModal('editModal');
+        return;
+    }
+
+    const grantBtn = e.target.closest('.js-grant-btn');
+    if (grantBtn) {
+        pendingGrantId = grantBtn.dataset.id;
+        document.getElementById('grantUserName').textContent = grantBtn.dataset.name;
+        openModal('grantModal');
+        return;
+    }
+
+    const deleteBtn = e.target.closest('.js-delete-btn');
+    if (deleteBtn) {
+        pendingDeleteId = deleteBtn.dataset.id;
+        document.getElementById('deleteUserName').textContent = deleteBtn.dataset.name;
+        openModal('deleteModal');
+        return;
+    }
+
+    const banBtn = e.target.closest('.js-ban-btn');
+    if (banBtn) {
+        banBtn.disabled = true;
+        try {
+            const res = await fetch('/admin/users/' + banBtn.dataset.id + '/ban', { method: 'POST' });
+            if (res.ok) { location.reload(); }
+            else {
+                let errMsg = 'HTTP ' + res.status;
+                try { errMsg = (await res.json()).error || errMsg; } catch (_) {}
+                showError('Не удалось изменить статус: ' + errMsg);
+                banBtn.disabled = false;
+            }
+        } catch (err) { showError('Сетевая ошибка: ' + err.message); banBtn.disabled = false; }
+        return;
+    }
+
+    const confirmGrantBtn = e.target.closest('#confirmGrantBtn');
+    if (confirmGrantBtn) {
+        confirmGrantBtn.disabled = true;
+        confirmGrantBtn.textContent = 'Выдаём…';
+        try {
+            const formData = new FormData();
+            formData.append('plan_key', document.getElementById('grantPlanSelect').value);
+            formData.append('traffic_gb', document.getElementById('grantTrafficSelect').value);
+            const res = await fetch('/admin/users/' + pendingGrantId + '/grant-subscription', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.ok) {
+                closeModal('grantModal');
+                showSuccess('Подписка успешно выдана');
+                setTimeout(() => location.reload(), 1200);
+            } else {
+                showError('Не удалось выдать подписку: ' + (data.error || 'неизвестная ошибка'));
+            }
+        } catch (err) { showError('Сетевая ошибка: ' + err.message); }
+        confirmGrantBtn.disabled = false;
+        confirmGrantBtn.textContent = 'Выдать';
+        return;
+    }
+
+    const confirmBtn = e.target.closest('#confirmDeleteBtn');
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Удаление…';
+        try {
+            const res = await fetch('/admin/users/' + pendingDeleteId + '/delete', { method: 'POST' });
+            const data = await res.json();
+            if (data.ok) {
+                // Пользователя больше нет - его карточка тоже, уходим в список
+                window.location.href = '/admin/users';
+            } else {
+                showError('Не удалось удалить: ' + (data.error || 'неизвестная ошибка сервера'));
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Удалить навсегда';
+            }
+        } catch (err) {
+            showError('Сетевая ошибка: ' + err.message);
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Удалить навсегда';
+        }
+        return;
+    }
+});
+</script>
+{% endblock %}

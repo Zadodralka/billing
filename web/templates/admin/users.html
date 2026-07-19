@@ -24,7 +24,7 @@
         <tbody id="usersBody">
             {% for u in users %}
             <tr id="user-row-{{ u.id }}" data-row-for="{{ u.id }}">
-                <td class="mono" style="color:var(--muted);font-size:.8rem;">#{{ u.id }}</td>
+                <td class="mono" style="font-size:.8rem;"><a href="/admin/users/{{ u.id }}">#{{ u.id }}</a></td>
                 <td>
                     {% if u.telegram_username %}<a href="https://t.me/{{ u.telegram_username }}" target="_blank">@{{ u.telegram_username }}</a>
                     {% elif u.telegram_id %}<span class="mono" style="color:var(--muted);font-size:.8rem;">{{ u.telegram_id }}</span>
@@ -44,6 +44,9 @@
                 </td>
                 <td>
                     <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
+                        <a href="/admin/users/{{ u.id }}" class="btn btn-sm btn-outline-1" title="Карточка пользователя">
+                            <i class="bi bi-person-lines-fill"></i>
+                        </a>
                         <button type="button" class="btn btn-sm btn-outline-1 js-edit-btn"
                             data-id="{{ u.id }}" data-email="{{ u.email or '' }}" data-isadmin="{{ 'true' if u.is_admin else 'false' }}">
                             <i class="bi bi-pencil"></i>
@@ -96,6 +99,9 @@
         </div>
         <div class="data-card-row"><span class="k">Регистрация</span><span class="v">{{ (u.created_at | localtime).strftime('%d.%m.%Y') }}</span></div>
         <template class="data-card-actions-tpl">
+            <a href="/admin/users/{{ u.id }}" class="btn btn-sm btn-outline-1">
+                <i class="bi bi-person-lines-fill"></i> Карточка пользователя
+            </a>
             <button type="button" class="btn btn-sm btn-outline-1 js-edit-btn"
                 data-id="{{ u.id }}" data-email="{{ u.email or '' }}" data-isadmin="{{ 'true' if u.is_admin else 'false' }}">
                 <i class="bi bi-pencil"></i> Изменить
