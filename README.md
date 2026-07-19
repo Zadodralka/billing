@@ -223,6 +223,19 @@ psql "$DATABASE_URL" -f migrations/applied/имя_миграции.sql
 чтобы не путаться, какой билд сейчас в проде. Видна в подвале сайдбара
 администраторам в веб-кабинете.
 
+## Тесты
+
+Тесты гоняются на настоящем Postgres (не sqlite), нужна отдельная пустая БД:
+
+```bash
+createdb billing_test   # или CREATE DATABASE billing_test; через psql
+TEST_DATABASE_URL=postgresql+asyncpg://user:pass@localhost/billing_test pytest
+```
+
+Без переменной `TEST_DATABASE_URL` тесты, которым нужна БД, будут пропущены
+(а не упадут). Схема создаётся автоматически, каждая проверка стартует с
+чистых таблиц. Внешние API (Remnawave, Telegram) в тестах замоканы.
+
 ## Бэкап и восстановление на другом сервере
 
 Скрипты в `scripts/` собирают всё, что не лежит в git и нужно для быстрого
