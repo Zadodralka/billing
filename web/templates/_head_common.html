@@ -54,6 +54,28 @@
     // Сообщаем Telegram, что mini app загрузился (убирает его спиннер поверх
     // страницы). Вне Telegram window.Telegram отсутствует - ничего не делаем.
     if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData !== undefined) {
-        window.Telegram.WebApp.ready();
+        var _tg = window.Telegram.WebApp;
+        _tg.ready();
+
+        // Полноэкранный запуск mini app (настройка в BotFather) хорош на телефоне,
+        // но Telegram Desktop с той же настройкой открывает огромное несдвигаемое
+        // окно во весь экран. Возвращаем ДЕСКТОПНЫЕ клиенты в обычное оконное
+        // состояние, мобильные (android/ios) не трогаем.
+        var _tgMobile = _tg.platform === 'android' || _tg.platform === 'ios';
+        function _tgExitDesktopFullscreen() {
+            if (!_tgMobile && _tg.isFullscreen && _tg.exitFullscreen) {
+                try { _tg.exitFullscreen(); } catch (e) { /* старый клиент без метода */ }
+            }
+        }
+        _tgExitDesktopFullscreen();
+        // Telegram может применить полноэкранный режим чуть ПОЗЖЕ загрузки страницы -
+        // ловим событие, но только первые 3 секунды: дальше не мешаем пользователю,
+        // если он сам разворачивает окно кнопкой Telegram.
+        if (_tg.onEvent) {
+            _tg.onEvent('fullscreenChanged', _tgExitDesktopFullscreen);
+            setTimeout(function () {
+                if (_tg.offEvent) _tg.offEvent('fullscreenChanged', _tgExitDesktopFullscreen);
+            }, 3000);
+        }
     }
 </script>
