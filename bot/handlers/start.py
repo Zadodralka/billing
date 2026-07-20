@@ -7,7 +7,7 @@ from sqlalchemy import select, func
 from core.models import User
 from core.config import settings
 from core.telegram_login import confirm_token
-from bot.keyboards.main import terms_keyboard, terms_keyboard_for_login, main_menu, back_to_menu
+from bot.keyboards.main import terms_keyboard, terms_keyboard_for_login, main_menu, back_to_menu, open_webapp_keyboard
 
 router = Router()
 
@@ -77,9 +77,12 @@ async def _confirm_login_token(token: str, tg_user, reply_target: Message):
     data = await confirm_token(token, tg_user.id, tg_user.username, tg_user.first_name)
 
     if not data:
+        # Кнопка mini app - самый простой выход из тупика: не нужно возвращаться
+        # на сайт за новой ссылкой, кабинет откроется сразу с автовходом.
         await reply_target.answer(
             "⚠️ Эта ссылка для входа уже недействительна (устарела или уже использована).\n"
-            "Вернитесь на сайт и запросите новую."
+            "Просто откройте личный кабинет кнопкой ниже — вход произойдёт автоматически.",
+            reply_markup=open_webapp_keyboard(),
         )
         return
 
@@ -89,9 +92,16 @@ async def _confirm_login_token(token: str, tg_user, reply_target: Message):
             parse_mode="HTML",
         )
     else:
+        # "Вернитесь в браузер" работает, только если вкладка с сайтом ещё жива.
+        # На телефоне встроенный браузер часто закрывается при переходе в чат -
+        # тогда человек оставался в тупике ("вход подтверждён", а кабинета нет).
+        # Кнопка mini app закрывает этот сценарий: тап - и он в кабинете.
         await reply_target.answer(
-            "✅ <b>Вход подтверждён!</b>\n\nВернитесь в браузер — вы будете авторизованы автоматически.",
+            "✅ <b>Вход подтверждён!</b>\n\n"
+            "Если вы входили в браузере — вернитесь в него, вы уже авторизованы.\n"
+            "Или просто откройте кабинет кнопкой ниже:",
             parse_mode="HTML",
+            reply_markup=open_webapp_keyboard(),
         )
 
 

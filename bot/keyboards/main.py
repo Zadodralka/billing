@@ -1,4 +1,4 @@
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from core.config import settings
 
 
@@ -31,8 +31,13 @@ def main_menu(is_admin: bool = False) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="💰 Баланс и бонусы", callback_data="menu:balance"),
         ],
         [
-            InlineKeyboardButton(text="🌐 Личный кабинет", url=settings.webapp_url),
-            InlineKeyboardButton(text="📖 Инструкции", url=f"{settings.webapp_url}/docs"),
+            # web_app, а не url: обычная URL-кнопка открывает сайт во встроенном
+            # браузере Telegram БЕЗ initData - автовход не срабатывает, человек
+            # упирается в экран логина и не понимает, что делать. Mini App-кнопка
+            # открывает кабинет с мгновенной авторизацией через initData
+            # (см. /auth/telegram-webapp) - ноль лишних шагов.
+            InlineKeyboardButton(text="🌐 Личный кабинет", web_app=WebAppInfo(url=settings.webapp_url)),
+            InlineKeyboardButton(text="📖 Инструкции", web_app=WebAppInfo(url=f"{settings.webapp_url}/docs")),
         ],
         [
             InlineKeyboardButton(text="💬 Поддержка", callback_data="support:menu"),
@@ -75,4 +80,14 @@ def payment_keyboard(payment_url: str, label: str) -> InlineKeyboardMarkup:
 def back_to_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="← Главное меню", callback_data="menu:main")],
+    ])
+
+
+def open_webapp_keyboard() -> InlineKeyboardMarkup:
+    """Одна Mini App-кнопка "открыть кабинет" - для сообщений подтверждения входа:
+    если человек начинал вход из браузера, а вкладка уже умерла (частый случай на
+    телефоне - встроенный браузер закрывается при переходе в чат бота), ему не
+    нужно ничего искать: тап по кнопке открывает mini app с автовходом."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🌐 Открыть личный кабинет", web_app=WebAppInfo(url=settings.webapp_url))],
     ])
