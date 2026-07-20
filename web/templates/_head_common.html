@@ -13,6 +13,13 @@
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+{# SDK Telegram Mini Apps. Нужен ради CSS-переменных --tg-safe-area-inset-* и
+   --tg-content-safe-area-inset-*, которые Telegram проставляет на :root в
+   полноэкранном режиме mini app (Bot API 8.0+) - без них наш верхний бар
+   оказывается под системным статус-баром и плавающими кнопками Telegram.
+   В обычном браузере скрипт безвреден: переменные просто не появятся, и
+   --tg-top-offset ниже схлопнется в 0. #}
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
     :root {
         --bg: #0a0e14; --panel: #12161f; --panel-2: #161b26; --panel-3: #1a202c;
@@ -22,6 +29,11 @@
         --danger: #ef5b5b; --danger-soft: rgba(239, 91, 91, .1);
         --gold: #f5bf42; --gold-soft: rgba(245, 191, 66, .1);
         --radius: 16px; --radius-sm: 10px;
+        /* Суммарный отступ сверху в полноэкранном Telegram mini app:
+           системный статус-бар (safe-area) + шапка с кнопками Telegram
+           (content-safe-area). Вне Telegram обе переменные не определены,
+           фоллбэки дают 0px - обычные браузеры ничего не замечают. */
+        --tg-top-offset: calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
     }
     * { box-sizing: border-box; }
     /* Системный скроллбар (обычно светлый и широкий) резал глаз на тёмной теме -
@@ -38,3 +50,10 @@
     a { color: var(--blue); text-decoration: none; }
     button { font-family: inherit; }
 </style>
+<script>
+    // Сообщаем Telegram, что mini app загрузился (убирает его спиннер поверх
+    // страницы). Вне Telegram window.Telegram отсутствует - ничего не делаем.
+    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData !== undefined) {
+        window.Telegram.WebApp.ready();
+    }
+</script>

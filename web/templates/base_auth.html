@@ -10,7 +10,11 @@
            оплаты) - центрированная карточка на точечном фоне, без сайдбара. */
         body {
             display: flex; align-items: center; justify-content: center;
-            padding: 1.5rem; position: relative; overflow: hidden;
+            position: relative; overflow: hidden;
+            /* Верхний отступ учитывает шапку Telegram в полноэкранном mini app
+               (--tg-top-offset из _head_common.html, 0 вне Telegram) - иначе на
+               невысоких экранах верх карточки уходил бы под кнопки Telegram. */
+            padding: calc(1.5rem + var(--tg-top-offset)) 1.5rem 1.5rem;
         }
         body::before {
             content: ''; position: absolute; inset: 0;

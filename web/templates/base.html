@@ -11,6 +11,9 @@
             width: 252px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border);
             position: fixed; top: 0; left: 0; bottom: 0; display: flex; flex-direction: column; z-index: 100;
             overflow-y: auto;
+            /* В полноэкранном Telegram mini app сайдбар начинается под шапкой
+               Telegram, а не под системным статус-баром (0 вне Telegram) */
+            padding-top: var(--tg-top-offset);
         }
         .sidebar .brand {
             padding: 1.5rem 1.5rem 1.25rem; font-size: 1.1rem; font-weight: 700; color: #fff;
@@ -40,7 +43,7 @@
         .nav-link.active { background: var(--accent-soft); color: var(--accent); }
         .sidebar-footer { margin-top: auto; padding: 1rem .75rem; border-top: 1px solid var(--border); }
 
-        .main { margin-left: 252px; flex: 1; padding: 2rem 2.5rem 3rem; max-width: 100%; min-width: 0; }
+        .main { margin-left: 252px; flex: 1; padding: calc(2rem + var(--tg-top-offset)) 2.5rem 3rem; max-width: 100%; min-width: 0; }
         .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.75rem; flex-wrap: wrap; gap: 1rem; }
         .topbar h1 { font-size: 1.45rem; font-weight: 700; color: #fff; }
         .topbar .sub { color: var(--muted); font-size: .85rem; margin-top: .25rem; }
@@ -210,7 +213,12 @@
             .main { margin-left: 0; padding: 1rem 1rem 2.5rem; }
             .mobile-topbar {
                 display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 90;
-                background: var(--panel); border-bottom: 1px solid var(--border); padding: .85rem 1rem; margin: -1rem -1rem 1.25rem;
+                background: var(--panel); border-bottom: 1px solid var(--border); margin: -1rem -1rem 1.25rem;
+                /* Отступ прямо ВНУТРИ бара (а не снаружи): sticky-шапка липнет к
+                   top:0 вьюпорта, и при прокрутке контент бара должен оставаться
+                   ниже плавающих кнопок Telegram - внешний отступ при скролле
+                   уехал бы вместе со страницей. Вне Telegram offset равен 0. */
+                padding: calc(.85rem + var(--tg-top-offset)) 1rem .85rem;
             }
             .mobile-topbar .brand { font-size: 1rem; font-weight: 700; color: #fff; display: flex; gap: .5rem; align-items: center; }
             .mobile-burger {
