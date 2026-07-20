@@ -62,6 +62,41 @@
 
 {% block extra_scripts %}
 <script>
+// ── Автовход внутри Telegram Mini App ──
+// Telegram при каждом открытии mini app передаёт странице подписанные ботом
+// данные пользователя (initData). Отправляем их на сервер, тот сверяет
+// подпись и сразу ставит сессию - без кнопок и без перехода в чат бота
+// (переход по t.me-ссылке закрывает mini app, из-за чего старый диплинк-флоу
+// внутри mini app не мог довести вход до конца: бот подтверждал, а страница
+// с поллингом уже была мертва). В обычном браузере initData пуст - блок
+// молча не делает ничего, остаются кнопки ниже.
+(async function tgWebAppAutoLogin() {
+    const initData = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData;
+    if (!initData) return;
+
+    const statusEl = document.getElementById('tgBotLoginStatus');
+    const btn = document.getElementById('tgBotLoginBtn');
+    if (btn) btn.disabled = true;
+    if (statusEl) statusEl.textContent = 'Входим через Telegram…';
+
+    try {
+        const fd = new FormData();
+        fd.append('init_data', initData);
+        const res = await fetch('/auth/telegram-webapp', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.ok) {
+            if (statusEl) statusEl.textContent = '✅ Готово, переходим…';
+            window.location.href = data.redirect || '/dashboard';
+            return;
+        }
+        // Подпись не подтвердилась - оставляем обычные способы входа как фоллбэк
+        if (statusEl) statusEl.textContent = data.error || 'Автовход не сработал, войдите вручную';
+    } catch (e) {
+        if (statusEl) statusEl.textContent = 'Автовход не сработал, войдите вручную';
+    }
+    if (btn) btn.disabled = false;
+})();
+
 let tgLoginPollInterval = null;
 
 async function startTelegramBotLogin() {

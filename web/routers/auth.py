@@ -12,7 +12,12 @@ from core.email import send_magic_link
 from core.config import settings
 from core.version import APP_VERSION
 from core.timezone import to_local
-from core.telegram_login import create_token as create_tg_login_token, get_token_data as get_tg_login_data, consume_token as consume_tg_login_token
+from core.telegram_login import (
+    create_token as create_tg_login_token,
+    get_token_data as get_tg_login_data,
+    consume_token as consume_tg_login_token,
+    validate_webapp_init_data,
+)
 
 logger = logging.getLogger("auth")
 
@@ -276,6 +281,30 @@ async def telegram_login_status(token: str, request: Request, session: AsyncSess
     await consume_tg_login_token(token)
     request.session["user_id"] = user.id
     return {"status": "confirmed", "redirect": "/dashboard"}
+
+
+@router.post("/telegram-webapp")
+async def telegram_webapp_login(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    init_data: str = Form(...),
+):
+    """Мгновенный вход из Telegram Mini App: страница логина шлёт сюда
+    Telegram.WebApp.initData, подпись проверяется токеном бота - никакого
+    перехода в чат бота (который закрывает mini app и обрывает старый
+    диплинк-флоу) не требуется."""
+    data = validate_webapp_init_data(init_data)
+    if not data:
+        logger.warning("telegram_webapp_login: initData validation failed")
+        return {"ok": False, "error": "Не удалось подтвердить данные Telegram"}
+
+    user = await _find_or_create_telegram_user(data["telegram_id"], data.get("username"), request, session)
+    if user.is_banned:
+        return {"ok": False, "error": "Доступ заблокирован"}
+
+    request.session["user_id"] = user.id
+    logger.info(f"telegram_webapp_login: user {user.id} (tg {data['telegram_id']}) logged in via mini app initData")
+    return {"ok": True, "redirect": "/dashboard"}
 
 
 @router.get("/logout")
