@@ -68,8 +68,6 @@ async def dashboard(request: Request, user: User = Depends(require_user), sessio
         if s.expires_at and s.expires_at <= now + timedelta(days=EXPIRING_SOON_DAYS)
     ]
 
-    total_spent = sum(p.amount for p in user.payments if p.status == PaymentStatus.SUCCESS)
-
     return templates.TemplateResponse(request, "dashboard.html", {
         "user": user,
         "active_subs": active_subs,
@@ -80,6 +78,18 @@ async def dashboard(request: Request, user: User = Depends(require_user), sessio
         "now": now,
         "usage_map": usage_map,
         "expiring_soon": expiring_soon,
+    })
+
+
+@router.get("/profile", response_class=HTMLResponse)
+async def profile_page(request: Request, user: User = Depends(require_user), session: AsyncSession = Depends(get_db)):
+    result = await session.execute(
+        select(User).where(User.id == user.id).options(selectinload(User.payments))
+    )
+    user = result.scalar_one()
+    total_spent = sum(p.amount for p in user.payments if p.status == PaymentStatus.SUCCESS)
+    return templates.TemplateResponse(request, "profile.html", {
+        "user": user,
         "total_spent": total_spent,
     })
 

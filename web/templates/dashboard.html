@@ -3,28 +3,6 @@
 
 {% block extra_head %}
 <style>
-.stat-card-link { transition: border-color .15s; }
-.stat-card-link:hover { border-color: var(--accent); }
-
-/* ── Компактный ряд статистики на телефоне: обычные stat-card слишком высокие
-   и вынуждают долго скроллить до списка подписок - схлопываем в ряд из 4
-   маленьких плашек с иконкой вместо полноразмерных карточек. ── */
-.dash-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-.dash-stat-full { display: flex; justify-content: space-between; align-items: flex-start; }
-.dash-stat-compact { display: none; }
-@media (max-width: 600px) {
-    .dash-stats-grid { grid-template-columns: repeat(4, 1fr); gap: .4rem; }
-    .dash-stat-tile { padding: .1rem; }
-    .dash-stat-full { display: none; }
-    .dash-stat-compact {
-        display: flex; flex-direction: column; align-items: center; gap: .3rem;
-        padding: .6rem .1rem; text-align: center;
-    }
-    .dash-stat-compact .icon-badge { width: 28px; height: 28px; font-size: .82rem; border-radius: 8px; }
-    .dash-stat-compact .compact-value { font-size: .72rem; font-weight: 700; color: #fff; line-height: 1.1; white-space: nowrap; }
-    .dash-stat-compact .compact-label { font-size: .54rem; color: var(--muted); text-transform: uppercase; letter-spacing: .01em; white-space: nowrap; }
-}
-
 /* ── Сетка карточек ── */
 .subs-grid {
     display: grid;
@@ -326,152 +304,17 @@
 </div>
 {% endif %}
 
-<div class="dash-stats-grid">
-    <div class="card stat-card dash-stat-tile">
-        <div class="dash-stat-full">
-            <div><div class="label">Активных подписок</div><div class="value">{{ active_subs|length }}</div></div>
-            <div class="icon-badge" style="background:var(--accent-soft);color:var(--accent);"><i class="bi bi-broadcast"></i></div>
-        </div>
-        <div class="dash-stat-compact">
-            <div class="icon-badge" style="background:var(--accent-soft);color:var(--accent);"><i class="bi bi-broadcast"></i></div>
-            <div class="compact-value">{{ active_subs|length }}</div>
-            <div class="compact-label">Подписки</div>
-        </div>
+{# Баланс - реальные деньги (реферальные бонусы), которые можно потратить при
+   покупке/продлении на странице тарифов - поэтому остаётся на главной, в
+   отличие от количества подписок/суммы трат/даты регистрации (эта информация
+   не помогает решить что-то прямо сейчас, перенесена в профиль). #}
+<a href="/dashboard/referral" class="card quick-connect-card" style="display:flex;text-decoration:none;">
+    <div class="icon-badge" style="background:var(--gold-soft);color:var(--gold);width:44px;height:44px;font-size:1.25rem;flex-shrink:0;"><i class="bi bi-wallet2"></i></div>
+    <div class="quick-connect-info">
+        <div class="quick-connect-title">Баланс: <span style="color:var(--accent);">{{ user.balance }} ₽</span></div>
+        <div class="quick-connect-sub">Спишется при оплате подписки — пригласить друга →</div>
     </div>
-    <a href="/dashboard/referral" class="card stat-card stat-card-link dash-stat-tile" style="display:block;">
-        <div class="dash-stat-full">
-            <div>
-                <div class="label">Баланс</div>
-                <div class="value" style="color:var(--accent);">{{ user.balance }} ₽</div>
-                <div style="color:var(--muted);font-size:.74rem;margin-top:.2rem;">Пригласить друга →</div>
-            </div>
-            <div class="icon-badge" style="background:var(--gold-soft);color:var(--gold);"><i class="bi bi-wallet2"></i></div>
-        </div>
-        <div class="dash-stat-compact">
-            <div class="icon-badge" style="background:var(--gold-soft);color:var(--gold);"><i class="bi bi-wallet2"></i></div>
-            <div class="compact-value" style="color:var(--accent);">{{ user.balance }}₽</div>
-            <div class="compact-label">Баланс</div>
-        </div>
-    </a>
-    <div class="card stat-card dash-stat-tile">
-        <div class="dash-stat-full">
-            <div><div class="label">Потрачено всего</div><div class="value">{{ total_spent }} ₽</div></div>
-            <div class="icon-badge" style="background:var(--blue-soft);color:var(--blue);"><i class="bi bi-cash-coin"></i></div>
-        </div>
-        <div class="dash-stat-compact">
-            <div class="icon-badge" style="background:var(--blue-soft);color:var(--blue);"><i class="bi bi-cash-coin"></i></div>
-            <div class="compact-value">{{ total_spent }}₽</div>
-            <div class="compact-label">Потрачено</div>
-        </div>
-    </div>
-    <div class="card stat-card dash-stat-tile">
-        <div class="dash-stat-full">
-            <div><div class="label">С нами с</div><div class="value" style="font-size:1.3rem;">{{ (user.created_at | localtime).strftime('%d.%m.%Y') }}</div></div>
-            <div class="icon-badge" style="background:var(--panel-3);color:var(--muted);"><i class="bi bi-calendar-heart"></i></div>
-        </div>
-        <div class="dash-stat-compact">
-            <div class="icon-badge" style="background:var(--panel-3);color:var(--muted);"><i class="bi bi-calendar-heart"></i></div>
-            <div class="compact-value">{{ (user.created_at | localtime).strftime('%m.%y') }}</div>
-            <div class="compact-label">С нами</div>
-        </div>
-    </div>
-</div>
-
-{# Карточка показывается ВСЕГДА (раньше - только пока не привязан один из
-   способов входа): помимо привязки Telegram/email здесь живёт генерация
-   одноразового кода для входа на другом устройстве, а она нужна как раз
-   тем, у кого всё давно привязано. #}
-<div class="card" style="padding:0;margin-bottom:1.5rem;overflow:hidden;">
-    <div style="padding:1.1rem 1.3rem .9rem;">
-        <div style="color:#fff;font-weight:700;font-size:.92rem;margin-bottom:.2rem;">Способы входа</div>
-        <div style="color:var(--muted);font-size:.82rem;">
-            {% if not user.email or not user.telegram_id %}
-            Привяжите оба способа, чтобы заходить и по почте, и через Telegram
-            {% else %}
-            Оба способа привязаны — здесь же можно получить код для входа на другом устройстве
-            {% endif %}
-        </div>
-    </div>
-    <div class="sub-actions">
-        {% if user.telegram_id %}
-        <div class="sub-action-row" style="cursor:default;">
-            <span class="sub-action-icon" style="color:var(--accent);"><i class="bi bi-telegram"></i></span>
-            <span class="sub-action-text"><span class="sub-action-title">Telegram привязан</span>{% if user.telegram_username %}<span class="sub-action-sub">@{{ user.telegram_username }}</span>{% endif %}</span>
-            <i class="bi bi-check2-circle" style="color:var(--accent);"></i>
-        </div>
-        {% else %}
-        <button type="button" class="sub-action-row" id="linkTelegramBtn" onclick="startLinkTelegram()">
-            <span class="sub-action-icon"><i class="bi bi-telegram"></i></span>
-            <span class="sub-action-text"><span class="sub-action-title">Привязать Telegram</span></span>
-            <i class="bi bi-chevron-right sub-action-chevron"></i>
-        </button>
-        {% endif %}
-        {% if user.email %}
-        <div class="sub-action-row" style="cursor:default;">
-            <span class="sub-action-icon" style="color:var(--accent);"><i class="bi bi-envelope"></i></span>
-            <span class="sub-action-text"><span class="sub-action-title">{{ user.email }}</span></span>
-            <i class="bi bi-check2-circle" style="color:var(--accent);"></i>
-        </div>
-        {% else %}
-        <button type="button" class="sub-action-row" onclick="openModal('linkEmailModal')">
-            <span class="sub-action-icon"><i class="bi bi-envelope"></i></span>
-            <span class="sub-action-text"><span class="sub-action-title">Привязать email</span></span>
-            <i class="bi bi-chevron-right sub-action-chevron"></i>
-        </button>
-        {% endif %}
-        <button type="button" class="sub-action-row" onclick="generateDeviceCode()">
-            <span class="sub-action-icon"><i class="bi bi-laptop"></i></span>
-            <span class="sub-action-text">
-                <span class="sub-action-title">Код для входа на другом устройстве</span>
-                <span class="sub-action-sub">Без Telegram и почты на той машине</span>
-            </span>
-            <i class="bi bi-chevron-right sub-action-chevron"></i>
-        </button>
-    </div>
-    <div id="linkTelegramStatus" style="font-size:.8rem;padding:.6rem 1.3rem 0;"></div>
-</div>
-
-<div class="modal-overlay" id="deviceCodeModal">
-    <div class="modal-box">
-        <div class="modal-head">
-            <h3>Вход на другом устройстве</h3>
-            <button type="button" class="modal-close" onclick="closeModal('deviceCodeModal')"><i class="bi bi-x-lg"></i></button>
-        </div>
-        <div class="modal-body-c" style="text-align:center;">
-            <p style="color:#9aa5ba;font-size:.88rem;margin-bottom:1rem;">
-                На другом устройстве откройте страницу входа, нажмите
-                «У меня есть код с другого устройства» и введите:
-            </p>
-            <div id="deviceCodeDisplay" class="mono"
-                 style="font-size:1.9rem;font-weight:700;letter-spacing:.18em;color:var(--accent);background:var(--panel-2);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:.8rem;user-select:all;">
-                …
-            </div>
-            <p style="color:var(--muted);font-size:.8rem;margin:0;">
-                Код одноразовый, действует <strong id="deviceCodeTtl" style="color:var(--text);">5:00</strong>
-            </p>
-        </div>
-        <div class="modal-foot" style="justify-content:center;">
-            <button type="button" class="btn btn-outline-1" onclick="closeModal('deviceCodeModal')">Закрыть</button>
-        </div>
-    </div>
-</div>
-
-<div class="modal-overlay" id="linkEmailModal">
-    <div class="modal-box">
-        <div class="modal-head">
-            <h3>Привязать email</h3>
-            <button type="button" class="modal-close" onclick="closeModal('linkEmailModal')"><i class="bi bi-x-lg"></i></button>
-        </div>
-        <div class="modal-body-c">
-            <label class="form-label">Email адрес</label>
-            <input type="email" id="linkEmailInput" placeholder="your@email.com" style="margin-bottom:.8rem;">
-            <div id="linkEmailStatus" style="font-size:.82rem;min-height:1.2em;margin-bottom:.6rem;"></div>
-            <button type="button" class="btn btn-accent" style="width:100%;" onclick="submitLinkEmail()">
-                Отправить письмо для подтверждения
-            </button>
-        </div>
-    </div>
-</div>
+</a>
 
 {% set all_visible_subs = active_subs + paused_subs %}
 
@@ -896,123 +739,6 @@ function startPolling(label) {
         const status = await check.json();
         if (status.paid) { clearInterval(paymentPollInterval); location.reload(); }
     }, 8000);
-}
-
-let linkTgPollInterval = null;
-
-let deviceCodeTimer = null;
-
-async function generateDeviceCode() {
-    try {
-        const res = await fetch('/auth/device-code/create', { method: 'POST' });
-        const data = await res.json();
-        if (!data.ok) {
-            showError(data.error || 'Не удалось создать код');
-            return;
-        }
-        document.getElementById('deviceCodeDisplay').textContent = data.code;
-        openModal('deviceCodeModal');
-
-        // Обратный отсчёт срока жизни кода прямо в модалке
-        if (deviceCodeTimer) clearInterval(deviceCodeTimer);
-        let left = data.ttl_seconds;
-        const ttlEl = document.getElementById('deviceCodeTtl');
-        const tick = () => {
-            const m = Math.floor(left / 60), s = left % 60;
-            ttlEl.textContent = m + ':' + String(s).padStart(2, '0');
-            if (left <= 0) {
-                clearInterval(deviceCodeTimer);
-                document.getElementById('deviceCodeDisplay').textContent = 'Код истёк';
-                ttlEl.textContent = '0:00';
-            }
-            left -= 1;
-        };
-        tick();
-        deviceCodeTimer = setInterval(tick, 1000);
-    } catch (e) {
-        showError('Сетевая ошибка: ' + e.message);
-    }
-}
-
-async function startLinkTelegram() {
-    const btn = document.getElementById('linkTelegramBtn');
-    const statusEl = document.getElementById('linkTelegramStatus');
-    btn.disabled = true;
-    statusEl.textContent = 'Открываем Telegram…';
-    statusEl.style.color = 'var(--muted)';
-
-    let data;
-    try {
-        const res = await fetch('/dashboard/link-telegram/start', { method: 'POST' });
-        data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Не удалось начать привязку');
-    } catch (e) {
-        statusEl.textContent = '❌ ' + e.message;
-        statusEl.style.color = '#ef5b5b';
-        btn.disabled = false;
-        return;
-    }
-
-    window.open(data.deep_link, '_blank');
-    const token = data.deep_link.split('start=tglogin_')[1];
-    statusEl.textContent = 'Подтвердите в открывшемся чате с ботом…';
-
-    if (linkTgPollInterval) clearInterval(linkTgPollInterval);
-    const deadline = Date.now() + 9 * 60 * 1000;
-    linkTgPollInterval = setInterval(async () => {
-        if (Date.now() > deadline) {
-            clearInterval(linkTgPollInterval);
-            statusEl.textContent = 'Время ожидания истекло, попробуйте снова';
-            btn.disabled = false;
-            return;
-        }
-        const check = await fetch('/dashboard/link-telegram/status/' + token);
-        const status = await check.json();
-        if (status.status === 'confirmed') {
-            clearInterval(linkTgPollInterval);
-            statusEl.textContent = '✅ Telegram привязан!';
-            statusEl.style.color = 'var(--accent)';
-            setTimeout(() => location.reload(), 900);
-        } else if (status.status === 'expired') {
-            clearInterval(linkTgPollInterval);
-            statusEl.textContent = 'Ссылка истекла, попробуйте снова';
-            btn.disabled = false;
-        } else if (status.status === 'error') {
-            clearInterval(linkTgPollInterval);
-            statusEl.textContent = '❌ ' + status.error;
-            statusEl.style.color = '#ef5b5b';
-            btn.disabled = false;
-        }
-    }, 2000);
-}
-
-async function submitLinkEmail() {
-    const input = document.getElementById('linkEmailInput');
-    const statusEl = document.getElementById('linkEmailStatus');
-    const email = input.value.trim();
-    if (!email) {
-        statusEl.textContent = 'Введите email';
-        statusEl.style.color = '#ef5b5b';
-        return;
-    }
-    statusEl.textContent = 'Отправляем…';
-    statusEl.style.color = 'var(--muted)';
-    try {
-        const formData = new FormData();
-        formData.append('email', email);
-        const res = await fetch('/dashboard/link-email', { method: 'POST', body: formData });
-        const data = await res.json();
-        if (res.ok && data.ok) {
-            statusEl.textContent = '✅ ' + data.message;
-            statusEl.style.color = 'var(--accent)';
-        } else {
-            statusEl.textContent = '❌ ' + (data.detail || 'Не удалось отправить письмо');
-            statusEl.style.color = '#ef5b5b';
-        }
-    } catch (e) {
-        statusEl.textContent = '❌ Сетевая ошибка';
-        statusEl.style.color = '#ef5b5b';
-    }
 }
 
 document.addEventListener('click', async function(e) {
