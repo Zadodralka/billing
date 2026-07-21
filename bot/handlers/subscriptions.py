@@ -36,6 +36,20 @@ async def _load_active_subscriptions(user_id: int, session: AsyncSession) -> lis
     ]
 
 
+async def has_active_subscription(user_id: int, session: AsyncSession) -> bool:
+    """Лёгкая проверка для главного меню - показывать ли "Мои подписки"/"QR-код
+    подключения" вообще, без загрузки самих подписок."""
+    now = datetime.utcnow()
+    result = await session.execute(
+        select(Subscription.id).where(
+            Subscription.user_id == user_id,
+            Subscription.status == SubscriptionStatus.ACTIVE,
+            (Subscription.expires_at.is_(None)) | (Subscription.expires_at > now),
+        ).limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def _send_subscription_qr(target: Message, sub: Subscription, plan_name: str):
     """Отправляет QR-код + ссылку конфига для одной подписки. target.answer_photo используется
     и для обычных сообщений, и для callback.message - у обоих есть этот метод.
@@ -109,7 +123,7 @@ async def cb_my_subs(callback: CallbackQuery, user: User, session: AsyncSession)
             usage_line = f"\n📊 Использовано: {used_gb} GB{limit_part}"
 
         lines.append(f"\n<b>{i}. {plan_name}</b> · {traffic}\n📅 До {expires}{usage_line}")
-        buttons.append(subscription_actions_row(sub.id, i))
+        buttons.append(subscription_actions_row(sub.id))
 
     lines.append(f"\n🌐 Полное управление: <a href='{settings.webapp_url}/dashboard'>Личный кабинет</a>")
     buttons.append([InlineKeyboardButton(text="← Главное меню", callback_data="menu:main")])

@@ -8,6 +8,7 @@ from core.models import User
 from core.config import settings
 from core.telegram_login import confirm_token
 from bot.keyboards.main import terms_keyboard, terms_keyboard_for_login, main_menu, back_to_menu, open_webapp_keyboard
+from bot.handlers.subscriptions import has_active_subscription
 
 router = Router()
 
@@ -165,7 +166,7 @@ async def cmd_start(message: Message, command: CommandObject, user: User, sessio
     await message.answer(
         f"👋 С возвращением, {name}!\n\n" + WELCOME_TEXT,
         parse_mode="HTML",
-        reply_markup=main_menu(is_admin=_is_admin(user)),
+        reply_markup=main_menu(is_admin=_is_admin(user), has_active_sub=await has_active_subscription(user.id, session)),
     )
 
 
@@ -181,7 +182,7 @@ async def cb_accept_terms(callback: CallbackQuery, user: User, session: AsyncSes
         f"👋 Добро пожаловать, {name}!\n\n"
         + WELCOME_TEXT,
         parse_mode="HTML",
-        reply_markup=main_menu(is_admin=_is_admin(user)),
+        reply_markup=main_menu(is_admin=_is_admin(user), has_active_sub=await has_active_subscription(user.id, session)),
     )
     await callback.answer()
 
@@ -200,11 +201,11 @@ async def cb_accept_terms_login(callback: CallbackQuery, user: User, session: As
 
 # ===== Навигация главного меню =====
 @router.callback_query(F.data == "menu:main")
-async def cb_main_menu(callback: CallbackQuery, user: User):
+async def cb_main_menu(callback: CallbackQuery, user: User, session: AsyncSession):
     await callback.message.edit_text(
         WELCOME_TEXT,
         parse_mode="HTML",
-        reply_markup=main_menu(is_admin=_is_admin(user)),
+        reply_markup=main_menu(is_admin=_is_admin(user), has_active_sub=await has_active_subscription(user.id, session)),
     )
     await callback.answer()
 
@@ -283,5 +284,8 @@ HELP_TEXT = """
 
 
 @router.message(Command("help"))
-async def cmd_help(message: Message, user: User):
-    await message.answer(HELP_TEXT, parse_mode="HTML", reply_markup=main_menu(is_admin=_is_admin(user)))
+async def cmd_help(message: Message, user: User, session: AsyncSession):
+    await message.answer(
+        HELP_TEXT, parse_mode="HTML",
+        reply_markup=main_menu(is_admin=_is_admin(user), has_active_sub=await has_active_subscription(user.id, session)),
+    )

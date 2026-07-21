@@ -17,19 +17,23 @@ def terms_keyboard_for_login(token: str) -> InlineKeyboardMarkup:
     ])
 
 
-def main_menu(is_admin: bool = False) -> InlineKeyboardMarkup:
+def main_menu(is_admin: bool = False, has_active_sub: bool = False) -> InlineKeyboardMarkup:
     """Главное меню бота. is_admin добавляет отдельную кнопку входа в админ-меню -
     админские команды раньше были доступны только через слэш-команды (/stats,
-    /find, /broadcast), теперь то же самое доступно кнопками."""
+    /find, /broadcast), теперь то же самое доступно кнопками.
+
+    "Мои подписки" и "QR-код подключения" показываются только при наличии активной
+    подписки - без неё там нечего смотреть, а кнопки вели на пустой экран."""
+    row1 = [InlineKeyboardButton(text="💳 Купить подписку", callback_data="menu:buy")]
+    row2 = []
+    if has_active_sub:
+        row1.append(InlineKeyboardButton(text="📋 Мои подписки", callback_data="menu:subs"))
+        row2.append(InlineKeyboardButton(text="🔑 QR-код подключения", callback_data="menu:configs"))
+    row2.append(InlineKeyboardButton(text="💰 Баланс и бонусы", callback_data="menu:balance"))
+
     buttons = [
-        [
-            InlineKeyboardButton(text="💳 Купить подписку", callback_data="menu:buy"),
-            InlineKeyboardButton(text="📋 Мои подписки", callback_data="menu:subs"),
-        ],
-        [
-            InlineKeyboardButton(text="🔑 QR-код подключения", callback_data="menu:configs"),
-            InlineKeyboardButton(text="💰 Баланс и бонусы", callback_data="menu:balance"),
-        ],
+        row1,
+        row2,
         [
             # web_app, а не url: обычная URL-кнопка открывает сайт во встроенном
             # браузере Telegram БЕЗ initData - автовход не срабатывает, человек
@@ -59,13 +63,12 @@ def admin_menu() -> InlineKeyboardMarkup:
     ])
 
 
-def subscription_actions_row(sub_id: int, index: int) -> list[InlineKeyboardButton]:
-    """Ряд кнопок действий для одной подписки в списке — index (1, 2, ...) соответствует
-    порядковому номеру подписки в тексте сообщения, чтобы при нескольких активных
-    подписках было понятно, какая кнопка к какой из них относится."""
+def subscription_actions_row(sub_id: int) -> list[InlineKeyboardButton]:
+    """Ряд кнопок действий для одной подписки в списке — какая подписка имеется в виду,
+    видно по нумерации в тексте сообщения над кнопками (sub_id зашит в callback_data)."""
     return [
-        InlineKeyboardButton(text=f"🔑 Конфиг {index}", callback_data=f"sub:config:{sub_id}"),
-        InlineKeyboardButton(text=f"🔁 Продлить {index}", callback_data=f"sub:renew:{sub_id}"),
+        InlineKeyboardButton(text="🔑 Конфиг", callback_data=f"sub:config:{sub_id}"),
+        InlineKeyboardButton(text="🔁 Продлить", callback_data=f"sub:renew:{sub_id}"),
     ]
 
 

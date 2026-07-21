@@ -12,6 +12,7 @@ from core.yoomoney import yoomoney
 from core.remnawave import remnawave
 from bot.keyboards.main import payment_keyboard, main_menu
 from bot.handlers.start import WELCOME_TEXT
+from bot.handlers.subscriptions import has_active_subscription
 
 router = Router()
 
@@ -213,14 +214,17 @@ async def cb_check_payment(callback: CallbackQuery, user: User, session: AsyncSe
 
 
 @router.callback_query(F.data == "cancel")
-async def cb_cancel(callback: CallbackQuery, user: User):
+async def cb_cancel(callback: CallbackQuery, user: User, session: AsyncSession):
     # Раньше здесь было callback.message.delete() - сообщение с клавиатурой пропадало,
     # а никакого нового меню не показывалось, и пользователь оставался без единой кнопки
     # в чате (приходилось вручную набирать /start). Правим на возврат в главное меню.
     await callback.message.edit_text(
         "❌ Платёж отменён.\n\n" + WELCOME_TEXT,
         parse_mode="HTML",
-        reply_markup=main_menu(is_admin=user.telegram_id in settings.admin_ids),
+        reply_markup=main_menu(
+            is_admin=user.telegram_id in settings.admin_ids,
+            has_active_sub=await has_active_subscription(user.id, session),
+        ),
     )
     await callback.answer()
 
