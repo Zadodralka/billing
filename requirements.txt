@@ -14,7 +14,6 @@ aiohttp==3.10.11
 aiosmtplib==5.1.2
 itsdangerous==2.2.0
 passlib[bcrypt]==1.7.4
-python-jose[cryptography]==3.5.0
 redis==8.0.1
 APScheduler==3.11.3
 qrcode[pil]==8.2
@@ -22,7 +21,3 @@ Pillow==11.0.0
 Markdown==3.10.2
 pymdown-extensions==11.0.1
 nh3==0.3.6
-
-# Только для разработки/CI (не нужны в рантайме)
-pytest==9.1.1
-pytest-asyncio==1.4.0

@@ -225,9 +225,11 @@ psql "$DATABASE_URL" -f migrations/applied/имя_миграции.sql
 
 ## Тесты
 
-Тесты гоняются на настоящем Postgres (не sqlite), нужна отдельная пустая БД:
+Тесты гоняются на настоящем Postgres (не sqlite), нужна отдельная пустая БД.
+`pytest` не входит в боевые зависимости — ставится отдельно:
 
 ```bash
+pip install -r requirements-dev.txt
 createdb billing_test   # или CREATE DATABASE billing_test; через psql
 TEST_DATABASE_URL=postgresql+asyncpg://user:pass@localhost/billing_test pytest
 ```

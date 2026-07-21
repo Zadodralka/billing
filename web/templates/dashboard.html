@@ -250,6 +250,26 @@
 
 .sub-action-row:disabled { opacity: .55; cursor: default; }
 
+/* ── Быстрое подключение: когда активна ровно одна подписка, не заставляем
+   листать до карточки и открывать модалку ради самого частого действия -
+   показываем кнопку подключения сразу вверху страницы. Полная карточка с
+   QR/деталями остаётся ниже без изменений, это просто ярлык к ней же. ── */
+.quick-connect-card {
+    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+    padding: 1.1rem 1.3rem; margin-bottom: 1.5rem;
+    background: linear-gradient(135deg, rgba(61,220,132,.1) 0%, transparent 100%);
+    border-color: rgba(61,220,132,.3);
+}
+.quick-connect-info { flex: 1; min-width: 180px; }
+.quick-connect-title { color: #fff; font-weight: 700; font-size: .95rem; margin-bottom: .15rem; }
+.quick-connect-sub { color: var(--muted); font-size: .8rem; }
+.quick-connect-actions { display: flex; gap: .6rem; flex-shrink: 0; }
+@media (max-width: 480px) {
+    .quick-connect-card { padding: .9rem 1rem; }
+    .quick-connect-actions { width: 100%; }
+    .quick-connect-actions .btn { flex: 1; }
+}
+
 /* .payments-list/.payment-row - см. base.html (используется и в кабинете, и в рефералке) */
 </style>
 {% endblock %}
@@ -264,6 +284,21 @@
     </div>
     <a href="/dashboard/plans" class="btn btn-accent"><i class="bi bi-plus-lg"></i> Купить подписку</a>
 </div>
+
+{% set quick_sub = active_subs[0] if (active_subs|length == 1 and active_subs[0].config_link) else none %}
+{% if quick_sub %}
+<div class="card quick-connect-card">
+    <div class="icon-badge" style="background:var(--accent-soft);color:var(--accent);width:44px;height:44px;font-size:1.25rem;flex-shrink:0;"><i class="bi bi-lightning-charge-fill"></i></div>
+    <div class="quick-connect-info">
+        <div class="quick-connect-title">Быстрое подключение</div>
+        <div class="quick-connect-sub">{{ all_plans.get(quick_sub.plan_key, {}).get('name', quick_sub.plan_key) }}{% if quick_sub.expires_at %} · до {{ (quick_sub.expires_at | localtime).strftime('%d.%m.%Y') }}{% endif %}</div>
+    </div>
+    <div class="quick-connect-actions">
+        <button type="button" class="btn btn-outline-1" onclick="openSubModal('{{ quick_sub.id }}')"><i class="bi bi-qr-code"></i> QR и ссылка</button>
+        <a href="{{ quick_sub.config_link }}" target="_blank" class="btn btn-accent"><i class="bi bi-box-arrow-up-right"></i> Подключиться</a>
+    </div>
+</div>
+{% endif %}
 
 {% if expiring_soon %}
 <div class="card" style="padding:1rem 1.3rem;margin-bottom:1.5rem;border-color:rgba(245,191,66,.35);background:linear-gradient(135deg, rgba(245,191,66,.08) 0%, transparent 100%);">
