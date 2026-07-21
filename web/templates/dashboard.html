@@ -375,8 +375,41 @@
             <i class="bi bi-chevron-right sub-action-chevron"></i>
         </button>
         {% endif %}
+        <button type="button" class="sub-action-row" onclick="generateDeviceCode()">
+            <span class="sub-action-icon"><i class="bi bi-laptop"></i></span>
+            <span class="sub-action-text">
+                <span class="sub-action-title">Код для входа на другом устройстве</span>
+                <span class="sub-action-sub">Без Telegram и почты на той машине</span>
+            </span>
+            <i class="bi bi-chevron-right sub-action-chevron"></i>
+        </button>
     </div>
     <div id="linkTelegramStatus" style="font-size:.8rem;padding:.6rem 1.3rem 0;"></div>
+</div>
+
+<div class="modal-overlay" id="deviceCodeModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Вход на другом устройстве</h3>
+            <button type="button" class="modal-close" onclick="closeModal('deviceCodeModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c" style="text-align:center;">
+            <p style="color:#9aa5ba;font-size:.88rem;margin-bottom:1rem;">
+                На другом устройстве откройте страницу входа, нажмите
+                «У меня есть код с другого устройства» и введите:
+            </p>
+            <div id="deviceCodeDisplay" class="mono"
+                 style="font-size:1.9rem;font-weight:700;letter-spacing:.18em;color:var(--accent);background:var(--panel-2);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:.8rem;user-select:all;">
+                …
+            </div>
+            <p style="color:var(--muted);font-size:.8rem;margin:0;">
+                Код одноразовый, действует <strong id="deviceCodeTtl" style="color:var(--text);">5:00</strong>
+            </p>
+        </div>
+        <div class="modal-foot" style="justify-content:center;">
+            <button type="button" class="btn btn-outline-1" onclick="closeModal('deviceCodeModal')">Закрыть</button>
+        </div>
+    </div>
 </div>
 
 <div class="modal-overlay" id="linkEmailModal">
@@ -823,6 +856,40 @@ function startPolling(label) {
 }
 
 let linkTgPollInterval = null;
+
+let deviceCodeTimer = null;
+
+async function generateDeviceCode() {
+    try {
+        const res = await fetch('/auth/device-code/create', { method: 'POST' });
+        const data = await res.json();
+        if (!data.ok) {
+            showError(data.error || 'Не удалось создать код');
+            return;
+        }
+        document.getElementById('deviceCodeDisplay').textContent = data.code;
+        openModal('deviceCodeModal');
+
+        // Обратный отсчёт срока жизни кода прямо в модалке
+        if (deviceCodeTimer) clearInterval(deviceCodeTimer);
+        let left = data.ttl_seconds;
+        const ttlEl = document.getElementById('deviceCodeTtl');
+        const tick = () => {
+            const m = Math.floor(left / 60), s = left % 60;
+            ttlEl.textContent = m + ':' + String(s).padStart(2, '0');
+            if (left <= 0) {
+                clearInterval(deviceCodeTimer);
+                document.getElementById('deviceCodeDisplay').textContent = 'Код истёк';
+                ttlEl.textContent = '0:00';
+            }
+            left -= 1;
+        };
+        tick();
+        deviceCodeTimer = setInterval(tick, 1000);
+    } catch (e) {
+        showError('Сетевая ошибка: ' + e.message);
+    }
+}
 
 async function startLinkTelegram() {
     const btn = document.getElementById('linkTelegramBtn');

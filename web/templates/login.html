@@ -57,6 +57,23 @@
         <button type="submit">Получить ссылку для входа</button>
         <p class="hint">Мы пришлём письмо с кнопкой входа — без пароля</p>
     </form>
+
+    <div class="divider">или</div>
+
+    <!-- Вход по одноразовому коду с другого устройства: код генерируется в
+         кабинете на уже залогиненной машине ("Способы входа" -> "Код для
+         входа на другом устройстве") и вводится здесь. -->
+    <button type="button" id="deviceCodeToggle" onclick="toggleDeviceCodeForm()"
+            style="background:none;border:none;color:var(--muted);font-size:.82rem;cursor:pointer;width:100%;text-align:center;padding:.2rem;font-family:inherit;">
+        <i class="bi bi-laptop"></i> У меня есть код с другого устройства
+    </button>
+    <form id="deviceCodeForm" style="display:none;margin-top:.8rem;" onsubmit="return submitDeviceCode(event)">
+        <label>Код входа</label>
+        <input type="text" id="deviceCodeInput" placeholder="XXXX-XXXX" autocomplete="one-time-code"
+               style="width:100%;background:var(--panel-2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:.7rem .9rem;font-size:1.05rem;margin-bottom:1rem;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.15em;text-align:center;">
+        <button type="submit" id="deviceCodeSubmit">Войти по коду</button>
+        <p class="hint" id="deviceCodeStatus">Код можно получить в личном кабинете на устройстве, где вы уже вошли</p>
+    </form>
 </div>
 {% endblock %}
 
@@ -96,6 +113,41 @@
     }
     if (btn) btn.disabled = false;
 })();
+
+function toggleDeviceCodeForm() {
+    const form = document.getElementById('deviceCodeForm');
+    const visible = form.style.display !== 'none';
+    form.style.display = visible ? 'none' : 'block';
+    if (!visible) document.getElementById('deviceCodeInput').focus();
+}
+
+async function submitDeviceCode(e) {
+    e.preventDefault();
+    const input = document.getElementById('deviceCodeInput');
+    const btn = document.getElementById('deviceCodeSubmit');
+    const statusEl = document.getElementById('deviceCodeStatus');
+    const code = input.value.trim();
+    if (!code) return false;
+
+    btn.disabled = true;
+    statusEl.textContent = 'Проверяем код…';
+    try {
+        const fd = new FormData();
+        fd.append('code', code);
+        const res = await fetch('/auth/device-code/redeem', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.ok) {
+            statusEl.textContent = '✅ Готово, переходим…';
+            window.location.href = data.redirect || '/dashboard';
+            return false;
+        }
+        statusEl.textContent = data.error || 'Код не подошёл';
+    } catch (err) {
+        statusEl.textContent = 'Сетевая ошибка, попробуйте ещё раз';
+    }
+    btn.disabled = false;
+    return false;
+}
 
 let tgLoginPollInterval = null;
 

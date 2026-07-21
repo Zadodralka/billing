@@ -283,6 +283,52 @@ async def telegram_login_status(token: str, request: Request, session: AsyncSess
     return {"status": "confirmed", "redirect": "/dashboard"}
 
 
+@router.post("/device-code/create")
+async def device_code_create(request: Request, session: AsyncSession = Depends(get_db)):
+    """Генерирует одноразовый код входа для другого устройства. Только из уже
+    аутентифицированной сессии - код наследует аккаунт того, кто его создал."""
+    user = await require_user(request, session)
+
+    from core.rate_limit import check_rate_limit
+    if not await check_rate_limit(f"device_code_create:{user.id}", limit=5, window_seconds=900):
+        return {"ok": False, "error": "Слишком много кодов за короткое время, подождите немного"}
+
+    from core.device_login import create_device_code, format_code, DEVICE_CODE_TTL_SECONDS
+    code = await create_device_code(user.id)
+    logger.info(f"device_code_create: user {user.id} generated a device login code")
+    return {"ok": True, "code": format_code(code), "ttl_seconds": DEVICE_CODE_TTL_SECONDS}
+
+
+@router.post("/device-code/redeem")
+async def device_code_redeem(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    code: str = Form(...),
+):
+    """Вход по одноразовому коду на новом устройстве. Лимит попыток по IP -
+    вместе с 5-минутным TTL и ~39 битами энтропии кода перебор бессмысленен."""
+    from core.rate_limit import check_rate_limit
+    client_ip = request.client.host if request.client else "unknown"
+    if not await check_rate_limit(f"device_code_redeem:{client_ip}", limit=10, window_seconds=900):
+        return {"ok": False, "error": "Слишком много попыток, подождите 15 минут"}
+
+    from core.device_login import consume_device_code
+    user_id = await consume_device_code(code)
+    if user_id is None:
+        return {"ok": False, "error": "Код неверный или уже истёк"}
+
+    result = await session.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user or user.is_banned:
+        return {"ok": False, "error": "Аккаунт недоступен"}
+
+    user.last_seen = datetime.utcnow()
+    await session.commit()
+    request.session["user_id"] = user.id
+    logger.info(f"device_code_redeem: user {user.id} logged in via device code from {client_ip}")
+    return {"ok": True, "redirect": "/dashboard"}
+
+
 @router.post("/telegram-webapp")
 async def telegram_webapp_login(
     request: Request,
