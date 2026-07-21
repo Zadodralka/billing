@@ -241,6 +241,33 @@
         .row { display: flex; flex-wrap: wrap; margin: 0 -.5rem; }
         .col { padding: 0 .5rem; margin-bottom: 1rem; }
         .g-3 > .col { padding: 0 .5rem; }
+
+        /* ── Строки-действия в подвале карточки (кабинет, профиль): крупнее тап-зона
+           и понятнее на телефоне, чем ряд узких кнопок вплотную друг к другу ── */
+        .sub-actions { border-top: 1px solid var(--border); }
+        .sub-action-row {
+            display: flex; align-items: center; gap: .75rem; width: 100%;
+            padding: .85rem 1.3rem; background: none; border: none; border-bottom: 1px solid var(--border);
+            font-family: inherit; text-align: left; cursor: pointer; text-decoration: none; color: inherit;
+            transition: background .12s;
+        }
+        .sub-action-row:last-child { border-bottom: none; }
+        .sub-action-row:hover { background: rgba(255,255,255,.02); }
+        .sub-action-row:disabled { opacity: .55; cursor: default; }
+        .sub-action-icon {
+            width: 36px; height: 36px; border-radius: 9px; background: var(--panel-2); color: var(--accent);
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: .95rem;
+        }
+        .sub-action-text { flex: 1; min-width: 0; }
+        .sub-action-title { display: block; color: #fff; font-weight: 600; font-size: .86rem; }
+        .sub-action-sub   { display: block; color: var(--muted); font-size: .72rem; margin-top: .1rem; }
+        .sub-action-chevron { color: var(--muted); flex-shrink: 0; }
+        @media (max-width: 480px) {
+            .sub-action-row { padding: .65rem 1rem; gap: .6rem; }
+            .sub-action-icon { width: 32px; height: 32px; font-size: .85rem; }
+            .sub-action-title { font-size: .82rem; }
+            .sub-action-sub { font-size: .68rem; }
+        }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
