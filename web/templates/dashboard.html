@@ -342,11 +342,20 @@
     </div>
 </div>
 
-{% if not user.email or not user.telegram_id %}
+{# Карточка показывается ВСЕГДА (раньше - только пока не привязан один из
+   способов входа): помимо привязки Telegram/email здесь живёт генерация
+   одноразового кода для входа на другом устройстве, а она нужна как раз
+   тем, у кого всё давно привязано. #}
 <div class="card" style="padding:0;margin-bottom:1.5rem;overflow:hidden;">
     <div style="padding:1.1rem 1.3rem .9rem;">
         <div style="color:#fff;font-weight:700;font-size:.92rem;margin-bottom:.2rem;">Способы входа</div>
-        <div style="color:var(--muted);font-size:.82rem;">Привяжите оба способа, чтобы заходить и по почте, и через Telegram</div>
+        <div style="color:var(--muted);font-size:.82rem;">
+            {% if not user.email or not user.telegram_id %}
+            Привяжите оба способа, чтобы заходить и по почте, и через Telegram
+            {% else %}
+            Оба способа привязаны — здесь же можно получить код для входа на другом устройстве
+            {% endif %}
+        </div>
     </div>
     <div class="sub-actions">
         {% if user.telegram_id %}
@@ -428,7 +437,6 @@
         </div>
     </div>
 </div>
-{% endif %}
 
 {% set all_visible_subs = active_subs + paused_subs %}
 
