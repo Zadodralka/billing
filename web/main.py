@@ -20,7 +20,26 @@ app.mount("/static", StaticFiles(directory="web/static"), name="static")
 # Публичный лендинг на "/" - разрешаем ботам обходить только его, всё остальное
 # (кабинет, админка, оплата) требует авторизации и индексировать/сканировать
 # незачем. См. также web.routers.auth.get_current_user / get_bot_username.
-_ROBOTS_TXT = f"User-agent: *\nAllow: /$\nDisallow: /\n\nSitemap: {settings.webapp_url}/sitemap.xml\n"
+#
+# Перечисляем закрытые разделы явно, а не через "Disallow: / + Allow: /$":
+# якорь "$" понимают Google и Bing, но не все краулеры, а у тех, кто не
+# понимает, "Allow: /$" не срабатывает вовсе и под "Disallow: /" уходит весь
+# сайт вместе с лендингом и sitemap (Search Console на это отвечает "не
+# удалось обработать файл Sitemap" - сам файл при этом валиден).
+# На безопасность robots.txt всё равно не влияет: закрытые разделы защищены
+# require_user, здесь речь только о том, что попадёт в индекс.
+_ROBOTS_TXT = (
+    "User-agent: *\n"
+    "Disallow: /dashboard\n"
+    "Disallow: /admin\n"
+    "Disallow: /auth\n"
+    "Disallow: /payment\n"
+    "Disallow: /gift\n"
+    "Disallow: /docs\n"
+    "Disallow: /static/uploads\n"
+    "Disallow: /health\n"
+    f"\nSitemap: {settings.webapp_url}/sitemap.xml\n"
+)
 _SITEMAP_XML = f"""<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url><loc>{settings.webapp_url}/</loc><changefreq>monthly</changefreq><priority>1.0</priority></url>
