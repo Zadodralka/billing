@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 from fastapi import FastAPI, Request, Depends
-from fastapi.responses import RedirectResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import RedirectResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +20,12 @@ app.mount("/static", StaticFiles(directory="web/static"), name="static")
 # Публичный лендинг на "/" - разрешаем ботам обходить только его, всё остальное
 # (кабинет, админка, оплата) требует авторизации и индексировать/сканировать
 # незачем. См. также web.routers.auth.get_current_user / get_bot_username.
-_ROBOTS_TXT = "User-agent: *\nAllow: /$\nDisallow: /\n"
+_ROBOTS_TXT = f"User-agent: *\nAllow: /$\nDisallow: /\n\nSitemap: {settings.webapp_url}/sitemap.xml\n"
+_SITEMAP_XML = f"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url><loc>{settings.webapp_url}/</loc><changefreq>monthly</changefreq><priority>1.0</priority></url>
+</urlset>
+"""
 
 # Пути, куда легитимно приходят запросы без Origin/Referer (сервер-сервер вебхуки)
 _CSRF_EXEMPT_PATHS = {"/payment/webhook/yoomoney"}
@@ -95,6 +100,11 @@ async def root(request: Request, ref: str = None, session: AsyncSession = Depend
 @app.get("/robots.txt", response_class=PlainTextResponse)
 async def robots_txt():
     return _ROBOTS_TXT
+
+
+@app.get("/sitemap.xml")
+async def sitemap_xml():
+    return Response(_SITEMAP_XML, media_type="application/xml")
 
 
 @app.get("/health")
