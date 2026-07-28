@@ -158,16 +158,30 @@
    продление (как остальные sub-action-row в приложении) - переключатель трафика
    внутри останавливает всплытие клика у себя, чтобы не запускать продление сразу
    при выборе GB/Безлимит. div, а не button - button не может содержать вложенные
-   button (переключатель), это ломает разметку в браузере. ── */
-.renew-row { flex-wrap: wrap; row-gap: .5rem; }
-.renew-row .sub-action-text { flex: 1 1 130px; }
+   button (переключатель), это ломает разметку в браузере.
+
+   Раньше это была одна flex-строка (иконка+текст+переключатель+цена) - при
+   нехватке ширины модалки (420px) она переносилась, а точка переноса зависела
+   от длины конкретных цифр трафика ("20 GB" короче "100 GB"), из-за чего
+   у разных тарифов перенос срабатывал по-разному и список выглядел неровным.
+   Теперь у каждого варианта фиксированные две строки: сверху иконка+название+
+   цена, снизу срок+переключатель трафика - одинаковая структура у всех
+   тарифов независимо от длины текста. ── */
+.renew-row {
+    display: flex; flex-direction: column; align-items: stretch; gap: .55rem;
+}
+.renew-row-top { display: flex; align-items: center; gap: .75rem; }
+.renew-row-title { flex: 1; min-width: 0; color: #fff; font-weight: 600; font-size: .86rem; }
+.renew-row-bottom { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.renew-row-days { color: var(--muted); font-size: .72rem; }
 .renew-traffic-toggle { display: flex; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 2px; flex-shrink: 0; }
 .renew-traffic-btn {
     background: transparent; border: none; color: var(--muted); font-size: .72rem; font-weight: 600;
-    padding: .4rem .65rem; border-radius: 6px; cursor: pointer; font-family: inherit; white-space: nowrap; transition: all .12s;
+    padding: .4rem .65rem; border-radius: 6px; cursor: pointer; font-family: inherit; white-space: nowrap;
+    transition: all .12s; min-width: 4.2rem; text-align: center;
 }
 .renew-traffic-btn.active { background: var(--accent); color: #06140c; }
-.renew-price { color: var(--accent); font-weight: 700; font-size: .9rem; flex-shrink: 0; padding: .4rem .2rem; }
+.renew-price { color: var(--accent); font-weight: 700; font-size: .9rem; flex-shrink: 0; }
 
 /* ── Модалка конфига ── */
 .config-row { display: flex; gap: .5rem; }
@@ -610,16 +624,18 @@ function openRenewModal(subId, currentPlanKey) {
         row.setAttribute('role', 'button');
         row.setAttribute('tabindex', '0');
         row.innerHTML = `
-            <span class="sub-action-icon"><i class="bi bi-calendar-check"></i></span>
-            <span class="sub-action-text">
-                <span class="sub-action-title">${plan.name}</span>
-                <span class="sub-action-sub">${plan.days} дней</span>
-            </span>
-            <div class="renew-traffic-toggle">
-                <button type="button" class="renew-traffic-btn active" data-traffic="${defaultTraffic}">${defaultTraffic} GB</button>
-                <button type="button" class="renew-traffic-btn" data-traffic="0">Безлимит</button>
+            <div class="renew-row-top">
+                <span class="sub-action-icon"><i class="bi bi-calendar-check"></i></span>
+                <span class="renew-row-title">${plan.name}</span>
+                <span class="renew-price">${priceLimited} ₽</span>
             </div>
-            <span class="renew-price">${priceLimited} ₽</span>`;
+            <div class="renew-row-bottom">
+                <span class="renew-row-days">${plan.days} дней</span>
+                <div class="renew-traffic-toggle">
+                    <button type="button" class="renew-traffic-btn active" data-traffic="${defaultTraffic}">${defaultTraffic} GB</button>
+                    <button type="button" class="renew-traffic-btn" data-traffic="0">Безлимит</button>
+                </div>
+            </div>`;
 
         const priceEl = row.querySelector('.renew-price');
         row.querySelectorAll('.renew-traffic-btn').forEach(tb => {
