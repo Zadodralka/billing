@@ -196,6 +196,10 @@
         .faq-item.open .faq-toggle { transform: rotate(45deg); }
         .faq-toggle { transition: transform .25s ease; font-size: 1.15rem; color: var(--accent); flex-shrink: 0; }
 
+        /* Общие для всех тарифов условия - на десктопе их видно в каждой
+           карточке отдельным списком, здесь блок не нужен (см. медиазапрос). */
+        .price-common { display: none; }
+
         .landing-footer-slide { text-align: center; color: var(--muted); font-size: .78rem; margin-top: 32px; }
 
         @media (max-width: 768px) {
@@ -214,7 +218,60 @@
             .side-watermark { font-size: min(85vw, 500px); right: -18vw; top: 12%; opacity: .045; }
             .hero-actions { flex-direction: column; width: 100%; }
             .btn { width: 100%; }
-            .price-card, .price-card.featured { width: 100%; max-width: 320px; }
+
+            /* ── Преимущества на телефоне ──
+               На широком экране иконка стоит НАД заголовком - вертикально это
+               ~211px на карточку, шесть штук растягивались почти на два экрана
+               и слайд приходилось долго листать. Здесь разворачиваем карточку
+               в строку: иконка слева, весь текст справа. Grid, а не flex -
+               у карточек разный набор детей (у локаций есть флаги, у
+               надёжности - крупная цифра), поэтому иконку кладём в первую
+               колонку на все строки, а всё остальное автоматически уходит
+               во вторую. */
+            .section-header { margin-bottom: 22px; }
+            .section-header h2 { font-size: 1.55rem; }
+            .section-header p { font-size: .88rem; }
+
+            .grid-cards { gap: 9px; }
+            .glass-card {
+                display: grid; grid-template-columns: 38px 1fr; gap: 0 13px;
+                align-items: start; padding: 14px 16px; border-radius: 15px;
+            }
+            .glass-card .card-icon { grid-row: 1 / -1; grid-column: 1; margin-bottom: 0; width: 38px; height: 38px; font-size: 1rem; }
+            .glass-card > *:not(.card-icon) { grid-column: 2; }
+            .glass-card h3 { margin-bottom: 3px; font-size: .97rem; }
+            .glass-card p { font-size: .82rem; line-height: 1.42; }
+            .glass-card .stat-value { font-size: 1.3rem; }
+
+            /* ── Тарифы на телефоне ──
+               Список "что входит" одинаковый у всех тарифов - на телефоне это
+               были 12 повторяющихся строк подряд. Прячем его в карточках и
+               показываем один раз общей подписью под ними (.price-common),
+               а саму карточку сжимаем в строку: слева название и срок, справа
+               цена, кнопка на всю ширину снизу. */
+            .pricing-grid { gap: 12px; }
+            .price-card, .price-card.featured {
+                width: 100%; max-width: 380px; padding: 16px 18px; border-radius: 16px;
+                display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 14px;
+                grid-template-areas: "name price" "sub price" "btn btn";
+            }
+            .price-card .price-icon,
+            .price-card .price-divider,
+            .price-card .price-features,
+            .price-card .price-per-day { display: none; }
+            .price-card .price-plan-name { grid-area: name; }
+            .price-card .price-plan-sub { grid-area: sub; margin-top: 0; }
+            .price-card .price-amount { grid-area: price; margin: 0; text-align: right; }
+            .price-card .btn { grid-area: btn; margin-top: 12px; }
+            .price-card.featured .price-plan-name,
+            .price-card .price-plan-name { font-size: 1.1rem; }
+            .price-card.featured .price-amount,
+            .price-card .price-amount { font-size: 1.5rem; }
+            .badge-popular { top: -11px; left: auto; right: 16px; transform: none; font-size: .62rem; padding: 4px 11px; }
+            .price-common {
+                display: block; margin: 18px auto 0; max-width: 380px; text-align: center;
+                color: var(--muted); font-size: .8rem; line-height: 1.5;
+            }
         }
     </style>
 </head>
@@ -329,6 +386,9 @@
                 </div>
                 {% endfor %}
             </div>
+            <p class="price-common">
+                Во всех тарифах: один аккаунт на все устройства, конфиг сразу после оплаты и поддержка в Telegram.
+            </p>
         </div>
     </section>
 
