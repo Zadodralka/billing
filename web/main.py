@@ -1,17 +1,26 @@
+from datetime import datetime, timezone
 from urllib.parse import urlparse
-from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi import FastAPI, Request, Depends
+from fastapi.responses import RedirectResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from core.config import settings
-from core.database import init_db, AsyncSessionLocal
+from core.database import init_db, AsyncSessionLocal, get_db
 from core.plans import seed_plans_if_empty
 from web.routers import auth, dashboard, admin, payments, support, admin_support, admin_promo, referral, docs, admin_docs, gift
 
 app = FastAPI(title="Unlock VPN", docs_url=None, redoc_url=None)
+templates = Jinja2Templates(directory="web/templates")
 
 app.mount("/static", StaticFiles(directory="web/static"), name="static")
+
+# Публичный лендинг на "/" - разрешаем ботам обходить только его, всё остальное
+# (кабинет, админка, оплата) требует авторизации и индексировать/сканировать
+# незачем. См. также web.routers.auth.get_current_user / get_bot_username.
+_ROBOTS_TXT = "User-agent: *\nAllow: /$\nDisallow: /\n"
 
 # Пути, куда легитимно приходят запросы без Origin/Referer (сервер-сервер вебхуки)
 _CSRF_EXEMPT_PATHS = {"/payment/webhook/yoomoney"}
@@ -63,10 +72,29 @@ app.include_router(gift.router)
 
 
 @app.get("/")
-async def root(request: Request, ref: str = None):
+async def root(request: Request, ref: str = None, session: AsyncSession = Depends(get_db)):
     if ref:
         request.session["pending_ref"] = ref.strip().upper()
-    return RedirectResponse("/dashboard")
+
+    # Уже вошедших сразу отправляем в кабинет - лендинг нужен только тем, кто
+    # ещё не авторизован (в т.ч. поисковым ботам, для которых это единственная
+    # публичная страница сайта, см. _ROBOTS_TXT выше).
+    from web.routers.auth import get_current_user, get_bot_username
+    user = await get_current_user(request, session)
+    if user:
+        return RedirectResponse("/dashboard")
+
+    bot_username = await get_bot_username()
+    contact_url = f"https://t.me/{bot_username}" if bot_username else "https://t.me/"
+    return templates.TemplateResponse(request, "landing.html", {
+        "contact_url": contact_url,
+        "current_year": datetime.now(timezone.utc).year,
+    })
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+async def robots_txt():
+    return _ROBOTS_TXT
 
 
 @app.get("/health")
