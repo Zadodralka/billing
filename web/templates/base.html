@@ -422,6 +422,42 @@ function showToast(message, type) {
 function showError(msg) { console.error(msg); showToast(msg, 'error'); }
 function showSuccess(msg) { showToast(msg, 'success'); }
 
+// Уведомление "у вас уже есть неоплаченный счёт" - показывается вместо обычного
+// шага оплаты в #payModalBody, если бэкенд отказал в создании нового платежа
+// (см. core/pending_payment.py). Используется и в plans.html (покупка), и в
+// dashboard.html (продление) - обе страницы используют модалку #payModal с
+// тем же телом #payModalBody, поэтому реализация общая, а не дублируется.
+function showPendingPaymentNotice(pending) {
+    const body = document.getElementById('payModalBody');
+    if (!body) return;
+    body.innerHTML = `
+        <div style="text-align:center;padding:1rem 0;">
+            <div style="font-size:2rem;margin-bottom:.8rem;">⚠️</div>
+            <p style="color:#fff;font-weight:600;margin-bottom:.4rem;">У вас уже есть неоплаченный счёт</p>
+            <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem;">
+                ${pending.plan_name} · ${pending.traffic_label} — ${pending.amount} ₽<br>
+                Оплатите его или отмените, чтобы выбрать другой тариф.
+            </p>
+            <a href="${pending.payment_url}" target="_blank" class="pay-cta">Оплатить существующий счёт</a>
+            <button type="button" class="btn btn-outline-1" style="width:100%;margin-top:.6rem;" onclick="cancelPendingPayment(${pending.id})">Отменить покупку</button>
+        </div>`;
+}
+
+async function cancelPendingPayment(paymentId) {
+    try {
+        const res = await fetch('/payment/' + paymentId + '/cancel', { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+            closeModal('payModal');
+            showSuccess('Платёж отменён — выберите тариф ещё раз');
+        } else {
+            showError(data.error || 'Не удалось отменить платёж');
+        }
+    } catch (e) {
+        showError('Сетевая ошибка: ' + e.message);
+    }
+}
+
 function openModal(id) {
     // Закрываем остальные открытые модалки - иначе кнопка внутри cardActionsModal,
     // открывающая следующую модалку (например "Изменить"), оставляла бы предыдущую

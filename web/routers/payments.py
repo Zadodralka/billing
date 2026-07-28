@@ -10,6 +10,7 @@ from core.yoomoney import yoomoney
 from core.config import settings
 from core.version import APP_VERSION
 from core.timezone import to_local
+from core.pending_payment import get_pending_payment, cancel_pending_payment
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +137,31 @@ async def create_payment_web(request: Request, session: AsyncSession = Depends(g
     from sqlalchemy import select as sa_select
     result = await session.execute(sa_select(User).where(User.id == user.id).with_for_update())
     user = result.scalar_one()
+
+    # Не даём плодить счета - пока не оплачен или не отменён предыдущий, новый
+    # через "Купить"/"Продлить" не создаётся (иначе повторные клики/двойные
+    # вкладки плодят бесконечные PENDING-платежи).
+    pending = await get_pending_payment(user.id, session)
+    if pending:
+        from core.plans import get_plan as _get_plan_for_pending
+        pending_plan = await _get_plan_for_pending(session, pending.plan_key)
+        pending_traffic_label = "Безлимит" if pending.traffic_gb == 0 else f"{pending.traffic_gb} GB"
+        pending_url = yoomoney.create_payment_url(
+            amount=pending.amount,
+            label=pending.label,
+            comment=f"VPN {pending_plan['name'] if pending_plan else pending.plan_key} ({pending_traffic_label})",
+        )
+        return JSONResponse({
+            "ok": False,
+            "error": "pending_payment_exists",
+            "pending_payment": {
+                "id": pending.id,
+                "plan_name": pending_plan["name"] if pending_plan else pending.plan_key,
+                "traffic_label": pending_traffic_label,
+                "amount": pending.amount,
+                "payment_url": pending_url,
+            },
+        }, status_code=409)
 
     data = await request.json()
     plan_key = data.get("plan_key")
@@ -265,19 +291,7 @@ async def cancel_payment(payment_id: int, request: Request, session: AsyncSessio
         if payment.status == PaymentStatus.FAILED:
             return JSONResponse({"ok": True})  # уже отменён, идемпотентно
 
-        payment.status = PaymentStatus.FAILED
-
-        # Возвращаем баланс, списанный при создании этого платежа
-        if payment.balance_spent > 0:
-            from core.promo_referral import add_balance
-            result = await session.execute(select(User).where(User.id == user.id).with_for_update())
-            fresh_user = result.scalar_one()
-            await add_balance(
-                fresh_user, payment.balance_spent, "payment_refund",
-                f"Возврат за отменённый платёж #{payment.id}", session,
-            )
-            payment.balance_spent = 0
-
+        await cancel_pending_payment(payment, session)
         await session.commit()
         return JSONResponse({"ok": True})
     except Exception as e:

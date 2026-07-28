@@ -667,6 +667,10 @@ async function startRenewPayment(subId, planKey, trafficGb) {
         body: JSON.stringify({plan_key: planKey, traffic_gb: trafficGb, renew_subscription_id: parseInt(subId)})
     });
     const data = await res.json();
+    if (res.status === 409 && data.error === 'pending_payment_exists') {
+        showPendingPaymentNotice(data.pending_payment);
+        return;
+    }
     document.getElementById('payModalBody').innerHTML = `
         <div class="pay-summary"><div class="pname">Продление: ${data.plan_name}</div><div class="pamount">${data.amount} ₽</div></div>
         <a href="${data.payment_url}" target="_blank" class="pay-cta">Оплатить через ЮMoney</a>

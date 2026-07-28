@@ -206,6 +206,10 @@ async function buyPlan(planKey) {
         body: JSON.stringify({plan_key: planKey, traffic_gb: traffic, promo_code: promoValidated ? promoCode : '', use_balance: useBalance && USER_BALANCE > 0})
     });
     const data = await res.json();
+    if (res.status === 409 && data.error === 'pending_payment_exists') {
+        showPendingPaymentNotice(data.pending_payment);
+        return;
+    }
     if (data.free) {
         document.getElementById('payModalBody').innerHTML = `<div style="text-align:center;padding:1.5rem 0;"><div style="font-size:2rem;margin-bottom:.8rem;">🎉</div><p style="color:#fff;font-weight:600;">Оплачено балансом!</p><p style="color:var(--muted);font-size:.85rem;">Активируем подписку…</p></div>`;
         if (paymentPollInterval) clearInterval(paymentPollInterval);

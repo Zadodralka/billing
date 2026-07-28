@@ -80,6 +80,16 @@ def payment_keyboard(payment_url: str, label: str) -> InlineKeyboardMarkup:
     ])
 
 
+def pending_payment_keyboard(payment_url: str, label: str, payment_id: int) -> InlineKeyboardMarkup:
+    """Показывается вместо обычной оплаты, если у пользователя уже есть неоплаченный
+    счёт (см. core/pending_payment.py) - не даёт наплодить платежи повторными "Купить"."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💳 Оплатить существующий счёт", url=payment_url)],
+        [InlineKeyboardButton(text="✅ Я оплатил(а)", callback_data=f"check_payment:{label}")],
+        [InlineKeyboardButton(text="❌ Отменить покупку", callback_data=f"cancel_pending_payment:{payment_id}")],
+    ])
+
+
 def back_to_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="← Главное меню", callback_data="menu:main")],

@@ -10,9 +10,10 @@ from core.config import settings
 from core.plans import get_active_plans, get_plan
 from core.yoomoney import yoomoney
 from core.remnawave import remnawave
-from bot.keyboards.main import payment_keyboard, main_menu
+from bot.keyboards.main import payment_keyboard, pending_payment_keyboard, main_menu
 from bot.handlers.start import WELCOME_TEXT
 from bot.handlers.subscriptions import has_active_subscription
+from core.pending_payment import get_pending_payment, cancel_pending_payment
 
 router = Router()
 
@@ -28,6 +29,30 @@ async def _create_payment_and_show(
     plan_key: str, plan: dict, traffic_gb: int, title: str,
     payment_comment: str, renew_subscription_id: int | None = None,
 ):
+    # Не даём плодить счета - пока не оплачен или не отменён предыдущий, новый
+    # через "Купить"/"Продлить" не создаётся (иначе повторные нажатия кнопки
+    # плодят бесконечные PENDING-платежи, см. core/pending_payment.py).
+    pending = await get_pending_payment(user.id, session)
+    if pending:
+        pending_plan = await get_plan(session, pending.plan_key)
+        pending_traffic_label = _traffic_label(pending.traffic_gb)
+        pending_url = yoomoney.create_payment_url(
+            amount=pending.amount,
+            label=pending.label,
+            comment=f"VPN {pending_plan['name'] if pending_plan else pending.plan_key} ({pending_traffic_label})",
+        )
+        await callback.message.edit_text(
+            f"⚠️ <b>У вас уже есть неоплаченный счёт</b>\n\n"
+            f"📦 Тариф: {pending_plan['name'] if pending_plan else pending.plan_key}\n"
+            f"📊 Трафик: {pending_traffic_label}\n"
+            f"💰 Сумма: {pending.amount} ₽\n\n"
+            f"Оплатите его или отмените, чтобы выбрать другой тариф.",
+            reply_markup=pending_payment_keyboard(pending_url, pending.label, pending.id),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+        return
+
     label = yoomoney.generate_label()
     payment = Payment(
         user_id=user.id,
@@ -220,6 +245,34 @@ async def cb_cancel(callback: CallbackQuery, user: User, session: AsyncSession):
     # в чате (приходилось вручную набирать /start). Правим на возврат в главное меню.
     await callback.message.edit_text(
         "❌ Платёж отменён.\n\n" + WELCOME_TEXT,
+        parse_mode="HTML",
+        reply_markup=main_menu(
+            is_admin=user.telegram_id in settings.admin_ids,
+            has_active_sub=await has_active_subscription(user.id, session),
+        ),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("cancel_pending_payment:"))
+async def cb_cancel_pending_payment(callback: CallbackQuery, user: User, session: AsyncSession):
+    payment_id = int(callback.data.split(":")[1])
+    result = await session.execute(
+        select(Payment).where(Payment.id == payment_id, Payment.user_id == user.id).with_for_update()
+    )
+    payment = result.scalar_one_or_none()
+    if not payment:
+        await callback.answer("Платёж не найден", show_alert=True)
+        return
+    if payment.status == PaymentStatus.SUCCESS:
+        await callback.answer("Этот платёж уже оплачен", show_alert=True)
+        return
+    if payment.status != PaymentStatus.FAILED:
+        await cancel_pending_payment(payment, session)
+        await session.commit()
+
+    await callback.message.edit_text(
+        "❌ Покупка отменена.\n\n" + WELCOME_TEXT,
         parse_mode="HTML",
         reply_markup=main_menu(
             is_admin=user.telegram_id in settings.admin_ids,
