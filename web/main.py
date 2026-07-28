@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 from fastapi import FastAPI, Request, Depends
-from fastapi.responses import RedirectResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.responses import RedirectResponse, JSONResponse, PlainTextResponse, Response, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -119,12 +119,26 @@ async def root(request: Request, ref: str = None, session: AsyncSession = Depend
         "contact_url": contact_url,
         "current_year": datetime.now(timezone.utc).year,
         "plans": plans_sorted,
+        # Абсолютные URL для og:-тегов и schema.org - относительные пути в них
+        # не годятся, поисковику и соцсетям нужен полный адрес.
+        "site_url": settings.webapp_url.rstrip("/"),
     })
 
 
 @app.get("/robots.txt", response_class=PlainTextResponse)
 async def robots_txt():
     return _ROBOTS_TXT
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """Google ищет иконку сайта именно по /favicon.ico в корне, и до сих пор
+    получал здесь 404 (видно в логах nginx) - поэтому в выдаче показывался
+    стандартный глобус. Тега <link rel="icon"> в разметке недостаточно:
+    краулер иконок ходит отдельно от основного и корневой путь проверяет
+    в первую очередь. Отдаём тот же логотип (640x640, квадратный - как
+    требует Google)."""
+    return FileResponse("web/static/img/logo.jpg", media_type="image/jpeg")
 
 
 @app.get("/sitemap.xml")

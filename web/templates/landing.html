@@ -5,6 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Unlock VPN — приватный и быстрый VPN</title>
     <meta name="description" content="Unlock VPN — приватный, быстрый VPN на любые устройства. Подключись за 2 минуты и пользуйся преимуществами безопасного сёрфинга.">
+
+    {# Название сайта в выдаче Google. Без этой разметки поисковик подставляет
+       вместо имени сам домен ("unlockless.com"). Схема WebSite обязана лежать
+       именно на главной странице сайта - на вложенных Google её не учитывает.
+       og:site_name - дополнительный сигнал того же назначения. #}
+    <meta property="og:site_name" content="Unlockless">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Unlock VPN — приватный и быстрый VPN">
+    <meta property="og:description" content="Приватный, быстрый VPN на любые устройства. Подключись за 2 минуты и пользуйся преимуществами безопасного сёрфинга.">
+    <meta property="og:url" content="{{ site_url }}/">
+    <meta property="og:image" content="{{ site_url }}/static/img/logo.jpg">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Unlockless",
+        "url": "{{ site_url }}/"
+    }
+    </script>
+
     {% include "_head_common.html" %}
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons@7/css/flag-icons.min.css">
     <style>
