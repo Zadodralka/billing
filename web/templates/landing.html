@@ -6,6 +6,11 @@
     <title>Unlock VPN — приватный VPN-сервис</title>
     <meta name="description" content="Unlock VPN — приватный, быстрый VPN на любые устройства. Подключись за 2 минуты и пользуйся преимуществами безопасного сёрфинга.">
     {% include "_head_common.html" %}
+    {# Реальные SVG-флаги вместо emoji - flag-icons (тот же jsdelivr, что и bootstrap-icons
+       в _head_common.html). Emoji-флаги на Windows рендерятся как двухбуквенный код в
+       рамке, а не как флаг - на боевом окружении часть посетителей увидела бы "NL"/"DE"
+       вместо флажков. SVG одинаково выглядят на любой ОС. #}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons@7/css/flag-icons.min.css">
     <style>
         body {
             min-height: 100vh;
@@ -23,17 +28,21 @@
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes softPulse {
             0% { box-shadow: 0 0 0 0 rgba(61,220,132,.5); }
-            70% { box-shadow: 0 0 0 7px rgba(61,220,132,0); }
+            70% { box-shadow: 0 0 0 6px rgba(61,220,132,0); }
             100% { box-shadow: 0 0 0 0 rgba(61,220,132,0); }
         }
         @media (prefers-reduced-motion: reduce) {
             * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
         }
 
-        /* Всё должно помещаться на экран без прокрутки - вся страница в одном
-           flex-контейнере высотой в весь вьюпорт, отступы небольшие и в vh,
-           а не в фиксированных rem, чтобы ужиматься на невысоких экранах. */
-        .landing-wrap { width: 100%; max-width: 760px; padding: 1.2rem 1.5rem; text-align: center; }
+        /* Всё должно помещаться на экран без прокрутки - контент и боковая
+           панель лежат в одном центрированном flex-ряду (а не position:fixed
+           поверх), высоту задаёт основная колонка, панель просто встаёт рядом. */
+        .landing-page {
+            display: flex; align-items: center; justify-content: center; gap: 1.8rem;
+            width: 100%; max-width: 980px; padding: 1.2rem 1.5rem;
+        }
+        .landing-wrap { width: 100%; max-width: 760px; text-align: center; }
         .landing-hero { animation: fadeInUp .5s ease both; margin-bottom: min(3vh, 1.8rem); }
 
         .landing-logo-wrap { position: relative; width: 52px; height: 52px; margin: 0 auto .8rem; }
@@ -112,92 +121,127 @@
 
         .landing-footer { color: var(--muted); font-size: .72rem; margin-top: min(2.5vh, 1.2rem); }
 
-        /* ── Боковая карточка с локациями/аптаймом: только на широких экранах,
-           где сбоку от центрированного контента достаточно места - fixed,
-           чтобы не добавлять высоты общему layout (иначе снова появится
-           прокрутка, от которой только что избавились). На узких экранах
-           и телефонах просто не показывается, а не переносится вниз/сжимается. ── */
+        /* ── Боковая панель локаций/аптайма - та же карточка, что и .landing-feature
+           (радиус/бордер/hover совпадают, чтобы не выглядела чужеродной вставкой),
+           просто соседняя колонка в общем flex-ряду, а не плавающий поверх слой.
+           Только на широких экранах - на телефонах для неё физически нет места
+           сбоку, а сжимать/переносить вниз (и тем самым возвращать прокрутку)
+           не нужно, панель декоративно-дополнительная. ── */
         .landing-side-panel {
-            display: none; position: fixed; top: 50%; right: 2.2rem; transform: translateY(-50%);
-            width: 178px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
-            padding: 1.1rem 1.15rem; text-align: left; animation: fadeInUp .5s ease .15s both;
+            display: none; flex-shrink: 0; width: 200px;
+            background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+            padding: 1.2rem 1.25rem; text-align: left;
+            animation: fadeInUp .5s ease .12s both;
+            transition: border-color .15s, box-shadow .15s;
         }
-        @media (min-width: 1280px) {
+        .landing-side-panel:hover { border-color: rgba(61,220,132,.3); box-shadow: 0 16px 34px -14px rgba(0,0,0,.5); }
+        @media (min-width: 1180px) {
             .landing-side-panel { display: block; }
         }
-        .landing-side-label {
-            color: var(--muted); font-size: .66rem; font-weight: 700; text-transform: uppercase;
-            letter-spacing: .07em; margin-bottom: .65rem;
+        .landing-side-head { display: flex; align-items: center; gap: .55rem; margin-bottom: .9rem; }
+        .landing-side-head .icon-badge {
+            width: 30px; height: 30px; border-radius: 8px; background: var(--accent-soft); color: var(--accent);
+            display: flex; align-items: center; justify-content: center; font-size: .88rem; flex-shrink: 0;
         }
-        .landing-locations { list-style: none; margin: 0 0 .9rem; padding: 0; display: flex; flex-direction: column; gap: .4rem; }
-        .landing-locations li { display: flex; align-items: center; gap: .5rem; font-size: .82rem; color: var(--text); }
-        .landing-side-divider { height: 1px; background: var(--border); margin: 0 0 .9rem; }
+        .landing-side-head span {
+            color: var(--muted); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+        }
+
+        .landing-locations { list-style: none; margin: 0 0 1rem; padding: 0; display: flex; flex-direction: column; gap: .55rem; }
+        .landing-locations li {
+            display: flex; align-items: center; gap: .55rem; font-size: .84rem; color: var(--text);
+            opacity: 0; animation: fadeInUp .4s ease both;
+        }
+        .landing-locations li:nth-child(1) { animation-delay: .2s; }
+        .landing-locations li:nth-child(2) { animation-delay: .32s; }
+        .landing-locations li:nth-child(3) { animation-delay: .44s; }
+        .landing-locations li:nth-child(4) { animation-delay: .56s; }
+        .landing-locations .fi {
+            flex-shrink: 0; width: 22px; height: 16px; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255,255,255,.1);
+            background-size: cover;
+        }
+        .landing-loc-name { flex: 1; }
+        /* Пульсирующая точка "сервер онлайн" - та же анимация, что у точки в бейдже
+           наверху, просто с разной задержкой на каждой строке, чтобы список не
+           мигал синхронно единым блоком, а "дышал" по очереди сверху вниз. */
+        .landing-loc-status { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: softPulse 2s infinite; }
+        .landing-locations li:nth-child(1) .landing-loc-status { animation-delay: 0s; }
+        .landing-locations li:nth-child(2) .landing-loc-status { animation-delay: .4s; }
+        .landing-locations li:nth-child(3) .landing-loc-status { animation-delay: .8s; }
+        .landing-locations li:nth-child(4) .landing-loc-status { animation-delay: 1.2s; }
+
+        .landing-side-divider { height: 1px; background: var(--border); margin: 0 0 1rem; }
         .landing-uptime-value {
-            display: block; font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; font-weight: 700; color: var(--accent);
+            display: block; font-family: 'Space Grotesk', sans-serif; font-size: 1.6rem; font-weight: 700; color: var(--accent);
             line-height: 1;
         }
         .landing-uptime-label { display: block; color: var(--muted); font-size: .74rem; margin-top: .3rem; }
     </style>
 </head>
 <body>
-<div class="landing-wrap">
-    <div class="landing-hero">
-        <div class="landing-logo-wrap">
-            <div class="landing-logo-glow"></div>
-            <div class="landing-logo"><img src="/static/img/logo.jpg" alt="Unlock VPN"></div>
-        </div>
-        <div class="landing-badge"><span class="landing-badge-dot"></span> Приватный VPN-сервис</div>
+<div class="landing-page">
+    <div class="landing-wrap">
+        <div class="landing-hero">
+            <div class="landing-logo-wrap">
+                <div class="landing-logo-glow"></div>
+                <div class="landing-logo"><img src="/static/img/logo.jpg" alt="Unlock VPN"></div>
+            </div>
+            <div class="landing-badge"><span class="landing-badge-dot"></span> Приватный VPN-сервис</div>
 
-        <h1>Приватный, быстрый,<br>на <span>любые устройства</span></h1>
-        <p class="landing-subtitle">
-            Подключись за 2 минуты и пользуйся преимуществами безопасного сёрфинга —
-            без логов активности и лишних настроек.
-        </p>
+            <h1>Приватный, быстрый,<br>на <span>любые устройства</span></h1>
+            <p class="landing-subtitle">
+                Подключись за 2 минуты и пользуйся преимуществами безопасного сёрфинга —
+                без логов активности и лишних настроек.
+            </p>
 
-        <div class="landing-cta">
-            <a href="/auth/login" class="btn-start"><i class="bi bi-arrow-right-circle"></i> Начать</a>
-            <a href="{{ contact_url }}" class="btn-contact" target="_blank" rel="noopener"><i class="bi bi-telegram"></i> Связаться</a>
+            <div class="landing-cta">
+                <a href="/auth/login" class="btn-start"><i class="bi bi-arrow-right-circle"></i> Начать</a>
+                <a href="{{ contact_url }}" class="btn-contact" target="_blank" rel="noopener"><i class="bi bi-telegram"></i> Связаться</a>
+            </div>
         </div>
+
+        <div class="landing-section-label">Почему Unlock VPN</div>
+        <div class="landing-features">
+            <div class="landing-feature c-accent">
+                <div class="icon-badge"><i class="bi bi-incognito"></i></div>
+                <h3>Приватность</h3>
+                <p>Не храним логи активности и не передаём данные третьим лицам.</p>
+            </div>
+            <div class="landing-feature c-blue">
+                <div class="icon-badge"><i class="bi bi-lightning-charge"></i></div>
+                <h3>Скорость</h3>
+                <p>Стабильное соединение без просадок — для видео и работы.</p>
+            </div>
+            <div class="landing-feature c-gold">
+                <div class="icon-badge"><i class="bi bi-phone"></i></div>
+                <h3>Любые устройства</h3>
+                <p>iOS, Android, Windows и macOS — один аккаунт на всех.</p>
+            </div>
+            <div class="landing-feature c-accent">
+                <div class="icon-badge"><i class="bi bi-stopwatch"></i></div>
+                <h3>Быстрый старт</h3>
+                <p>Регистрация и подключение — пара минут, без сложных настроек.</p>
+            </div>
+        </div>
+
+        <div class="landing-footer">© {{ current_year }} Unlock VPN</div>
     </div>
 
-    <div class="landing-section-label">Почему Unlock VPN</div>
-    <div class="landing-features">
-        <div class="landing-feature c-accent">
-            <div class="icon-badge"><i class="bi bi-incognito"></i></div>
-            <h3>Приватность</h3>
-            <p>Не храним логи активности и не передаём данные третьим лицам.</p>
+    <div class="landing-side-panel">
+        <div class="landing-side-head">
+            <div class="icon-badge"><i class="bi bi-hdd-network"></i></div>
+            <span>Локации серверов</span>
         </div>
-        <div class="landing-feature c-blue">
-            <div class="icon-badge"><i class="bi bi-lightning-charge"></i></div>
-            <h3>Скорость</h3>
-            <p>Стабильное соединение без просадок — для видео и работы.</p>
-        </div>
-        <div class="landing-feature c-gold">
-            <div class="icon-badge"><i class="bi bi-phone"></i></div>
-            <h3>Любые устройства</h3>
-            <p>iOS, Android, Windows и macOS — один аккаунт на всех.</p>
-        </div>
-        <div class="landing-feature c-accent">
-            <div class="icon-badge"><i class="bi bi-stopwatch"></i></div>
-            <h3>Быстрый старт</h3>
-            <p>Регистрация и подключение — пара минут, без сложных настроек.</p>
-        </div>
+        <ul class="landing-locations">
+            <li><span class="fi fi-nl"></span><span class="landing-loc-name">Нидерланды</span><span class="landing-loc-status"></span></li>
+            <li><span class="fi fi-de"></span><span class="landing-loc-name">Германия</span><span class="landing-loc-status"></span></li>
+            <li><span class="fi fi-fi"></span><span class="landing-loc-name">Финляндия</span><span class="landing-loc-status"></span></li>
+            <li><span class="fi fi-kz"></span><span class="landing-loc-name">Казахстан</span><span class="landing-loc-status"></span></li>
+        </ul>
+        <div class="landing-side-divider"></div>
+        <span class="landing-uptime-value">99.9%</span>
+        <span class="landing-uptime-label">Uptime серверов</span>
     </div>
-
-    <div class="landing-footer">© {{ current_year }} Unlock VPN</div>
-</div>
-
-<div class="landing-side-panel">
-    <div class="landing-side-label">Локации серверов</div>
-    <ul class="landing-locations">
-        <li>🇳🇱 Нидерланды</li>
-        <li>🇩🇪 Германия</li>
-        <li>🇫🇮 Финляндия</li>
-        <li>🇰🇿 Казахстан</li>
-    </ul>
-    <div class="landing-side-divider"></div>
-    <span class="landing-uptime-value">99.9%</span>
-    <span class="landing-uptime-label">Uptime серверов</span>
 </div>
 </body>
 </html>
