@@ -91,9 +91,15 @@ async def root(request: Request, ref: str = None, session: AsyncSession = Depend
 
     bot_username = await get_bot_username()
     contact_url = f"https://t.me/{bot_username}" if bot_username else "https://t.me/"
+
+    from core.plans import get_active_plans
+    plans = await get_active_plans(session)
+    plans_sorted = sorted(plans.values(), key=lambda p: p["days"])
+
     return templates.TemplateResponse(request, "landing.html", {
         "contact_url": contact_url,
         "current_year": datetime.now(timezone.utc).year,
+        "plans": plans_sorted,
     })
 
 
