@@ -111,6 +111,32 @@
         .landing-feature p { font-size: .76rem; color: var(--muted); line-height: 1.42; margin: 0; }
 
         .landing-footer { color: var(--muted); font-size: .72rem; margin-top: min(2.5vh, 1.2rem); }
+
+        /* ── Боковая карточка с локациями/аптаймом: только на широких экранах,
+           где сбоку от центрированного контента достаточно места - fixed,
+           чтобы не добавлять высоты общему layout (иначе снова появится
+           прокрутка, от которой только что избавились). На узких экранах
+           и телефонах просто не показывается, а не переносится вниз/сжимается. ── */
+        .landing-side-panel {
+            display: none; position: fixed; top: 50%; right: 2.2rem; transform: translateY(-50%);
+            width: 178px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+            padding: 1.1rem 1.15rem; text-align: left; animation: fadeInUp .5s ease .15s both;
+        }
+        @media (min-width: 1280px) {
+            .landing-side-panel { display: block; }
+        }
+        .landing-side-label {
+            color: var(--muted); font-size: .66rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .07em; margin-bottom: .65rem;
+        }
+        .landing-locations { list-style: none; margin: 0 0 .9rem; padding: 0; display: flex; flex-direction: column; gap: .4rem; }
+        .landing-locations li { display: flex; align-items: center; gap: .5rem; font-size: .82rem; color: var(--text); }
+        .landing-side-divider { height: 1px; background: var(--border); margin: 0 0 .9rem; }
+        .landing-uptime-value {
+            display: block; font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; font-weight: 700; color: var(--accent);
+            line-height: 1;
+        }
+        .landing-uptime-label { display: block; color: var(--muted); font-size: .74rem; margin-top: .3rem; }
     </style>
 </head>
 <body>
@@ -159,6 +185,19 @@
     </div>
 
     <div class="landing-footer">© {{ current_year }} Unlock VPN</div>
+</div>
+
+<div class="landing-side-panel">
+    <div class="landing-side-label">Локации серверов</div>
+    <ul class="landing-locations">
+        <li>🇳🇱 Нидерланды</li>
+        <li>🇩🇪 Германия</li>
+        <li>🇫🇮 Финляндия</li>
+        <li>🇰🇿 Казахстан</li>
+    </ul>
+    <div class="landing-side-divider"></div>
+    <span class="landing-uptime-value">99.9%</span>
+    <span class="landing-uptime-label">Uptime серверов</span>
 </div>
 </body>
 </html>
