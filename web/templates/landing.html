@@ -120,7 +120,11 @@
         .glass-card.c-blue .card-icon   { background: var(--blue-soft); color: var(--blue); }
         .glass-card.c-gold .card-icon   { background: var(--gold-soft); color: var(--gold); }
         .glass-card h3 { font-size: 1.02rem; font-weight: 700; margin-bottom: 8px; }
-        .glass-card p { color: var(--muted); font-size: .85rem; line-height: 1.5; }
+        /* margin: 0 обязателен - у p браузерный отступ 1em сверху и снизу
+           (~26px суммарно на карточку), глобального reset'а для p в
+           _head_common.html нет. На телефоне это была самая большая часть
+           высоты плитки: сам текст занимал 37px, а отступы вокруг - 26px. */
+        .glass-card p { color: var(--muted); font-size: .85rem; line-height: 1.5; margin: 0; }
 
         /* Флаги локаций внутри карточки - на своей строке, чтобы не пытаться
            уместить название страны текстом (на телефоне не влезет). */
@@ -232,16 +236,18 @@
             .section-header h2 { font-size: 1.55rem; }
             .section-header p { font-size: .88rem; }
 
-            .grid-cards { gap: 9px; }
+            .grid-cards { gap: 8px; }
             .glass-card {
-                display: grid; grid-template-columns: 38px 1fr; gap: 0 13px;
-                align-items: start; padding: 14px 16px; border-radius: 15px;
+                display: grid; grid-template-columns: 34px 1fr; gap: 0 12px;
+                align-items: start; padding: 12px 14px; border-radius: 14px;
             }
-            .glass-card .card-icon { grid-row: 1 / -1; grid-column: 1; margin-bottom: 0; width: 38px; height: 38px; font-size: 1rem; }
+            .glass-card .card-icon { grid-row: 1 / -1; grid-column: 1; margin-bottom: 0; width: 34px; height: 34px; font-size: .92rem; border-radius: 10px; }
             .glass-card > *:not(.card-icon) { grid-column: 2; }
-            .glass-card h3 { margin-bottom: 3px; font-size: .97rem; }
-            .glass-card p { font-size: .82rem; line-height: 1.42; }
-            .glass-card .stat-value { font-size: 1.3rem; }
+            .glass-card h3 { margin-bottom: 2px; font-size: .93rem; }
+            .glass-card p { font-size: .79rem; line-height: 1.38; }
+            .glass-card .stat-value { font-size: 1.2rem; }
+            .card-flags { gap: 6px; margin-top: 2px; }
+            .card-flags .fi { width: 21px; height: 15px; }
 
             /* ── Тарифы на телефоне ──
                Список "что входит" одинаковый у всех тарифов - на телефоне это
