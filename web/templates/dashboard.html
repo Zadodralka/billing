@@ -86,9 +86,12 @@
 .sub-countdown-unit {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     background: var(--panel-2); border: 1px solid var(--border); border-radius: 9px;
-    padding: .4rem .2rem; flex: 1;
+    padding: .4rem .2rem; flex: 0 0 auto; min-width: 2.6rem;
 }
-.sub-countdown-num { font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; font-weight: 700; color: #fff; line-height: 1; }
+/* tabular-nums - все цифры одной ширины, иначе "1" уже "8" и окошко секунд
+   каждую секунду чуть меняет размер, дёргая соседние блоки (flex: 1 раньше
+   давал то же самое, только сильнее - ширина плыла от содержимого). */
+.sub-countdown-num { font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; font-weight: 700; color: #fff; line-height: 1; font-variant-numeric: tabular-nums; }
 .sub-countdown-label { font-size: .6rem; color: var(--muted); text-transform: uppercase; margin-top: .2rem; }
 .sub-countdown-sep { color: var(--muted); font-weight: 700; }
 
@@ -110,7 +113,7 @@
     .sub-card-body { padding: .85rem 1rem; gap: .4rem; }
     .sub-traffic-used { font-size: 1.15rem; }
     .sub-countdown { margin: .3rem 0 .05rem; gap: .25rem; }
-    .sub-countdown-unit { padding: .3rem .15rem; }
+    .sub-countdown-unit { padding: .3rem .15rem; min-width: 2.3rem; }
     .sub-countdown-num { font-size: 1rem; }
     .sub-countdown-label { font-size: .56rem; }
     .sub-action-row { padding: .65rem 1rem; gap: .6rem; }
@@ -281,18 +284,6 @@
     </div>
 </div>
 {% endif %}
-
-{# Баланс - реальные деньги (реферальные бонусы), которые можно потратить при
-   покупке/продлении на странице тарифов - поэтому остаётся на главной, в
-   отличие от количества подписок/суммы трат/даты регистрации (эта информация
-   не помогает решить что-то прямо сейчас, перенесена в профиль). #}
-<a href="/dashboard/referral" class="card quick-connect-card" style="display:flex;text-decoration:none;">
-    <div class="icon-badge" style="background:var(--gold-soft);color:var(--gold);width:44px;height:44px;font-size:1.25rem;flex-shrink:0;"><i class="bi bi-wallet2"></i></div>
-    <div class="quick-connect-info">
-        <div class="quick-connect-title">Баланс: <span style="color:var(--accent);">{{ user.balance }} ₽</span></div>
-        <div class="quick-connect-sub">Спишется при оплате подписки — пригласить друга →</div>
-    </div>
-</a>
 
 {% set all_visible_subs = active_subs + paused_subs %}
 
