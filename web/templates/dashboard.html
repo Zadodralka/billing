@@ -229,7 +229,6 @@
     .quick-connect-actions .btn { flex: 1; }
 }
 
-/* .payments-list/.payment-row - см. base.html (используется и в кабинете, и в рефералке) */
 </style>
 {% endblock %}
 
@@ -532,30 +531,6 @@
 </div>
 {% endif %}
 
-{% if recent_payments %}
-<h2 class="section-title">История платежей</h2>
-<div class="payments-list">
-    {% for payment in recent_payments %}
-    <div class="payment-row" id="payment-row-{{ payment.id }}">
-        <div class="payment-row-main">
-            <div class="payment-row-plan">{{ all_plans.get(payment.plan_key, {}).get('name', payment.plan_key) }}</div>
-            <div class="payment-row-date">{{ (payment.created_at | localtime).strftime('%d.%m.%Y %H:%M') }}</div>
-        </div>
-        <div class="payment-row-side">
-            <div class="payment-row-amount">{{ payment.amount }} ₽</div>
-            {% if payment.status.value == 'success' %}<span class="badge badge-on">Оплачен</span>
-            {% elif payment.status.value == 'pending' %}
-                <span class="badge badge-mid">Ожидание</span>
-                <button type="button" class="btn btn-sm btn-danger-1 js-cancel-payment-btn" data-id="{{ payment.id }}">
-                    Отменить
-                </button>
-            {% else %}<span class="badge badge-neutral">Отменён</span>{% endif %}
-        </div>
-    </div>
-    {% endfor %}
-</div>
-{% endif %}
-
 <!-- Модалка продления -->
 <div class="modal-overlay" id="renewModal">
     <div class="modal-box">
@@ -710,26 +685,5 @@ function startPolling(label) {
     }, 8000);
 }
 
-document.addEventListener('click', async function(e) {
-    const cancelBtn = e.target.closest('.js-cancel-payment-btn');
-    if (!cancelBtn) return;
-    if (!(await confirmAction('Отменить этот платёж? Если вы уже оплатили — не отменяйте, подписка активируется автоматически.', { okText: 'Отменить платёж' }))) return;
-
-    cancelBtn.disabled = true;
-    const paymentId = cancelBtn.dataset.id;
-    try {
-        const res = await fetch('/payment/' + paymentId + '/cancel', { method: 'POST' });
-        const data = await res.json();
-        if (data.ok) {
-            location.reload();
-        } else {
-            alert(data.error || 'Не удалось отменить платёж');
-            cancelBtn.disabled = false;
-        }
-    } catch (err) {
-        alert('Сетевая ошибка: ' + err.message);
-        cancelBtn.disabled = false;
-    }
-});
 </script>
 {% endblock %}

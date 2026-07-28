@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta
 from core.database import get_db
-from core.models import User, Subscription, Payment, PaymentStatus, SubscriptionStatus, EmailToken
+from core.models import User, PaymentStatus, SubscriptionStatus, EmailToken
 from core.plans import get_active_plans, get_all_plans
 from core.remnawave import remnawave
 from core.version import APP_VERSION
@@ -33,7 +33,7 @@ async def dashboard(request: Request, user: User = Depends(require_user), sessio
     result = await session.execute(
         select(User)
         .where(User.id == user.id)
-        .options(selectinload(User.subscriptions), selectinload(User.payments))
+        .options(selectinload(User.subscriptions))
     )
     user = result.scalar_one()
 
@@ -48,8 +48,6 @@ async def dashboard(request: Request, user: User = Depends(require_user), sessio
         s.status == SubscriptionStatus.CANCELLED or
         (s.status == SubscriptionStatus.EXPIRED and s.expires_at and s.expires_at >= recent_cutoff)
     ]
-    # 3. Старые истёкшие — в историю
-    recent_payments = sorted(user.payments, key=lambda p: p.created_at, reverse=True)[:10]
 
     all_plans = await get_all_plans(session)
     active_plans = await get_active_plans(session)
@@ -72,7 +70,6 @@ async def dashboard(request: Request, user: User = Depends(require_user), sessio
         "user": user,
         "active_subs": active_subs,
         "paused_subs": paused_subs,
-        "recent_payments": recent_payments,
         "plans": active_plans,
         "all_plans": all_plans,
         "now": now,
@@ -88,9 +85,13 @@ async def profile_page(request: Request, user: User = Depends(require_user), ses
     )
     user = result.scalar_one()
     total_spent = sum(p.amount for p in user.payments if p.status == PaymentStatus.SUCCESS)
+    recent_payments = sorted(user.payments, key=lambda p: p.created_at, reverse=True)[:10]
+    all_plans = await get_all_plans(session)
     return templates.TemplateResponse(request, "profile.html", {
         "user": user,
         "total_spent": total_spent,
+        "recent_payments": recent_payments,
+        "all_plans": all_plans,
     })
 
 
