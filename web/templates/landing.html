@@ -160,62 +160,19 @@
 
         .stat-value { font-family: 'Manrope', sans-serif; font-size: 1.6rem; font-weight: 800; color: var(--accent); }
 
-        /* ── Слайд 3: Тарифы ── */
-        /* flex + justify-content:center вместо grid - карточки держат свою
-           собственную ширину и группа центрируется как единый блок, а не
-           растягивается на всю ширину ряда. align-items:flex-end - более
-           высокая (за счёт паддинга) карточка "популярного" тарифа выступает
-           вверх над соседями, но низом все карточки на одной линии. */
-        .pricing-grid { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 22px; }
-        .price-card {
-            background: var(--panel); border: 1px solid var(--border); border-radius: 24px;
-            padding: 28px 24px; width: 245px; flex-shrink: 0; position: relative; text-align: left;
-            transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+        /* ── Слайд 3: призыв к действию ──
+           Раньше здесь был блок тарифов; цены переехали в личный кабинет,
+           на публичной странице остался только переход ко входу. */
+        .cta-block { max-width: 620px; margin: 0 auto; text-align: center; }
+        .cta-icon {
+            width: 64px; height: 64px; border-radius: 18px; margin: 0 auto 22px;
+            background: var(--accent-soft); color: var(--accent);
+            display: flex; align-items: center; justify-content: center; font-size: 1.7rem;
         }
-        .price-card:hover { transform: translateY(-4px); border-color: rgba(61,220,132,.3); box-shadow: 0 18px 38px -18px rgba(0,0,0,.6); }
-        .price-card.featured {
-            width: 280px; padding: 38px 28px;
-            border-color: rgba(61,220,132,.45);
-            background: linear-gradient(180deg, var(--accent-soft) 0%, var(--panel) 100%);
-            box-shadow: 0 0 48px -10px rgba(61,220,132,.45);
-        }
-        .price-card.featured:hover { transform: translateY(-6px); box-shadow: 0 0 56px -8px rgba(61,220,132,.55); }
-        .badge-popular {
-            position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
-            background: var(--gradient-main); color: #06140c; white-space: nowrap;
-            padding: 5px 15px; border-radius: 20px; font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
-        }
-        /* Иконка-бейдж сверху - тот же приём, что и в карточках преимуществ
-           на предыдущем слайде, чтобы тарифы визуально ощущались частью
-           того же набора компонентов, а не отдельным чужим блоком. */
-        .price-icon {
-            width: 38px; height: 38px; border-radius: 11px; background: var(--accent-soft); color: var(--accent);
-            display: flex; align-items: center; justify-content: center; font-size: 1.02rem; margin-bottom: 16px;
-        }
-        .price-card.featured .price-icon { background: var(--gradient-main); color: #06140c; }
-        /* font-family не наследовался от заголовков (h1/h2 берут заголовочный
-           шрифт через глобальное правило в _head_common.html, но .price-plan-name -
-           это div, не h-тег) - из-за этого название тарифа визуально оставалось
-           на обычном Inter, а не на фирменном геометричном шрифте, как цена
-           рядом и остальные заголовки на странице. */
-        .price-plan-name { font-family: 'Manrope', sans-serif; font-size: 1.24rem; font-weight: 700; color: #fff; letter-spacing: -.01em; }
-        .price-plan-sub { color: var(--muted); font-size: .78rem; margin-top: 3px; }
-        .price-amount { font-family: 'Manrope', sans-serif; font-size: 1.8rem; font-weight: 800; margin: 18px 0 2px; color: #fff; }
-        .price-amount span { font-size: .8rem; font-weight: 500; color: var(--muted); }
-        .price-per-day { color: var(--muted); font-size: .74rem; margin-bottom: 4px; }
-        .price-card.featured .price-plan-name { font-size: 1.34rem; }
-        .price-card.featured .price-amount { font-size: 2.1rem; }
-        .price-divider { height: 1px; background: var(--border); margin: 16px 0; }
-        .price-card.featured .price-divider { background: rgba(61,220,132,.2); }
-        /* padding: 0 обязателен - у ul есть браузерный padding-left ~40px, из-за
-           которого список визуально уезжал вправо относительно названия и цены
-           (казался отцентрированным внутри карточки, а не прижатым влево).
-           Глобального reset'а для ul в _head_common.html нет, только box-sizing. */
-        .price-features { list-style: none; margin: 0 0 22px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-        /* flex-start, а не center - у пунктов в две строки галочка иначе
-           встаёт по вертикали между строк, а не рядом с первой. */
-        .price-features li { font-size: .85rem; color: var(--muted); display: flex; align-items: flex-start; gap: 9px; line-height: 1.4; }
-        .price-features li::before { content: "✓"; color: var(--accent); font-weight: 700; flex-shrink: 0; }
+        .cta-block h2 { font-size: clamp(1.7rem, 3.5vw, 2.4rem); font-weight: 800; letter-spacing: -.02em; margin-bottom: 14px; }
+        .cta-text { color: var(--muted); font-size: 1rem; line-height: 1.6; margin: 0 auto 30px; max-width: 480px; }
+        .cta-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+        .cta-note { color: var(--muted); font-size: .82rem; margin-top: 20px; }
 
         /* ── Слайд 4: FAQ ── */
         .faq-box { display: grid; gap: 12px; max-width: 760px; margin: 0 auto; }
@@ -226,10 +183,6 @@
         .faq-item.open .faq-a { display: block; }
         .faq-item.open .faq-toggle { transform: rotate(45deg); }
         .faq-toggle { transition: transform .25s ease; font-size: 1.15rem; color: var(--accent); flex-shrink: 0; }
-
-        /* Общие для всех тарифов условия - на десктопе их видно в каждой
-           карточке отдельным списком, здесь блок не нужен (см. медиазапрос). */
-        .price-common { display: none; }
 
         .landing-footer-slide { text-align: center; color: var(--muted); font-size: .78rem; margin-top: 32px; }
 
@@ -276,35 +229,11 @@
             .card-flags { gap: 6px; margin-top: 2px; }
             .card-flags .fi { width: 21px; height: 15px; }
 
-            /* ── Тарифы на телефоне ──
-               Список "что входит" одинаковый у всех тарифов - на телефоне это
-               были 12 повторяющихся строк подряд. Прячем его в карточках и
-               показываем один раз общей подписью под ними (.price-common),
-               а саму карточку сжимаем в строку: слева название и срок, справа
-               цена, кнопка на всю ширину снизу. */
-            .pricing-grid { gap: 12px; }
-            .price-card, .price-card.featured {
-                width: 100%; max-width: 380px; padding: 16px 18px; border-radius: 16px;
-                display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 14px;
-                grid-template-areas: "name price" "sub price" "btn btn";
-            }
-            .price-card .price-icon,
-            .price-card .price-divider,
-            .price-card .price-features,
-            .price-card .price-per-day { display: none; }
-            .price-card .price-plan-name { grid-area: name; }
-            .price-card .price-plan-sub { grid-area: sub; margin-top: 0; }
-            .price-card .price-amount { grid-area: price; margin: 0; text-align: right; }
-            .price-card .btn { grid-area: btn; margin-top: 12px; }
-            .price-card.featured .price-plan-name,
-            .price-card .price-plan-name { font-size: 1.1rem; }
-            .price-card.featured .price-amount,
-            .price-card .price-amount { font-size: 1.5rem; }
-            .badge-popular { top: -11px; left: auto; right: 16px; transform: none; font-size: .62rem; padding: 4px 11px; }
-            .price-common {
-                display: block; margin: 18px auto 0; max-width: 380px; text-align: center;
-                color: var(--muted); font-size: .8rem; line-height: 1.5;
-            }
+            /* Блок призыва на телефоне: кнопки в столбик на всю ширину
+               (общее правило .btn { width: 100% } выше уже это делает). */
+            .cta-icon { width: 54px; height: 54px; font-size: 1.45rem; margin-bottom: 18px; }
+            .cta-text { font-size: .92rem; margin-bottom: 24px; }
+            .cta-actions { flex-direction: column; width: 100%; }
         }
     </style>
 </head>
@@ -325,7 +254,7 @@
 <div class="slide-dots">
     <div class="dot-item active" onclick="scrollToSlide(0)" data-label="Главная"></div>
     <div class="dot-item" onclick="scrollToSlide(1)" data-label="Преимущества"></div>
-    <div class="dot-item" onclick="scrollToSlide(2)" data-label="Тарифы"></div>
+    <div class="dot-item" onclick="scrollToSlide(2)" data-label="Подключение"></div>
     <div class="dot-item" onclick="scrollToSlide(3)" data-label="Вопросы"></div>
 </div>
 
@@ -338,7 +267,7 @@
             <h1 class="hero-title">Приватный, быстрый,<br>на <span class="gradient-text">любые устройства</span></h1>
             <p class="hero-desc">Подключись за 2 минуты и пользуйся преимуществами безопасного сёрфинга — без логов активности и лишних настроек.</p>
             <div class="hero-actions">
-                <a href="javascript:void(0)" onclick="scrollToSlide(2)" class="btn btn-glow"><i class="bi bi-arrow-right-circle"></i> Смотреть тарифы</a>
+                <a href="/auth/login" class="btn btn-glow"><i class="bi bi-arrow-right-circle"></i> Начать</a>
                 <a href="{{ contact_url }}" target="_blank" rel="noopener" class="btn btn-glass"><i class="bi bi-telegram"></i> Написать в Telegram</a>
             </div>
         </div>
@@ -393,35 +322,22 @@
         </div>
     </section>
 
-    <!-- Слайд 3: Тарифы -->
+    <!-- Слайд 3: Переход в кабинет (тарифы и оплата - там) -->
     <section class="section-slide">
         <div class="content-box">
-            <div class="section-header" style="text-align:center;">
-                <h2>Прозрачные <span class="gradient-text">тарифы</span></h2>
-                <p>Оплата картой в личном кабинете, без скрытых платежей</p>
-            </div>
-            <div class="pricing-grid">
-                {% for plan in plans %}
-                <div class="price-card {% if plan.is_featured %}featured{% endif %}">
-                    {% if plan.is_featured %}<div class="badge-popular">Популярный выбор</div>{% endif %}
-                    <div class="price-icon"><i class="bi bi-calendar-check"></i></div>
-                    <div class="price-plan-name">{{ plan.name }}</div>
-                    <div class="price-plan-sub">{{ plan.days }} дней доступа</div>
-                    <div class="price-amount">{{ plan.price }} ₽</div>
-                    <div class="price-per-day">≈ {{ (plan.price / plan.days) | round | int }} ₽ / день</div>
-                    <div class="price-divider"></div>
-                    <ul class="price-features">
-                        <li>Один аккаунт на все устройства</li>
-                        <li>Конфиг сразу после оплаты</li>
-                        <li>Поддержка в Telegram</li>
-                    </ul>
-                    <a href="/auth/login" class="btn {% if plan.is_featured %}btn-glow{% else %}btn-glass{% endif %}" style="width:100%;">Выбрать</a>
+            <div class="cta-block">
+                <div class="cta-icon"><i class="bi bi-rocket-takeoff"></i></div>
+                <h2>Готовы <span class="gradient-text">подключиться?</span></h2>
+                <p class="cta-text">
+                    Войдите в личный кабинет — там доступны варианты подписки,
+                    оплата и готовый конфиг для подключения.
+                </p>
+                <div class="cta-actions">
+                    <a href="/auth/login" class="btn btn-glow"><i class="bi bi-box-arrow-in-right"></i> Перейти в личный кабинет</a>
+                    <a href="{{ contact_url }}" target="_blank" rel="noopener" class="btn btn-glass"><i class="bi bi-telegram"></i> Задать вопрос</a>
                 </div>
-                {% endfor %}
+                <p class="cta-note">Вход без пароля — через Telegram или по ссылке на почту</p>
             </div>
-            <p class="price-common">
-                Во всех тарифах: один аккаунт на все устройства, конфиг сразу после оплаты и поддержка в Telegram.
-            </p>
         </div>
     </section>
 
