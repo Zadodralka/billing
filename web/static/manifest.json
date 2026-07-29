@@ -1,6 +1,6 @@
 {
-  "name": "Unlock VPN",
-  "short_name": "Unlock VPN",
+  "name": "Unlockless VPN",
+  "short_name": "Unlockless",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#0a0e14",

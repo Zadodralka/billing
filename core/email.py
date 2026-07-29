@@ -39,7 +39,7 @@ def _magic_link_html(link: str) -> str:
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
-<title>Вход в Unlock VPN</title>
+<title>Вход в Unlockless VPN</title>
 <style>
   body, table, td, p, a {{ margin: 0; padding: 0; border: 0; }}
   body {{ -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }}
@@ -75,12 +75,12 @@ def _magic_link_html(link: str) -> str:
                     <tr>
                       <td style="width: 44px; height: 44px; border-radius: 12px; overflow: hidden; vertical-align: middle;">
                         <img src="{webapp_url}/static/img/logo.jpg"
-                             alt="Unlock VPN"
+                             alt="Unlockless VPN"
                              width="44" height="44"
                              style="display: block; width: 44px; height: 44px; border-radius: 12px; object-fit: cover;">
                       </td>
                       <td style="padding-left: 12px; vertical-align: middle;">
-                        <span style="color: #14181f; font-size: 18px; font-weight: 700; letter-spacing: -0.3px;">Unlock VPN</span>
+                        <span style="color: #14181f; font-size: 18px; font-weight: 700; letter-spacing: -0.3px;">Unlockless VPN</span>
                       </td>
                     </tr>
                   </table>
@@ -173,7 +173,7 @@ def _magic_link_html(link: str) -> str:
         <tr>
           <td align="center">
             <p style="color: #97a1b0; font-size: 11px; margin: 0;">
-              © Unlock VPN · <a href="{webapp_url}" style="color: #97a1b0; text-decoration: none;">{webapp_url}</a>
+              © Unlockless VPN · <a href="{webapp_url}" style="color: #97a1b0; text-decoration: none;">{webapp_url}</a>
             </p>
           </td>
         </tr>
@@ -190,7 +190,7 @@ def _magic_link_html(link: str) -> str:
 async def send_magic_link(email: str, token: str):
     link = f"{settings.webapp_url}/auth/verify?token={token}"
     html = _magic_link_html(link)
-    await send_email(email, "Ссылка для входа в Unlock VPN", html)
+    await send_email(email, "Ссылка для входа в Unlockless VPN", html)
 
 
 def _gift_html(code: str, plan_name: str, days: int, redeem_url: str) -> str:
@@ -203,7 +203,7 @@ def _gift_html(code: str, plan_name: str, days: int, redeem_url: str) -> str:
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
-<title>Вам подарили VPN — Unlock VPN</title>
+<title>Вам подарили VPN — Unlockless VPN</title>
 <style>
   body, table, td, p, a {{ margin: 0; padding: 0; border: 0; }}
   body {{ -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }}
@@ -236,12 +236,12 @@ def _gift_html(code: str, plan_name: str, days: int, redeem_url: str) -> str:
                     <tr>
                       <td style="width: 44px; height: 44px; border-radius: 12px; overflow: hidden; vertical-align: middle;">
                         <img src="{webapp_url}/static/img/logo.jpg"
-                             alt="Unlock VPN"
+                             alt="Unlockless VPN"
                              width="44" height="44"
                              style="display: block; width: 44px; height: 44px; border-radius: 12px; object-fit: cover;">
                       </td>
                       <td style="padding-left: 12px; vertical-align: middle;">
-                        <span style="color: #14181f; font-size: 18px; font-weight: 700; letter-spacing: -0.3px;">Unlock VPN</span>
+                        <span style="color: #14181f; font-size: 18px; font-weight: 700; letter-spacing: -0.3px;">Unlockless VPN</span>
                       </td>
                     </tr>
                   </table>
@@ -320,7 +320,7 @@ def _gift_html(code: str, plan_name: str, days: int, redeem_url: str) -> str:
         <tr>
           <td align="center">
             <p style="color: #97a1b0; font-size: 11px; margin: 0;">
-              © Unlock VPN · <a href="{webapp_url}" style="color: #97a1b0; text-decoration: none;">{webapp_url}</a>
+              © Unlockless VPN · <a href="{webapp_url}" style="color: #97a1b0; text-decoration: none;">{webapp_url}</a>
             </p>
           </td>
         </tr>
@@ -337,7 +337,7 @@ def _gift_html(code: str, plan_name: str, days: int, redeem_url: str) -> str:
 async def send_gift_email(recipient_email: str, code: str, plan_name: str, days: int):
     redeem_url = f"{settings.webapp_url}/gift/redeem/{code}"
     html = _gift_html(code, plan_name, days, redeem_url)
-    await send_email(recipient_email, "🎁 Вам подарили подписку Unlock VPN", html)
+    await send_email(recipient_email, "🎁 Вам подарили подписку Unlockless VPN", html)
 
 
 def _simple_notice_html(
@@ -355,7 +355,7 @@ def _simple_notice_html(
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
-<title>{title} — Unlock VPN</title>
+<title>{title} — Unlockless VPN</title>
 <style>
   body, table, td, p, a {{ margin: 0; padding: 0; border: 0; }}
   body {{ -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }}
@@ -387,12 +387,12 @@ def _simple_notice_html(
                     <tr>
                       <td style="width: 44px; height: 44px; border-radius: 12px; overflow: hidden; vertical-align: middle;">
                         <img src="{webapp_url}/static/img/logo.jpg"
-                             alt="Unlock VPN"
+                             alt="Unlockless VPN"
                              width="44" height="44"
                              style="display: block; width: 44px; height: 44px; border-radius: 12px; object-fit: cover;">
                       </td>
                       <td style="padding-left: 12px; vertical-align: middle;">
-                        <span style="color: #14181f; font-size: 18px; font-weight: 700; letter-spacing: -0.3px;">Unlock VPN</span>
+                        <span style="color: #14181f; font-size: 18px; font-weight: 700; letter-spacing: -0.3px;">Unlockless VPN</span>
                       </td>
                     </tr>
                   </table>
@@ -440,7 +440,7 @@ def _simple_notice_html(
         <tr>
           <td align="center">
             <p style="color: #97a1b0; font-size: 11px; margin: 0;">
-              © Unlock VPN · <a href="{webapp_url}" style="color: #97a1b0; text-decoration: none;">{webapp_url}</a>
+              © Unlockless VPN · <a href="{webapp_url}" style="color: #97a1b0; text-decoration: none;">{webapp_url}</a>
             </p>
           </td>
         </tr>
@@ -506,7 +506,7 @@ async def send_ticket_reply_email(recipient_email: str, ticket_id: int, subject:
             f"<a href='{settings.webapp_url}' style='color: #97a1b0; text-decoration: underline;'>{settings.webapp_url}</a>."
         ),
     )
-    await send_email(recipient_email, f"💬 Ответ по обращению #{ticket_id} — Unlock VPN", html)
+    await send_email(recipient_email, f"💬 Ответ по обращению #{ticket_id} — Unlockless VPN", html)
 
 
 async def send_balance_bonus_email(recipient_email: str, amount: int, reason_text: str, balance: int):
@@ -531,7 +531,7 @@ async def send_balance_bonus_email(recipient_email: str, amount: int, reason_tex
             f"<a href='{settings.webapp_url}' style='color: #97a1b0; text-decoration: underline;'>{settings.webapp_url}</a>."
         ),
     )
-    await send_email(recipient_email, "🎉 Начислен бонус на баланс — Unlock VPN", html)
+    await send_email(recipient_email, "🎉 Начислен бонус на баланс — Unlockless VPN", html)
 
 
 async def send_expiry_reminder_email(recipient_email: str, plan_name: str, days_left: int, expires_str: str):
@@ -557,7 +557,7 @@ async def send_expiry_reminder_email(recipient_email: str, plan_name: str, days_
             f"<a href='{settings.webapp_url}' style='color: #97a1b0; text-decoration: underline;'>{settings.webapp_url}</a>."
         ),
     )
-    await send_email(recipient_email, f"⏳ Подписка истекает через {days_left} дн. — Unlock VPN", html)
+    await send_email(recipient_email, f"⏳ Подписка истекает через {days_left} дн. — Unlockless VPN", html)
 
 
 async def send_subscription_expired_email(recipient_email: str, plan_name: str):
@@ -581,4 +581,4 @@ async def send_subscription_expired_email(recipient_email: str, plan_name: str):
             f"<a href='{settings.webapp_url}' style='color: #97a1b0; text-decoration: underline;'>{settings.webapp_url}</a>."
         ),
     )
-    await send_email(recipient_email, "⚠️ Подписка истекла — доступ заблокирован — Unlock VPN", html)
+    await send_email(recipient_email, "⚠️ Подписка истекла — доступ заблокирован — Unlockless VPN", html)

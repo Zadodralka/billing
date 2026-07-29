@@ -12,7 +12,7 @@ from core.database import init_db, AsyncSessionLocal, get_db
 from core.plans import seed_plans_if_empty
 from web.routers import auth, dashboard, admin, payments, support, admin_support, admin_promo, referral, docs, admin_docs, gift
 
-app = FastAPI(title="Unlock VPN", docs_url=None, redoc_url=None)
+app = FastAPI(title="Unlockless VPN", docs_url=None, redoc_url=None)
 templates = Jinja2Templates(directory="web/templates")
 
 app.mount("/static", StaticFiles(directory="web/static"), name="static")

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Unlock VPN{% endblock %}</title>
+    <title>{% block title %}Unlockless VPN{% endblock %}</title>
     {% include "_head_common.html" %}
     <style>
         .shell { display: flex; min-height: 100vh; }
@@ -275,7 +275,7 @@
 <div class="shell">
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar(false)"></div>
     <aside class="sidebar" id="sidebar">
-        <div class="brand"><img src="/static/img/logo.jpg" alt="Unlock VPN" class="brand-logo"> Unlock VPN <span class="dot"></span></div>
+        <div class="brand"><img src="/static/img/logo.jpg" alt="Unlockless VPN" class="brand-logo"> Unlockless VPN <span class="dot"></span></div>
         <div class="nav-group">
             <span class="nav-label">Кабинет</span>
             <a href="/dashboard" class="nav-link sidebar-nav-item {% if request.url.path == '/dashboard' %}active{% endif %}">
@@ -342,7 +342,7 @@
     </aside>
     <div class="main">
         <div class="mobile-topbar">
-            <div class="brand"><img src="/static/img/logo.jpg" alt="Unlock VPN" class="brand-logo"> Unlock VPN <span class="dot"></span></div>
+            <div class="brand"><img src="/static/img/logo.jpg" alt="Unlockless VPN" class="brand-logo"> Unlockless VPN <span class="dot"></span></div>
             <button class="mobile-burger" onclick="toggleSidebar(true)"><i class="bi bi-list"></i></button>
         </div>
         {% block content %}{% endblock %}
