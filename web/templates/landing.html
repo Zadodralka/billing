@@ -158,7 +158,7 @@
         .card-flags { display: flex; gap: 8px; margin-top: 4px; }
         .card-flags .fi { width: 24px; height: 18px; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255,255,255,.12); background-size: cover; }
 
-        .stat-value { font-family: 'Space Grotesk', sans-serif; font-size: 1.6rem; font-weight: 800; color: var(--accent); }
+        .stat-value { font-family: 'Manrope', sans-serif; font-size: 1.6rem; font-weight: 800; color: var(--accent); }
 
         /* ── Слайд 3: Тарифы ── */
         /* flex + justify-content:center вместо grid - карточки держат свою
@@ -193,14 +193,14 @@
             display: flex; align-items: center; justify-content: center; font-size: 1.02rem; margin-bottom: 16px;
         }
         .price-card.featured .price-icon { background: var(--gradient-main); color: #06140c; }
-        /* font-family не наследовался от заголовков (h1/h2 берут Space Grotesk
-           через глобальное правило в _head_common.html, но .price-plan-name -
+        /* font-family не наследовался от заголовков (h1/h2 берут заголовочный
+           шрифт через глобальное правило в _head_common.html, но .price-plan-name -
            это div, не h-тег) - из-за этого название тарифа визуально оставалось
            на обычном Inter, а не на фирменном геометричном шрифте, как цена
            рядом и остальные заголовки на странице. */
-        .price-plan-name { font-family: 'Space Grotesk', sans-serif; font-size: 1.24rem; font-weight: 700; color: #fff; letter-spacing: -.01em; }
+        .price-plan-name { font-family: 'Manrope', sans-serif; font-size: 1.24rem; font-weight: 700; color: #fff; letter-spacing: -.01em; }
         .price-plan-sub { color: var(--muted); font-size: .78rem; margin-top: 3px; }
-        .price-amount { font-family: 'Space Grotesk', sans-serif; font-size: 1.8rem; font-weight: 800; margin: 18px 0 2px; color: #fff; }
+        .price-amount { font-family: 'Manrope', sans-serif; font-size: 1.8rem; font-weight: 800; margin: 18px 0 2px; color: #fff; }
         .price-amount span { font-size: .8rem; font-weight: 500; color: var(--muted); }
         .price-per-day { color: var(--muted); font-size: .74rem; margin-bottom: 4px; }
         .price-card.featured .price-plan-name { font-size: 1.34rem; }
