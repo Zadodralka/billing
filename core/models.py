@@ -151,6 +151,14 @@ class PlanSetting(Base):
     price: Mapped[int] = mapped_column(Integer)
     traffic_gb: Mapped[int] = mapped_column(Integer, default=50)  # 0 = безлимит по умолчанию
     unlimited_extra: Mapped[int] = mapped_column(Integer, default=0)  # доплата за безлимит
+    # Стратегия сброса лимита трафика в Remnawave: NO_RESET/DAY/WEEK/MONTH.
+    # Например, у тарифа "1 месяц" может не сбрасываться вовсе (весь объём даётся
+    # разом на весь срок), а у многомесячных - сбрасываться каждый месяц.
+    traffic_reset_strategy: Mapped[str] = mapped_column(String(16), default="MONTH")
+    # UUID squad'ов Remnawave через запятую, к которым привязывается тариф
+    # (например отдельный squad "белые списки" для соответствующего платного тарифа).
+    # Пусто/NULL - поведение по умолчанию (Default-Squad, см. RemnawaveClient.create_user).
+    squad_uuids: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_featured: Mapped[bool] = mapped_column(Boolean, default=False)  # «Популярный выбор» — выделяется на витрине
     sort_order: Mapped[int] = mapped_column(Integer, default=0)

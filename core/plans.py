@@ -8,6 +8,15 @@ from core.models import PlanSetting
 from core.config import PLANS as DEFAULT_PLANS
 
 
+def parse_squad_uuids(raw: str | None) -> list[str]:
+    """squad_uuids хранится в БД одной строкой через запятую - здесь превращаем
+    её в список для передачи в RemnawaveClient.create_user(). Пустая строка/NULL
+    даёт [] - вызывающий код в этом случае использует squad по умолчанию."""
+    if not raw:
+        return []
+    return [s.strip() for s in raw.split(",") if s.strip()]
+
+
 async def seed_plans_if_empty(session: AsyncSession):
     """Заполняет таблицу тарифов дефолтными значениями, если она пуста (первый запуск)"""
     result = await session.execute(select(PlanSetting))
@@ -23,6 +32,8 @@ async def seed_plans_if_empty(session: AsyncSession):
             price=plan["price"],
             traffic_gb=plan.get("traffic_gb", 50),
             unlimited_extra=plan.get("unlimited_extra", 0),
+            traffic_reset_strategy=plan.get("traffic_reset_strategy", "MONTH"),
+            squad_uuids=plan.get("squad_uuids"),
             is_active=True,
             sort_order=i,
         ))
@@ -45,6 +56,8 @@ async def get_active_plans(session: AsyncSession) -> dict:
             "price": row.price,
             "traffic_gb": row.traffic_gb,
             "unlimited_extra": row.unlimited_extra,
+            "traffic_reset_strategy": row.traffic_reset_strategy,
+            "squad_uuids": parse_squad_uuids(row.squad_uuids),
             "is_featured": row.is_featured,
         }
         for row in rows
@@ -65,6 +78,8 @@ async def get_all_plans(session: AsyncSession) -> dict:
             "price": row.price,
             "traffic_gb": row.traffic_gb,
             "unlimited_extra": row.unlimited_extra,
+            "traffic_reset_strategy": row.traffic_reset_strategy,
+            "squad_uuids": parse_squad_uuids(row.squad_uuids),
             "is_active": row.is_active,
             "is_featured": row.is_featured,
         }
@@ -83,5 +98,7 @@ async def get_plan(session: AsyncSession, plan_key: str) -> dict | None:
         "price": row.price,
         "traffic_gb": row.traffic_gb,
         "unlimited_extra": row.unlimited_extra,
+        "traffic_reset_strategy": row.traffic_reset_strategy,
+        "squad_uuids": parse_squad_uuids(row.squad_uuids),
         "is_active": row.is_active,
     }

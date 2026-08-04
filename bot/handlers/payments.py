@@ -362,6 +362,13 @@ async def create_new_vpn_subscription(user: User, plan_key: str, days: int, traf
     при погашении подарочного кода (там нет Payment - оплата уже прошла раньше, при покупке
     подарка), где нужно ровно то же самое создание аккаунта без Payment-специфичной логики.
     """
+    # Стратегия сброса трафика и squad'ы - настройки самого тарифа (см. core/plans.py,
+    # /admin/plans), берём текущие значения по ключу, а не то, что было на момент
+    # покупки/подарка (days/traffic_gb, наоборот, намеренно приходят снаружи снимком).
+    plan = await get_plan(session, plan_key)
+    traffic_reset_strategy = (plan or {}).get("traffic_reset_strategy") or "MONTH"
+    squad_uuids = (plan or {}).get("squad_uuids") or None
+
     username = f"user_{user.id}_{secrets.token_hex(4)}"
     rw_user = await remnawave.create_user(
         username,
@@ -369,6 +376,8 @@ async def create_new_vpn_subscription(user: User, plan_key: str, days: int, traf
         traffic_limit_gb=traffic_gb,
         telegram_id=user.telegram_id,
         email=user.email,
+        traffic_reset_strategy=traffic_reset_strategy,
+        squad_uuids=squad_uuids,
     )
     remnawave_uuid = rw_user["uuid"]
     config_data = rw_user if rw_user.get("subscriptionUrl") else await remnawave.get_user_config(remnawave_uuid)

@@ -2,6 +2,7 @@
 {% block title %}Тарифы — Админ{% endblock %}
 
 {% block content %}
+{% set reset_labels = {"NO_RESET": "Не сбрасывается", "DAY": "Каждый день", "WEEK": "Каждую неделю", "MONTH": "Каждый месяц"} %}
 <div class="topbar">
     <div>
         <h1>Управление тарифами</h1>
@@ -14,7 +15,7 @@
     <div class="table-wrap">
     <table>
         <thead>
-            <tr><th>Ключ</th><th>Название</th><th>Срок</th><th>Цена</th><th>Трафик</th><th>Доплата за безлимит</th><th>Показывать</th><th></th></tr>
+            <tr><th>Ключ</th><th>Название</th><th>Срок</th><th>Цена</th><th>Трафик</th><th>Сброс трафика</th><th>Squad</th><th>Доплата за безлимит</th><th>Показывать</th><th></th></tr>
         </thead>
         <tbody id="plansBody">
             {% for plan in plans %}
@@ -24,6 +25,16 @@
                 <td class="mono">{{ plan.days }} дн.</td>
                 <td class="mono" style="color:var(--accent);font-weight:600;">{{ plan.price }} ₽</td>
                 <td class="mono">{% if plan.traffic_gb == 0 %}Безлимит{% else %}{{ plan.traffic_gb }} GB{% endif %}</td>
+                <td class="mono" style="color:var(--muted);font-size:.82rem;">{{ reset_labels.get(plan.traffic_reset_strategy, plan.traffic_reset_strategy) }}</td>
+                <td style="color:var(--muted);font-size:.82rem;">
+                    {% if plan_squad_uuids[plan.id] %}
+                        {%- for uuid in plan_squad_uuids[plan.id] -%}
+                            {{ squad_name_by_uuid.get(uuid, uuid[:8] + '…') }}{{ ', ' if not loop.last else '' }}
+                        {%- endfor -%}
+                    {% else %}
+                        По умолчанию
+                    {% endif %}
+                </td>
                 <td class="mono" style="color:var(--muted);">{{ plan.unlimited_extra }} ₽</td>
                 <td>
                     {% if plan.is_active %}<span class="badge badge-on">Активен</span>
@@ -39,7 +50,9 @@
                             data-traffic="{{ plan.traffic_gb }}"
                             data-extra="{{ plan.unlimited_extra }}"
                             data-active="{{ 'true' if plan.is_active else 'false' }}"
-                            data-featured="{{ 'true' if plan.is_featured else 'false' }}">
+                            data-featured="{{ 'true' if plan.is_featured else 'false' }}"
+                            data-reset="{{ plan.traffic_reset_strategy }}"
+                            data-squads="{{ plan_squad_uuids[plan.id] | join(',') }}">
                             <i class="bi bi-pencil"></i>
                         </button>
                         <!-- Быстрый тоггл видимости - раньше единственный способ был открыть
@@ -59,7 +72,7 @@
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:2rem;">Тарифов пока нет</td></tr>
+            <tr><td colspan="10" style="text-align:center;color:var(--muted);padding:2rem;">Тарифов пока нет</td></tr>
             {% endfor %}
         </tbody>
     </table>
@@ -87,6 +100,14 @@
         <div class="data-card-row"><span class="k">Срок</span><span class="v">{{ plan.days }} дн.</span></div>
         <div class="data-card-row"><span class="k">Цена</span><span class="v">{{ plan.price }} ₽</span></div>
         <div class="data-card-row"><span class="k">Трафик</span><span class="v">{% if plan.traffic_gb == 0 %}Безлимит{% else %}{{ plan.traffic_gb }} GB{% endif %}</span></div>
+        <div class="data-card-row"><span class="k">Сброс трафика</span><span class="v">{{ reset_labels.get(plan.traffic_reset_strategy, plan.traffic_reset_strategy) }}</span></div>
+        <div class="data-card-row"><span class="k">Squad</span><span class="v">
+            {%- if plan_squad_uuids[plan.id] -%}
+                {%- for uuid in plan_squad_uuids[plan.id] -%}
+                    {{ squad_name_by_uuid.get(uuid, uuid[:8] + '…') }}{{ ', ' if not loop.last else '' }}
+                {%- endfor -%}
+            {%- else -%}По умолчанию{%- endif -%}
+        </span></div>
         <template class="data-card-actions-tpl">
             <button type="button" class="btn btn-sm btn-outline-1 js-edit-plan-btn"
                 data-id="{{ plan.id }}"
@@ -96,7 +117,9 @@
                 data-traffic="{{ plan.traffic_gb }}"
                 data-extra="{{ plan.unlimited_extra }}"
                 data-active="{{ 'true' if plan.is_active else 'false' }}"
-                data-featured="{{ 'true' if plan.is_featured else 'false' }}">
+                data-featured="{{ 'true' if plan.is_featured else 'false' }}"
+                data-reset="{{ plan.traffic_reset_strategy }}"
+                data-squads="{{ plan_squad_uuids[plan.id] | join(',') }}">
                 <i class="bi bi-pencil"></i> Изменить
             </button>
             <button type="button" class="btn btn-sm btn-outline-1 js-toggle-plan-btn" data-id="{{ plan.id }}">
@@ -145,6 +168,29 @@
                 </div>
             </div>
 
+            <label class="form-label">Стратегия сброса трафика</label>
+            <select id="editPlanReset" style="margin-bottom:.9rem;">
+                <option value="NO_RESET">Не сбрасывается (весь объём сразу на срок)</option>
+                <option value="DAY">Каждый день</option>
+                <option value="WEEK">Каждую неделю</option>
+                <option value="MONTH">Каждый месяц</option>
+            </select>
+
+            <label class="form-label">Squad Remnawave</label>
+            {% if squads %}
+            <div id="editPlanSquads" style="margin-bottom:.9rem;max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:.6rem .8rem;">
+                {% for squad in squads %}
+                <label style="display:flex;align-items:center;gap:.5rem;font-size:.85rem;margin-bottom:.4rem;">
+                    <input type="checkbox" class="js-squad-checkbox" value="{{ squad.uuid }}" style="width:auto;"> {{ squad.name }}
+                </label>
+                {% endfor %}
+            </div>
+            <div style="color:var(--muted);font-size:.78rem;margin-bottom:.9rem;margin-top:-.5rem;">Ничего не выбрано — используется squad по умолчанию (Default-Squad)</div>
+            {% else %}
+            <div id="editPlanSquads" style="display:none;"></div>
+            <div style="color:var(--muted);font-size:.8rem;margin-bottom:.9rem;">Не удалось получить список squad'ов от Remnawave — будет использован squad по умолчанию.</div>
+            {% endif %}
+
             <label class="toggle-row">
                 <span class="toggle-switch"><input type="checkbox" id="editPlanActive"><span class="toggle-slider"></span></span>
                 Показывать тариф на сайте
@@ -186,7 +232,7 @@
                 </div>
             </div>
 
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:.9rem;">
                 <div>
                     <label class="form-label">Трафик (GB, 0 = безлимит)</label>
                     <input type="number" id="newPlanTraffic" min="0" value="50">
@@ -196,6 +242,29 @@
                     <input type="number" id="newPlanExtra" min="0" value="150">
                 </div>
             </div>
+
+            <label class="form-label">Стратегия сброса трафика</label>
+            <select id="newPlanReset" style="margin-bottom:.9rem;">
+                <option value="NO_RESET">Не сбрасывается (весь объём сразу на срок)</option>
+                <option value="DAY">Каждый день</option>
+                <option value="WEEK">Каждую неделю</option>
+                <option value="MONTH" selected>Каждый месяц</option>
+            </select>
+
+            <label class="form-label">Squad Remnawave</label>
+            {% if squads %}
+            <div id="newPlanSquads" style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:.6rem .8rem;">
+                {% for squad in squads %}
+                <label style="display:flex;align-items:center;gap:.5rem;font-size:.85rem;margin-bottom:.4rem;">
+                    <input type="checkbox" class="js-squad-checkbox" value="{{ squad.uuid }}" style="width:auto;"> {{ squad.name }}
+                </label>
+                {% endfor %}
+            </div>
+            <div style="color:var(--muted);font-size:.78rem;margin-top:.3rem;">Ничего не выбрано — используется squad по умолчанию (Default-Squad)</div>
+            {% else %}
+            <div id="newPlanSquads" style="display:none;"></div>
+            <div style="color:var(--muted);font-size:.8rem;">Не удалось получить список squad'ов от Remnawave — будет использован squad по умолчанию.</div>
+            {% endif %}
         </div>
         <div class="modal-foot">
             <button type="button" class="btn btn-outline-1" onclick="closeModal('createPlanModal')">Отмена</button>
@@ -221,6 +290,11 @@ document.addEventListener('click', async function(e) {
         document.getElementById('editPlanExtra').value = editBtn.dataset.extra;
         document.getElementById('editPlanActive').checked = editBtn.dataset.active === 'true';
         document.getElementById('editPlanFeatured').checked = editBtn.dataset.featured === 'true';
+        document.getElementById('editPlanReset').value = editBtn.dataset.reset || 'MONTH';
+        const editSquads = (editBtn.dataset.squads || '').split(',').filter(Boolean);
+        document.querySelectorAll('#editPlanSquads .js-squad-checkbox').forEach(cb => {
+            cb.checked = editSquads.includes(cb.value);
+        });
         openModal('editPlanModal');
         return;
     }
@@ -280,6 +354,9 @@ document.addEventListener('click', async function(e) {
             formData.append('price', document.getElementById('editPlanPrice').value);
             formData.append('traffic_gb', document.getElementById('editPlanTraffic').value);
             formData.append('unlimited_extra', document.getElementById('editPlanExtra').value);
+            formData.append('traffic_reset_strategy', document.getElementById('editPlanReset').value);
+            const editSelectedSquads = Array.from(document.querySelectorAll('#editPlanSquads .js-squad-checkbox:checked')).map(cb => cb.value);
+            formData.append('squad_uuids', editSelectedSquads.join(','));
             formData.append('is_active', document.getElementById('editPlanActive').checked ? 'true' : 'false');
             formData.append('is_featured', document.getElementById('editPlanFeatured').checked ? 'true' : 'false');
 
@@ -312,6 +389,9 @@ document.addEventListener('click', async function(e) {
             formData.append('price', document.getElementById('newPlanPrice').value);
             formData.append('traffic_gb', document.getElementById('newPlanTraffic').value);
             formData.append('unlimited_extra', document.getElementById('newPlanExtra').value);
+            formData.append('traffic_reset_strategy', document.getElementById('newPlanReset').value);
+            const newSelectedSquads = Array.from(document.querySelectorAll('#newPlanSquads .js-squad-checkbox:checked')).map(cb => cb.value);
+            formData.append('squad_uuids', newSelectedSquads.join(','));
 
             const res = await fetch('/admin/plans/create', { method: 'POST', body: formData });
             const data = await res.json();

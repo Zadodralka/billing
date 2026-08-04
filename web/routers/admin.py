@@ -367,10 +367,13 @@ async def grant_subscription(
     plan_key: str = Form(...),
     traffic_gb: int = Form(50),
 ):
-    from core.config import PLANS
+    from core.plans import get_plan
     from datetime import datetime, timedelta as td
 
-    plan = PLANS.get(plan_key)
+    # Раньше здесь читался core.config.PLANS (статичные дефолты из .env) - тариф,
+    # изменённый в /admin/plans (срок, стратегия сброса, squad'ы), тут просто
+    # игнорировался. get_plan читает актуальные настройки из БД.
+    plan = await get_plan(session, plan_key)
     if not plan:
         return JSONResponse({"ok": False, "error": "Неверный тариф"}, status_code=400)
 
@@ -395,6 +398,8 @@ async def grant_subscription(
             traffic_limit_gb=traffic_gb,
             telegram_id=user.telegram_id,
             email=user.email,
+            traffic_reset_strategy=plan.get("traffic_reset_strategy") or "MONTH",
+            squad_uuids=plan.get("squad_uuids") or None,
         )
         if not rw_user or "uuid" not in rw_user:
             logger.error(f"grant_subscription: remnawave create_user returned unexpected data: {rw_user}")
@@ -821,13 +826,27 @@ async def admin_remnawave(request: Request, admin: User = Depends(require_admin)
 
 @router.get("/plans", response_class=HTMLResponse)
 async def admin_plans(request: Request, admin: User = Depends(require_admin), session: AsyncSession = Depends(get_db)):
+    from core.plans import parse_squad_uuids
+
     result = await session.execute(select(PlanSetting).order_by(PlanSetting.sort_order))
     plans = result.scalars().all()
+
+    # Список squad'ов Remnawave - нужен, чтобы в форме тарифа выбирать их галочками,
+    # а не вручную вписывать UUID. get_internal_squads() уже не бросает исключение
+    # при недоступности панели, а возвращает [] - тогда форма просто покажет
+    # "не удалось получить список squad'ов" и оставит поведение по умолчанию.
+    squads = await remnawave.get_internal_squads()
 
     return templates.TemplateResponse(request, "admin/plans.html", {
         "user": admin,
         "plans": plans,
+        "squads": squads,
+        "plan_squad_uuids": {plan.id: parse_squad_uuids(plan.squad_uuids) for plan in plans},
+        "squad_name_by_uuid": {s.get("uuid"): s.get("name", "?") for s in squads if s.get("uuid")},
     })
+
+
+_TRAFFIC_RESET_STRATEGIES = {"NO_RESET", "DAY", "WEEK", "MONTH"}
 
 
 @router.post("/plans/{plan_id}/update")
@@ -840,6 +859,8 @@ async def update_plan(
     price: int = Form(...),
     traffic_gb: int = Form(...),
     unlimited_extra: int = Form(0),
+    traffic_reset_strategy: str = Form("MONTH"),
+    squad_uuids: str = Form(""),
     is_active: str = Form(None),
     is_featured: str = Form(None),
 ):
@@ -852,16 +873,21 @@ async def update_plan(
         if price < 0 or days < 1:
             return JSONResponse({"ok": False, "error": "Цена не может быть отрицательной, срок - минимум 1 день"}, status_code=400)
 
+        if traffic_reset_strategy not in _TRAFFIC_RESET_STRATEGIES:
+            return JSONResponse({"ok": False, "error": "Неверная стратегия сброса трафика"}, status_code=400)
+
         plan.name = name.strip()
         plan.days = days
         plan.price = price
         plan.traffic_gb = traffic_gb
         plan.unlimited_extra = unlimited_extra
+        plan.traffic_reset_strategy = traffic_reset_strategy
+        plan.squad_uuids = squad_uuids.strip() or None
         plan.is_active = is_active == "true"
         plan.is_featured = is_featured == "true"
 
         await session.commit()
-        logger.info(f"Admin {admin.id} updated plan {plan.plan_key}: price={price}, days={days}, active={plan.is_active}")
+        logger.info(f"Admin {admin.id} updated plan {plan.plan_key}: price={price}, days={days}, active={plan.is_active}, traffic_reset_strategy={traffic_reset_strategy}, squad_uuids={plan.squad_uuids}")
         return JSONResponse({"ok": True})
     except Exception as e:
         await session.rollback()
@@ -896,12 +922,17 @@ async def create_plan(
     price: int = Form(...),
     traffic_gb: int = Form(50),
     unlimited_extra: int = Form(0),
+    traffic_reset_strategy: str = Form("MONTH"),
+    squad_uuids: str = Form(""),
     is_featured: str = Form(None),
 ):
     try:
         plan_key = plan_key.strip().lower().replace(" ", "_")
         if not plan_key:
             return JSONResponse({"ok": False, "error": "Укажите ключ тарифа"}, status_code=400)
+
+        if traffic_reset_strategy not in _TRAFFIC_RESET_STRATEGIES:
+            return JSONResponse({"ok": False, "error": "Неверная стратегия сброса трафика"}, status_code=400)
 
         existing = await session.execute(select(PlanSetting).where(PlanSetting.plan_key == plan_key))
         if existing.scalar_one_or_none():
@@ -917,6 +948,8 @@ async def create_plan(
             price=price,
             traffic_gb=traffic_gb,
             unlimited_extra=unlimited_extra,
+            traffic_reset_strategy=traffic_reset_strategy,
+            squad_uuids=squad_uuids.strip() or None,
             is_active=True,
             is_featured=is_featured == "true",
             sort_order=next_order,
