@@ -76,6 +76,11 @@ class Subscription(Base):
     remnawave_sub_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     config_link: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Купленные доп.опции (см. PlanAddon) - список ключей через запятую, снимок на
+    # момент покупки/выдачи. Нужен для отображения пользователю и для истории;
+    # сами squad'ы уже применены в Remnawave на момент создания аккаунта.
+    addon_keys: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Сброс на False при продлении - чтобы после продления снова напомнить
     # об истечении ближе к новой дате (см. scheduler.notify_expiring_soon)
     expiry_reminder_sent: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -103,6 +108,8 @@ class Payment(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     plan_key: Mapped[str] = mapped_column(String(10))
     traffic_gb: Mapped[int] = mapped_column(Integer, default=50)  # 0 = безлимит
+    # Выбранные доп.опции (см. PlanAddon) - ключи через запятую, снимок на момент оплаты
+    addon_keys: Mapped[str | None] = mapped_column(Text, nullable=True)
     amount: Mapped[int] = mapped_column(Integer)  # в рублях
     status: Mapped[PaymentStatus] = mapped_column(SAEnum(PaymentStatus), default=PaymentStatus.PENDING)
     label: Mapped[str] = mapped_column(String(64), unique=True, index=True)  # для ЮМани
@@ -164,6 +171,24 @@ class PlanSetting(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+
+class PlanAddon(Base):
+    """Платная доп.опция к подписке (например «Белые списки») - в отличие от тарифа,
+    не самостоятельна: выбирается тумблером поверх ЛЮБОГО тарифа при покупке, точно
+    так же, как сейчас выбирается объём трафика (стандарт/безлимит за доплату).
+    При выборе squad_uuids добавляются к squad'ам самого тарифа, а не заменяют их -
+    см. RemnawaveClient.create_user(extra_squad_uuids=...)."""
+    __tablename__ = "plan_addons"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(32), unique=True, index=True)  # whitelist
+    name: Mapped[str] = mapped_column(String(64))  # "Белые списки"
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    price: Mapped[int] = mapped_column(Integer, default=0)  # доплата за весь срок подписки, ₽
+    squad_uuids: Mapped[str] = mapped_column(Text)  # squad'ы Remnawave, добавляемые при выборе опции
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class TicketStatus(str, enum.Enum):
@@ -288,6 +313,9 @@ class GiftCode(Base):
     plan_name: Mapped[str] = mapped_column(String(64))
     days: Mapped[int] = mapped_column(Integer)
     traffic_gb: Mapped[int] = mapped_column(Integer, default=50)
+    # Выбранные покупателем доп.опции (см. PlanAddon) - ключи через запятую,
+    # применяются получателю в Remnawave при погашении кода.
+    addon_keys: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Строка, а не SAEnum: избегаем истории с TicketStatus (рассинхрон нативного
     # Postgres ENUM и модели) - GiftCodeStatus сам по себе str, сравнения работают как есть.

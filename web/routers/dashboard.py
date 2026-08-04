@@ -52,6 +52,9 @@ async def dashboard(request: Request, user: User = Depends(require_user), sessio
     all_plans = await get_all_plans(session)
     active_plans = await get_active_plans(session)
 
+    from core.addons import get_addon_name_map, parse_addon_keys
+    addon_names = await get_addon_name_map(session)
+
     # Расход трафика по активным подпискам - запросы к Remnawave идут параллельно,
     # а не по очереди, иначе при нескольких подписках открытие кабинета ждало бы
     # каждый запрос последовательно (см. аналогичный фикс для бота).
@@ -66,12 +69,20 @@ async def dashboard(request: Request, user: User = Depends(require_user), sessio
         if s.expires_at and s.expires_at <= now + timedelta(days=EXPIRING_SOON_DAYS)
     ]
 
+    # Названия купленных доп.опций по подпискам - для маленького бейджа в карточке
+    # (например "Белые списки"), см. core/addons.py.
+    sub_addon_names = {
+        s.id: [addon_names.get(k, k) for k in parse_addon_keys(s.addon_keys)]
+        for s in user.subscriptions
+    }
+
     return templates.TemplateResponse(request, "dashboard.html", {
         "user": user,
         "active_subs": active_subs,
         "paused_subs": paused_subs,
         "plans": active_plans,
         "all_plans": all_plans,
+        "sub_addon_names": sub_addon_names,
         "now": now,
         "usage_map": usage_map,
         "expiring_soon": expiring_soon,
@@ -97,10 +108,13 @@ async def profile_page(request: Request, user: User = Depends(require_user), ses
 
 @router.get("/plans", response_class=HTMLResponse)
 async def plans_page(request: Request, user: User = Depends(require_user), session: AsyncSession = Depends(get_db)):
+    from core.addons import get_active_addons
     plans = await get_active_plans(session)
+    addons = await get_active_addons(session)
     return templates.TemplateResponse(request, "plans.html", {
         "user": user,
         "plans": plans,
+        "addons": addons,
     })
 
 

@@ -68,6 +68,7 @@ class RemnawaveClient:
         email: str | None = None,
         traffic_reset_strategy: str = "MONTH",
         squad_uuids: list[str] | None = None,
+        extra_squad_uuids: list[str] | None = None,
     ) -> dict:
         expire_at = datetime.utcnow() + timedelta(days=days)
         payload = {
@@ -85,29 +86,41 @@ class RemnawaveClient:
         if email:
             payload["email"] = email
 
+        resolved_squads: list[str] = []
         if squad_uuids:
             # Тариф явно привязан к конкретным squad'ам (например отдельный squad
             # "белые списки" для соответствующего платного тарифа) - используем их
             # и не трогаем автоопределение Default-Squad ниже.
-            payload["activeInternalSquads"] = squad_uuids
-            logger.info(f"create_user: assigning plan-configured squads={squad_uuids}")
+            resolved_squads = list(squad_uuids)
+            logger.info(f"create_user: assigning plan-configured squads={resolved_squads}")
         else:
             try:
                 squads = await self.get_internal_squads()
                 default_squad = next((s for s in squads if s.get("name") == "Default-Squad"), None)
                 if default_squad and default_squad.get("uuid"):
-                    payload["activeInternalSquads"] = [default_squad["uuid"]]
+                    resolved_squads = [default_squad["uuid"]]
                     logger.info(f"create_user: assigning Default-Squad uuid={default_squad['uuid']}")
                 elif squads:
                     # Default-Squad не найден по имени - берём первый доступный как фолбэк
                     first_uuid = squads[0].get("uuid")
                     if first_uuid:
-                        payload["activeInternalSquads"] = [first_uuid]
+                        resolved_squads = [first_uuid]
                         logger.warning(f"create_user: 'Default-Squad' not found by name, using first squad uuid={first_uuid}")
                 else:
                     logger.warning("create_user: no squads found - user will be created WITHOUT working config")
             except Exception as e:
                 logger.warning(f"Could not fetch internal squads, user will be created without them: {e}")
+
+        if extra_squad_uuids:
+            # Доп.опции (см. core/addons.py) ДОБАВЛЯЮТ свои squad'ы к уже определённым
+            # выше, а не заменяют их - например "белые списки" поверх обычного Default-Squad.
+            for uuid in extra_squad_uuids:
+                if uuid not in resolved_squads:
+                    resolved_squads.append(uuid)
+            logger.info(f"create_user: adding addon squads={extra_squad_uuids}")
+
+        if resolved_squads:
+            payload["activeInternalSquads"] = resolved_squads
 
         logger.info(f"create_user: POST /api/users payload={payload}")
         try:

@@ -61,6 +61,26 @@
     {% endif %}
 </div>
 
+{% if addons %}
+<!-- Доп.опции - не привязаны к конкретному тарифу, применяются к любому выбранному
+     плану сверху (как переключатель трафика, только независимо от карточек). -->
+<div class="card" id="addonsCard" style="padding:1.1rem 1.2rem;margin-bottom:1.3rem;">
+    <label class="form-label" style="display:block;margin-bottom:.7rem;">➕ Дополнительные опции</label>
+    <div style="display:flex;flex-direction:column;gap:.6rem;">
+        {% for addon in addons %}
+        <div>
+            <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+                <input type="checkbox" class="js-addon-check" value="{{ addon.key }}" data-price="{{ addon.price }}" style="width:auto;" onchange="onAddonToggle()">
+                <span style="color:#fff;font-weight:500;">{{ addon.name }}</span>
+                <span style="color:var(--accent);font-weight:600;margin-left:auto;white-space:nowrap;">+{{ addon.price }} ₽</span>
+            </label>
+            {% if addon.description %}<div style="color:var(--muted);font-size:.78rem;margin-left:2.1rem;margin-top:.15rem;">{{ addon.description }}</div>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 {% set ref_plan = plans.values() | list | sort(attribute='days') | first %}
 <div class="plans-grid">
     {% for key, plan in plans.items() | sort(attribute='1.days') %}
@@ -125,9 +145,7 @@ function selectTraffic(btn, planKey) {
     toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     selectedTraffic[planKey] = parseInt(btn.dataset.traffic, 10);
-    const basePrice = parseInt(toggle.dataset.basePrice, 10);
-    const extra = parseInt(toggle.dataset.extra, 10);
-    const price = selectedTraffic[planKey] === 0 ? basePrice + extra : basePrice;
+    const price = _currentPrice(planKey);  // включает доп.опции, см. selectedAddonsSum()
     if (promoValidated && promoDiscount > 0) {
         const disc = price - Math.floor(price * promoDiscount / 100);
         document.getElementById('price-' + planKey).innerHTML = disc + '<span>₽</span>';
@@ -164,13 +182,27 @@ async function validatePromo() {
     }
 }
 
+function selectedAddonKeys() {
+    return Array.from(document.querySelectorAll('.js-addon-check:checked')).map(cb => cb.value);
+}
+
+function selectedAddonsSum() {
+    return Array.from(document.querySelectorAll('.js-addon-check:checked'))
+        .reduce((sum, cb) => sum + parseInt(cb.dataset.price, 10), 0);
+}
+
+// Доп.опции общие для всех карточек - при переключении пересчитываем цены сразу везде
+function onAddonToggle() {
+    if (promoValidated) { _updateCardPrices(); } else { _clearCardPrices(); }
+}
+
 function _currentPrice(planKey) {
     const toggle = document.querySelector(`.traffic-toggle[data-plan="${planKey}"]`);
     if (!toggle) return 0;
     const base = parseInt(toggle.dataset.basePrice, 10);
     const extra = parseInt(toggle.dataset.extra, 10);
     const traffic = selectedTraffic[planKey] !== undefined ? selectedTraffic[planKey] : 50;
-    return traffic === 0 ? base + extra : base;
+    return (traffic === 0 ? base + extra : base) + selectedAddonsSum();
 }
 
 function _updateCardPrices() {
@@ -203,7 +235,7 @@ async function buyPlan(planKey) {
     document.getElementById('payModalBody').innerHTML = `<div class="pay-loading"><div class="spinner"></div><span style="color:var(--muted);font-size:.85rem;">Создаём счёт…</span></div>`;
     const res = await fetch('/payment/create', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({plan_key: planKey, traffic_gb: traffic, promo_code: promoValidated ? promoCode : '', use_balance: useBalance && USER_BALANCE > 0})
+        body: JSON.stringify({plan_key: planKey, traffic_gb: traffic, addon_keys: selectedAddonKeys(), promo_code: promoValidated ? promoCode : '', use_balance: useBalance && USER_BALANCE > 0})
     });
     const data = await res.json();
     if (res.status === 409 && data.error === 'pending_payment_exists') {
@@ -248,7 +280,7 @@ async function giftPlan(planKey) {
 
     const res = await fetch('/gift/create', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({plan_key: planKey, traffic_gb: traffic, recipient_email: email})
+        body: JSON.stringify({plan_key: planKey, traffic_gb: traffic, addon_keys: selectedAddonKeys(), recipient_email: email})
     });
     if (!res.ok) {
         const err = await res.json().catch(() => ({}));

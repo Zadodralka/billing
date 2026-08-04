@@ -363,6 +363,13 @@
             </div>
             {% endif %}
 
+            {% if sub_addon_names.get(sub.id) %}
+            <div class="sub-info-row">
+                <span class="k">Опции</span>
+                <span class="v">{{ sub_addon_names[sub.id] | join(', ') }}</span>
+            </div>
+            {% endif %}
+
             {% if card_state == 'active' and sub.expires_at %}
             <div class="sub-countdown" data-expires="{{ sub.expires_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z">
                 <div class="sub-countdown-unit"><span class="sub-countdown-num" data-unit="d">--</span><span class="sub-countdown-label">дн</span></div>

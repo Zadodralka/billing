@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+{% block title %}Доп.опции — Админ{% endblock %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>Дополнительные опции</h1>
+        <div class="sub">Платные тумблеры поверх любого тарифа (например «Белые списки») — применяются сразу</div>
+    </div>
+    <button class="btn btn-accent" onclick="openModal('createAddonModal')"><i class="bi bi-plus-lg"></i> Новая опция</button>
+</div>
+
+<div class="table-card has-mobile-cards">
+    <div class="table-wrap">
+    <table>
+        <thead>
+            <tr><th>Ключ</th><th>Название</th><th>Доплата</th><th>Squad</th><th>Показывать</th><th></th></tr>
+        </thead>
+        <tbody id="addonsBody">
+            {% for addon in addons %}
+            <tr id="addon-row-{{ addon.id }}" data-row-for="{{ addon.id }}">
+                <td class="mono" style="color:var(--muted);font-size:.8rem;">{{ addon.key }}</td>
+                <td>{{ addon.name }}{% if addon.description %}<div style="color:var(--muted);font-size:.78rem;margin-top:.15rem;">{{ addon.description }}</div>{% endif %}</td>
+                <td class="mono" style="color:var(--accent);font-weight:600;">+{{ addon.price }} ₽</td>
+                <td style="color:var(--muted);font-size:.82rem;">
+                    {%- if addon_squad_uuids[addon.id] -%}
+                        {%- for uuid in addon_squad_uuids[addon.id] -%}
+                            {{ squad_name_by_uuid.get(uuid, uuid[:8] + '…') }}{{ ', ' if not loop.last else '' }}
+                        {%- endfor -%}
+                    {%- else -%}
+                        <span style="color:var(--danger);">не выбран</span>
+                    {%- endif -%}
+                </td>
+                <td>
+                    {% if addon.is_active %}<span class="badge badge-on">Активна</span>
+                    {% else %}<span class="badge badge-neutral">Скрыта</span>{% endif %}
+                </td>
+                <td>
+                    <div style="display:flex;gap:.4rem;">
+                        <button type="button" class="btn btn-sm btn-outline-1 js-edit-addon-btn"
+                            data-id="{{ addon.id }}"
+                            data-name="{{ addon.name }}"
+                            data-description="{{ addon.description or '' }}"
+                            data-price="{{ addon.price }}"
+                            data-active="{{ 'true' if addon.is_active else 'false' }}"
+                            data-squads="{{ addon_squad_uuids[addon.id] | join(',') }}">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-1 js-toggle-addon-btn" data-id="{{ addon.id }}"
+                            title="{% if addon.is_active %}Скрыть{% else %}Показать{% endif %}">
+                            {% if addon.is_active %}<i class="bi bi-eye-slash"></i>{% else %}<i class="bi bi-check2-circle"></i>{% endif %}
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger-1 js-delete-addon-btn" data-id="{{ addon.id }}" data-name="{{ addon.name }}">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:2rem;">Доп.опций пока нет</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<div class="data-cards">
+    {% for addon in addons %}
+    <div class="data-card" data-row-for="{{ addon.id }}" onclick="openCardActions(this)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.6rem;">
+            <div style="min-width:0;">
+                <div style="color:#fff;font-weight:700;font-size:.92rem;">{{ addon.name }}</div>
+                <div class="mono" style="color:var(--muted);font-size:.8rem;margin-top:.15rem;">{{ addon.key }}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.5rem;flex-shrink:0;">
+                {% if addon.is_active %}<span class="badge badge-on">Активна</span>
+                {% else %}<span class="badge badge-neutral">Скрыта</span>{% endif %}
+                <i class="bi bi-chevron-right" style="color:var(--muted);"></i>
+            </div>
+        </div>
+        <div class="data-card-row"><span class="k">Доплата</span><span class="v">+{{ addon.price }} ₽</span></div>
+        <div class="data-card-row"><span class="k">Squad</span><span class="v">
+            {%- if addon_squad_uuids[addon.id] -%}
+                {%- for uuid in addon_squad_uuids[addon.id] -%}
+                    {{ squad_name_by_uuid.get(uuid, uuid[:8] + '…') }}{{ ', ' if not loop.last else '' }}
+                {%- endfor -%}
+            {%- else -%}не выбран{%- endif -%}
+        </span></div>
+        <template class="data-card-actions-tpl">
+            <button type="button" class="btn btn-sm btn-outline-1 js-edit-addon-btn"
+                data-id="{{ addon.id }}"
+                data-name="{{ addon.name }}"
+                data-description="{{ addon.description or '' }}"
+                data-price="{{ addon.price }}"
+                data-active="{{ 'true' if addon.is_active else 'false' }}"
+                data-squads="{{ addon_squad_uuids[addon.id] | join(',') }}">
+                <i class="bi bi-pencil"></i> Изменить
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-1 js-toggle-addon-btn" data-id="{{ addon.id }}">
+                {% if addon.is_active %}<i class="bi bi-eye-slash"></i> Скрыть{% else %}<i class="bi bi-check2-circle"></i> Показать{% endif %}
+            </button>
+            <button type="button" class="btn btn-sm btn-danger-1 js-delete-addon-btn" data-id="{{ addon.id }}" data-name="{{ addon.name }}">
+                <i class="bi bi-trash"></i> Удалить
+            </button>
+        </template>
+    </div>
+    {% else %}
+    <div style="text-align:center;color:var(--muted);padding:2rem;">Доп.опций пока нет</div>
+    {% endfor %}
+</div>
+
+<!-- Edit addon modal -->
+<div class="modal-overlay" id="editAddonModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Редактировать опцию</h3>
+            <button type="button" class="modal-close" onclick="closeModal('editAddonModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c">
+            <label class="form-label">Название</label>
+            <input type="text" id="editAddonName" style="margin-bottom:.9rem;">
+
+            <label class="form-label">Описание (необязательно, показывается пользователю)</label>
+            <input type="text" id="editAddonDescription" style="margin-bottom:.9rem;">
+
+            <label class="form-label">Доплата за весь срок подписки (₽)</label>
+            <input type="number" id="editAddonPrice" min="0" style="margin-bottom:.9rem;">
+
+            <label class="form-label">Squad Remnawave (добавляется к squad'ам тарифа)</label>
+            {% if squads %}
+            <div id="editAddonSquads" style="margin-bottom:.9rem;max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:.6rem .8rem;">
+                {% for squad in squads %}
+                <label style="display:flex;align-items:center;gap:.5rem;font-size:.85rem;margin-bottom:.4rem;">
+                    <input type="checkbox" class="js-squad-checkbox" value="{{ squad.uuid }}" style="width:auto;"> {{ squad.name }}
+                </label>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div id="editAddonSquads" style="display:none;"></div>
+            <div style="color:var(--muted);font-size:.8rem;margin-bottom:.9rem;">Не удалось получить список squad'ов от Remnawave — опцию сохранить не получится, пока панель недоступна.</div>
+            {% endif %}
+
+            <label class="toggle-row">
+                <span class="toggle-switch"><input type="checkbox" id="editAddonActive"><span class="toggle-slider"></span></span>
+                Показывать опцию при покупке
+            </label>
+        </div>
+        <div class="modal-foot">
+            <button type="button" class="btn btn-outline-1" onclick="closeModal('editAddonModal')">Отмена</button>
+            <button type="button" class="btn btn-accent" id="confirmEditAddonBtn">Сохранить</button>
+        </div>
+    </div>
+</div>
+
+<!-- Create addon modal -->
+<div class="modal-overlay" id="createAddonModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Новая опция</h3>
+            <button type="button" class="modal-close" onclick="closeModal('createAddonModal')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-body-c">
+            <label class="form-label">Ключ (латиницей, без пробелов)</label>
+            <input type="text" id="newAddonKey" placeholder="например whitelist" style="margin-bottom:.9rem;">
+
+            <label class="form-label">Название</label>
+            <input type="text" id="newAddonName" placeholder="Белые списки" style="margin-bottom:.9rem;">
+
+            <label class="form-label">Описание (необязательно, показывается пользователю)</label>
+            <input type="text" id="newAddonDescription" style="margin-bottom:.9rem;">
+
+            <label class="form-label">Доплата за весь срок подписки (₽)</label>
+            <input type="number" id="newAddonPrice" min="0" value="100" style="margin-bottom:.9rem;">
+
+            <label class="form-label">Squad Remnawave (добавляется к squad'ам тарифа)</label>
+            {% if squads %}
+            <div id="newAddonSquads" style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:.6rem .8rem;">
+                {% for squad in squads %}
+                <label style="display:flex;align-items:center;gap:.5rem;font-size:.85rem;margin-bottom:.4rem;">
+                    <input type="checkbox" class="js-squad-checkbox" value="{{ squad.uuid }}" style="width:auto;"> {{ squad.name }}
+                </label>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div id="newAddonSquads" style="display:none;"></div>
+            <div style="color:var(--muted);font-size:.8rem;">Не удалось получить список squad'ов от Remnawave — опцию сохранить не получится, пока панель недоступна.</div>
+            {% endif %}
+        </div>
+        <div class="modal-foot">
+            <button type="button" class="btn btn-outline-1" onclick="closeModal('createAddonModal')">Отмена</button>
+            <button type="button" class="btn btn-accent" id="confirmCreateAddonBtn">Создать</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let pendingEditAddonId = null;
+
+document.addEventListener('click', async function(e) {
+    const editBtn = e.target.closest('.js-edit-addon-btn');
+    if (editBtn) {
+        pendingEditAddonId = editBtn.dataset.id;
+        document.getElementById('editAddonName').value = editBtn.dataset.name;
+        document.getElementById('editAddonDescription').value = editBtn.dataset.description;
+        document.getElementById('editAddonPrice').value = editBtn.dataset.price;
+        document.getElementById('editAddonActive').checked = editBtn.dataset.active === 'true';
+        const editSquads = (editBtn.dataset.squads || '').split(',').filter(Boolean);
+        document.querySelectorAll('#editAddonSquads .js-squad-checkbox').forEach(cb => {
+            cb.checked = editSquads.includes(cb.value);
+        });
+        openModal('editAddonModal');
+        return;
+    }
+
+    const deleteBtn = e.target.closest('.js-delete-addon-btn');
+    if (deleteBtn) {
+        if (!(await confirmAction('Удалить опцию "' + deleteBtn.dataset.name + '"? Уже купленные подписки не пострадают.', { okText: 'Удалить' }))) return;
+        const id = deleteBtn.dataset.id;
+        try {
+            const res = await fetch('/admin/addons/' + id + '/delete', { method: 'POST' });
+            const data = await res.json();
+            if (data.ok) {
+                document.querySelectorAll('[data-row-for="' + id + '"]').forEach(el => el.remove());
+                showSuccess('Опция удалена');
+            } else {
+                showError('Не удалось удалить: ' + (data.error || 'ошибка'));
+            }
+        } catch (err) { showError('Сетевая ошибка: ' + err.message); }
+        return;
+    }
+
+    const toggleBtn = e.target.closest('.js-toggle-addon-btn');
+    if (toggleBtn) {
+        toggleBtn.disabled = true;
+        try {
+            const res = await fetch('/admin/addons/' + toggleBtn.dataset.id + '/toggle', { method: 'POST' });
+            const data = await res.json();
+            if (data.ok) {
+                location.reload();
+            } else {
+                showError('Не удалось изменить статус: ' + (data.error || 'ошибка'));
+                toggleBtn.disabled = false;
+            }
+        } catch (err) {
+            showError('Сетевая ошибка: ' + err.message);
+            toggleBtn.disabled = false;
+        }
+        return;
+    }
+
+    const confirmEdit = e.target.closest('#confirmEditAddonBtn');
+    if (confirmEdit) {
+        confirmEdit.disabled = true;
+        try {
+            const formData = new FormData();
+            formData.append('name', document.getElementById('editAddonName').value);
+            formData.append('description', document.getElementById('editAddonDescription').value);
+            formData.append('price', document.getElementById('editAddonPrice').value);
+            const editSelectedSquads = Array.from(document.querySelectorAll('#editAddonSquads .js-squad-checkbox:checked')).map(cb => cb.value);
+            formData.append('squad_uuids', editSelectedSquads.join(','));
+            formData.append('is_active', document.getElementById('editAddonActive').checked ? 'true' : 'false');
+
+            const res = await fetch('/admin/addons/' + pendingEditAddonId + '/update', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.ok) {
+                closeModal('editAddonModal');
+                showSuccess('Опция обновлена');
+                setTimeout(() => location.reload(), 800);
+            } else {
+                showError('Не удалось сохранить: ' + (data.error || 'ошибка'));
+            }
+        } catch (err) { showError('Сетевая ошибка: ' + err.message); }
+        confirmEdit.disabled = false;
+        return;
+    }
+
+    const confirmCreate = e.target.closest('#confirmCreateAddonBtn');
+    if (confirmCreate) {
+        const key = document.getElementById('newAddonKey').value.trim();
+        const name = document.getElementById('newAddonName').value.trim();
+        if (!key || !name) { showError('Заполните ключ и название опции'); return; }
+
+        confirmCreate.disabled = true;
+        try {
+            const formData = new FormData();
+            formData.append('key', key);
+            formData.append('name', name);
+            formData.append('description', document.getElementById('newAddonDescription').value);
+            formData.append('price', document.getElementById('newAddonPrice').value);
+            const newSelectedSquads = Array.from(document.querySelectorAll('#newAddonSquads .js-squad-checkbox:checked')).map(cb => cb.value);
+            formData.append('squad_uuids', newSelectedSquads.join(','));
+
+            const res = await fetch('/admin/addons/create', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.ok) {
+                closeModal('createAddonModal');
+                showSuccess('Опция создана');
+                setTimeout(() => location.reload(), 800);
+            } else {
+                showError('Не удалось создать: ' + (data.error || 'ошибка'));
+            }
+        } catch (err) { showError('Сетевая ошибка: ' + err.message); }
+        confirmCreate.disabled = false;
+        return;
+    }
+});
+</script>
+{% endblock %}

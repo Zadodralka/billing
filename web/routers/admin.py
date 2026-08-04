@@ -10,7 +10,7 @@ import logging
 import traceback
 import secrets
 from core.database import get_db
-from core.models import User, Subscription, Payment, SubscriptionStatus, PaymentStatus, PlanSetting
+from core.models import User, Subscription, Payment, SubscriptionStatus, PaymentStatus, PlanSetting, PlanAddon
 from core.remnawave import remnawave
 from core.version import APP_VERSION
 from core.timezone import to_local
@@ -978,4 +978,137 @@ async def delete_plan(plan_id: int, admin: User = Depends(require_admin), sessio
     except Exception as e:
         await session.rollback()
         logger.error(f"delete_plan failed: {traceback.format_exc()}")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+# ───────────── Доп.опции подписки (см. core/addons.py) ─────────────
+# Платные тумблеры поверх ЛЮБОГО тарифа (например «Белые списки») - независимы
+# от /admin/plans, выбираются пользователем при покупке точно так же, как объём
+# трафика (см. web/templates/plans.html и bot/handlers/payments.py buy_addons:).
+
+@router.get("/addons", response_class=HTMLResponse)
+async def admin_addons(request: Request, admin: User = Depends(require_admin), session: AsyncSession = Depends(get_db)):
+    from core.plans import parse_squad_uuids
+
+    result = await session.execute(select(PlanAddon).order_by(PlanAddon.sort_order))
+    addons = result.scalars().all()
+    squads = await remnawave.get_internal_squads()
+
+    return templates.TemplateResponse(request, "admin/addons.html", {
+        "user": admin,
+        "addons": addons,
+        "squads": squads,
+        "addon_squad_uuids": {addon.id: parse_squad_uuids(addon.squad_uuids) for addon in addons},
+        "squad_name_by_uuid": {s.get("uuid"): s.get("name", "?") for s in squads if s.get("uuid")},
+    })
+
+
+@router.post("/addons/create")
+async def create_addon(
+    admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_db),
+    key: str = Form(...),
+    name: str = Form(...),
+    description: str = Form(""),
+    price: int = Form(0),
+    squad_uuids: str = Form(""),
+):
+    try:
+        key = key.strip().lower().replace(" ", "_")
+        if not key:
+            return JSONResponse({"ok": False, "error": "Укажите ключ опции"}, status_code=400)
+        if price < 0:
+            return JSONResponse({"ok": False, "error": "Цена не может быть отрицательной"}, status_code=400)
+        if not squad_uuids.strip():
+            return JSONResponse({"ok": False, "error": "Выберите хотя бы один squad - иначе опция ничего не добавляет"}, status_code=400)
+
+        existing = await session.execute(select(PlanAddon).where(PlanAddon.key == key))
+        if existing.scalar_one_or_none():
+            return JSONResponse({"ok": False, "error": f"Опция с ключом '{key}' уже существует"}, status_code=400)
+
+        max_order = await session.execute(select(func.max(PlanAddon.sort_order)))
+        next_order = (max_order.scalar() or 0) + 1
+
+        addon = PlanAddon(
+            key=key,
+            name=name.strip(),
+            description=description.strip() or None,
+            price=price,
+            squad_uuids=squad_uuids.strip(),
+            is_active=True,
+            sort_order=next_order,
+        )
+        session.add(addon)
+        await session.commit()
+        logger.info(f"Admin {admin.id} created addon '{key}'")
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        await session.rollback()
+        logger.error(f"create_addon failed: {traceback.format_exc()}")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@router.post("/addons/{addon_id}/update")
+async def update_addon(
+    addon_id: int,
+    admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_db),
+    name: str = Form(...),
+    description: str = Form(""),
+    price: int = Form(...),
+    squad_uuids: str = Form(""),
+    is_active: str = Form(None),
+):
+    try:
+        result = await session.execute(select(PlanAddon).where(PlanAddon.id == addon_id))
+        addon = result.scalar_one_or_none()
+        if not addon:
+            return JSONResponse({"ok": False, "error": "Опция не найдена"}, status_code=404)
+
+        if price < 0:
+            return JSONResponse({"ok": False, "error": "Цена не может быть отрицательной"}, status_code=400)
+        if not squad_uuids.strip():
+            return JSONResponse({"ok": False, "error": "Выберите хотя бы один squad - иначе опция ничего не добавляет"}, status_code=400)
+
+        addon.name = name.strip()
+        addon.description = description.strip() or None
+        addon.price = price
+        addon.squad_uuids = squad_uuids.strip()
+        addon.is_active = is_active == "true"
+
+        await session.commit()
+        logger.info(f"Admin {admin.id} updated addon {addon.key}: price={price}, active={addon.is_active}")
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        await session.rollback()
+        logger.error(f"update_addon failed: {traceback.format_exc()}")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@router.post("/addons/{addon_id}/toggle")
+async def toggle_addon(addon_id: int, admin: User = Depends(require_admin), session: AsyncSession = Depends(get_db)):
+    result = await session.execute(select(PlanAddon).where(PlanAddon.id == addon_id))
+    addon = result.scalar_one_or_none()
+    if not addon:
+        return JSONResponse({"ok": False, "error": "Опция не найдена"}, status_code=404)
+    addon.is_active = not addon.is_active
+    await session.commit()
+    logger.info(f"Admin {admin.id} toggled addon {addon.key} active={addon.is_active}")
+    return JSONResponse({"ok": True, "is_active": addon.is_active})
+
+
+@router.post("/addons/{addon_id}/delete")
+async def delete_addon(addon_id: int, admin: User = Depends(require_admin), session: AsyncSession = Depends(get_db)):
+    try:
+        result = await session.execute(select(PlanAddon).where(PlanAddon.id == addon_id))
+        addon = result.scalar_one_or_none()
+        if not addon:
+            return JSONResponse({"ok": False, "error": "Опция не найдена"}, status_code=404)
+
+        await session.execute(delete(PlanAddon).where(PlanAddon.id == addon_id))
+        await session.commit()
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        await session.rollback()
+        logger.error(f"delete_addon failed: {traceback.format_exc()}")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)

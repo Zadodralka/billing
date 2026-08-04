@@ -9,6 +9,7 @@ from sqlalchemy import select, update
 from core.database import get_db
 from core.models import User, Payment, PaymentStatus, GiftCode, GiftCodeStatus
 from core.plans import get_plan
+from core.addons import get_addons_by_keys, addons_price, parse_addon_keys
 from core.yoomoney import yoomoney
 from core.rate_limit import check_rate_limit
 from core.version import APP_VERSION
@@ -53,16 +54,19 @@ async def create_gift_payment(request: Request, user: User = Depends(require_use
     if not plan or not plan.get("is_active", True):
         raise HTTPException(400, "Invalid plan")
 
-    # Трафик выбирается тем же переключателем, что и при покупке себе (см. plans.html) -
-    # логика цены совпадает с web.routers.payments.create_payment_web.
+    # Трафик и доп.опции выбираются теми же переключателями, что и при покупке себе
+    # (см. plans.html) - логика цены совпадает с web.routers.payments.create_payment_web.
     traffic_gb = data.get("traffic_gb", plan.get("traffic_gb", 50))
-    amount = plan["price"] + (plan.get("unlimited_extra", 0) if traffic_gb == 0 else 0)
+    addon_keys_in = data.get("addon_keys") or []
+    addons = await get_addons_by_keys(session, addon_keys_in)
+    amount = plan["price"] + (plan.get("unlimited_extra", 0) if traffic_gb == 0 else 0) + addons_price(addons)
 
     label = yoomoney.generate_label()
     payment = Payment(
         user_id=user.id,
         plan_key=plan_key,
         traffic_gb=traffic_gb,
+        addon_keys=",".join(a["key"] for a in addons) or None,
         amount=amount,
         original_amount=amount,
         label=label,
@@ -166,7 +170,10 @@ async def redeem_gift(code: str, request: Request, user: User = Depends(require_
 
     try:
         from bot.handlers.payments import create_new_vpn_subscription
-        subscription, _ = await create_new_vpn_subscription(user, gift.plan_key, gift.days, gift.traffic_gb, session)
+        subscription, _ = await create_new_vpn_subscription(
+            user, gift.plan_key, gift.days, gift.traffic_gb, session,
+            addon_keys=parse_addon_keys(gift.addon_keys),
+        )
         gift.subscription_id = subscription.id
         await session.commit()
     except Exception as e:

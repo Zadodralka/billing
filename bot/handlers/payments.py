@@ -28,6 +28,7 @@ async def _create_payment_and_show(
     callback: CallbackQuery, user: User, session: AsyncSession,
     plan_key: str, plan: dict, traffic_gb: int, title: str,
     payment_comment: str, renew_subscription_id: int | None = None,
+    addon_keys: list[str] | None = None,
 ):
     # Не даём плодить счета - пока не оплачен или не отменён предыдущий, новый
     # через "Купить"/"Продлить" не создаётся (иначе повторные нажатия кнопки
@@ -58,6 +59,7 @@ async def _create_payment_and_show(
         user_id=user.id,
         plan_key=plan_key,
         traffic_gb=traffic_gb,
+        addon_keys=",".join(addon_keys) if addon_keys else None,
         amount=plan["price"],
         label=label,
         renew_subscription_id=renew_subscription_id,
@@ -71,10 +73,18 @@ async def _create_payment_and_show(
         comment=payment_comment,
     )
 
+    addons_line = ""
+    if addon_keys:
+        from core.addons import get_addons_by_keys
+        addons = await get_addons_by_keys(session, addon_keys)
+        if addons:
+            addons_line = f"➕ Опции: {', '.join(a['name'] for a in addons)}\n"
+
     await callback.message.edit_text(
         f"💳 <b>{title}</b>\n\n"
         f"📦 Тариф: {plan['name']}\n"
         f"📊 Трафик: {_traffic_label(traffic_gb)}\n"
+        f"{addons_line}"
         f"💰 Сумма: {plan['price']} ₽\n\n"
         f"Нажмите кнопку ниже для оплаты через ЮМани.\n"
         f"После оплаты нажмите <b>✅ Я оплатил(а)</b>",
@@ -96,25 +106,38 @@ async def cb_buy_plan_traffic(callback: CallbackQuery, user: User, session: Asyn
     base_traffic = plan.get("traffic_gb", 50)
     unlimited_extra = plan.get("unlimited_extra", 0)
 
-    # Тариф уже безлимитный сам по себе - выбирать нечего, сразу к оплате
+    from core.addons import get_active_addons
+    has_addons = bool(await get_active_addons(session))
+
+    def _next_step_callback_data(traffic: int) -> str:
+        # Если доп.опций нет вообще (сейчас так по умолчанию) - шаг buy_addons не
+        # нужен, ведём себя ровно как раньше: buy:<plan>:<traffic> сразу создаёт счёт.
+        if has_addons:
+            return f"buy_addons:{plan_key}:{traffic}:0"  # 0 - маска выбранных опций, пока ничего не выбрано
+        return f"buy:{plan_key}:{traffic}"
+
+    # Тариф уже безлимитный сам по себе - трафик выбирать нечего
     if base_traffic == 0:
-        await _create_payment_and_show(
-            callback, user, session, plan_key, plan,
-            traffic_gb=0,
-            title="Оплата подписки",
-            payment_comment=f"VPN подписка {plan['name']}",
-        )
+        if has_addons:
+            await _render_addons_step(callback, session, plan_key, traffic_gb=0, mask=0)
+        else:
+            await _create_payment_and_show(
+                callback, user, session, plan_key, plan,
+                traffic_gb=0,
+                title="Оплата подписки",
+                payment_comment=f"VPN подписка {plan['name']}",
+            )
         return
 
     unlimited_price = plan["price"] + unlimited_extra
     buttons = [
         [InlineKeyboardButton(
             text=f"{base_traffic} GB — {plan['price']} ₽",
-            callback_data=f"buy:{plan_key}:{base_traffic}",
+            callback_data=_next_step_callback_data(base_traffic),
         )],
         [InlineKeyboardButton(
             text=f"♾ Безлимит — {unlimited_price} ₽",
-            callback_data=f"buy:{plan_key}:0",
+            callback_data=_next_step_callback_data(0),
         )],
         [InlineKeyboardButton(text="← Назад", callback_data="menu:buy")],
     ]
@@ -126,7 +149,78 @@ async def cb_buy_plan_traffic(callback: CallbackQuery, user: User, session: Asyn
     await callback.answer()
 
 
-# ===== Покупка — шаг 2: тариф и трафик выбраны, создаём счёт =====
+# ===== Покупка — шаг 1.5 (только если есть активные доп.опции): тумблеры опций =====
+async def _render_addons_step(callback: CallbackQuery, session: AsyncSession, plan_key: str, traffic_gb: int, mask: int):
+    from core.addons import get_active_addons
+    plan = await get_plan(session, plan_key)
+    addons = await get_active_addons(session)
+    if not plan or not plan.get("is_active", True):
+        await callback.answer("Тариф недоступен")
+        return
+
+    traffic_extra = plan.get("unlimited_extra", 0) if traffic_gb == 0 else 0
+    base_price = plan["price"] + traffic_extra
+    selected = [a for i, a in enumerate(addons) if mask & (1 << i)]
+    total = base_price + sum(a["price"] for a in selected)
+
+    buttons = []
+    for i, addon in enumerate(addons):
+        checked = bool(mask & (1 << i))
+        mark = "✅" if checked else "⬜"
+        new_mask = mask ^ (1 << i)
+        buttons.append([InlineKeyboardButton(
+            text=f"{mark} {addon['name']} (+{addon['price']} ₽)",
+            callback_data=f"buy_addons:{plan_key}:{traffic_gb}:{new_mask}",
+        )])
+    buttons.append([InlineKeyboardButton(
+        text=f"Оплатить — {total} ₽",
+        callback_data=f"buy_confirm:{plan_key}:{traffic_gb}:{mask}",
+    )])
+    buttons.append([InlineKeyboardButton(text="← Назад", callback_data=f"buy_plan:{plan_key}")])
+
+    await callback.message.edit_text(
+        f"📦 <b>{plan['name']}</b>\n\n"
+        f"Дополнительные опции (необязательно, доплата за весь срок):",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("buy_addons:"))
+async def cb_buy_addons(callback: CallbackQuery, session: AsyncSession):
+    _, plan_key, traffic_str, mask_str = callback.data.split(":")
+    await _render_addons_step(callback, session, plan_key, int(traffic_str), int(mask_str))
+
+
+@router.callback_query(F.data.startswith("buy_confirm:"))
+async def cb_buy_confirm(callback: CallbackQuery, user: User, session: AsyncSession):
+    _, plan_key, traffic_str, mask_str = callback.data.split(":")
+    traffic_gb = int(traffic_str)
+    mask = int(mask_str)
+
+    plan = await get_plan(session, plan_key)
+    if not plan or not plan.get("is_active", True):
+        await callback.answer("Тариф недоступен")
+        return
+
+    from core.addons import get_active_addons, addons_price
+    addons = await get_active_addons(session)
+    selected = [a for i, a in enumerate(addons) if mask & (1 << i)]
+
+    price = plan["price"] + (plan.get("unlimited_extra", 0) if traffic_gb == 0 else 0) + addons_price(selected)
+    plan_for_payment = {**plan, "price": price}
+
+    await _create_payment_and_show(
+        callback, user, session, plan_key, plan_for_payment,
+        traffic_gb=traffic_gb,
+        title="Оплата подписки",
+        payment_comment=f"VPN подписка {plan['name']}" + (" (безлимит)" if traffic_gb == 0 else ""),
+        addon_keys=[a["key"] for a in selected],
+    )
+
+
+# ===== Покупка — шаг 2 (без доп.опций): тариф и трафик выбраны, создаём счёт =====
 @router.callback_query(F.data.startswith("buy:"))
 async def cb_buy_plan(callback: CallbackQuery, user: User, session: AsyncSession):
     _, plan_key, traffic_str = callback.data.split(":")
@@ -339,7 +433,11 @@ async def activate_subscription(user: User, payment: Payment, session: AsyncSess
         return sub, sub.config_link or ""
 
     # ===== Покупка новой независимой подписки =====
-    subscription, config_link = await create_new_vpn_subscription(user, payment.plan_key, plan["days"], traffic_gb, session)
+    from core.addons import parse_addon_keys
+    subscription, config_link = await create_new_vpn_subscription(
+        user, payment.plan_key, plan["days"], traffic_gb, session,
+        addon_keys=parse_addon_keys(payment.addon_keys),
+    )
 
     payment.status = PaymentStatus.SUCCESS
     payment.paid_at = now
@@ -355,12 +453,18 @@ async def activate_subscription(user: User, payment: Payment, session: AsyncSess
     return subscription, config_link
 
 
-async def create_new_vpn_subscription(user: User, plan_key: str, days: int, traffic_gb: int, session: AsyncSession):
+async def create_new_vpn_subscription(
+    user: User, plan_key: str, days: int, traffic_gb: int, session: AsyncSession,
+    addon_keys: list[str] | None = None,
+):
     """
     Создаёт новый независимый VPN-аккаунт в Remnawave и Subscription-запись для user.
     Вынесено из activate_subscription() отдельной функцией, т.к. переиспользуется также
     при погашении подарочного кода (там нет Payment - оплата уже прошла раньше, при покупке
     подарка), где нужно ровно то же самое создание аккаунта без Payment-специфичной логики.
+
+    addon_keys - выбранные покупателем доп.опции (см. core/addons.py, например
+    "белые списки"): squad'ы этих опций ДОБАВЛЯЮТСЯ к squad'ам тарифа, а не заменяют их.
     """
     # Стратегия сброса трафика и squad'ы - настройки самого тарифа (см. core/plans.py,
     # /admin/plans), берём текущие значения по ключу, а не то, что было на момент
@@ -368,6 +472,10 @@ async def create_new_vpn_subscription(user: User, plan_key: str, days: int, traf
     plan = await get_plan(session, plan_key)
     traffic_reset_strategy = (plan or {}).get("traffic_reset_strategy") or "MONTH"
     squad_uuids = (plan or {}).get("squad_uuids") or None
+
+    from core.addons import get_addons_by_keys, addons_squad_uuids
+    addons = await get_addons_by_keys(session, addon_keys or [])
+    extra_squad_uuids = addons_squad_uuids(addons) or None
 
     username = f"user_{user.id}_{secrets.token_hex(4)}"
     rw_user = await remnawave.create_user(
@@ -378,6 +486,7 @@ async def create_new_vpn_subscription(user: User, plan_key: str, days: int, traf
         email=user.email,
         traffic_reset_strategy=traffic_reset_strategy,
         squad_uuids=squad_uuids,
+        extra_squad_uuids=extra_squad_uuids,
     )
     remnawave_uuid = rw_user["uuid"]
     config_data = rw_user if rw_user.get("subscriptionUrl") else await remnawave.get_user_config(remnawave_uuid)
@@ -387,6 +496,7 @@ async def create_new_vpn_subscription(user: User, plan_key: str, days: int, traf
         user_id=user.id,
         plan_key=plan_key,
         traffic_gb=traffic_gb,
+        addon_keys=",".join(a["key"] for a in addons) or None,
         status=SubscriptionStatus.ACTIVE,
         starts_at=datetime.utcnow(),
         expires_at=datetime.utcnow() + timedelta(days=days),
@@ -434,6 +544,7 @@ async def _activate_gift(user: User, payment: Payment, session: AsyncSession):
         plan_name=plan["name"],
         days=plan["days"],
         traffic_gb=traffic_gb,
+        addon_keys=payment.addon_keys,
         status=GiftCodeStatus.ISSUED.value,
     )
     session.add(gift)

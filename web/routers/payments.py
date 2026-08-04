@@ -11,6 +11,7 @@ from core.config import settings
 from core.version import APP_VERSION
 from core.timezone import to_local
 from core.pending_payment import get_pending_payment, cancel_pending_payment
+from core.addons import get_addons_by_keys, addons_price
 
 logger = logging.getLogger(__name__)
 
@@ -183,8 +184,13 @@ async def create_payment_web(request: Request, session: AsyncSession = Depends(g
         if not sub_result.scalar_one_or_none():
             raise HTTPException(404, "Подписка не найдена")
 
+    # Доп.опции (см. core/addons.py) - только для покупки новой подписки. При продлении
+    # (renew_subscription_id) squad'ы существующего аккаунта в Remnawave и так не
+    # трогаются (extend_user продлевает только срок), поэтому опции здесь не применимы.
+    addons = [] if renew_subscription_id else await get_addons_by_keys(session, data.get("addon_keys") or [])
+
     # Базовая цена
-    base_price = plan["price"] + (plan["unlimited_extra"] if traffic_gb == 0 else 0)
+    base_price = plan["price"] + (plan["unlimited_extra"] if traffic_gb == 0 else 0) + addons_price(addons)
     traffic_label = "Безлимит" if traffic_gb == 0 else f"{traffic_gb}GB"
     original_amount = base_price
     promo_discount = 0
@@ -211,6 +217,7 @@ async def create_payment_web(request: Request, session: AsyncSession = Depends(g
         user_id=user.id,
         plan_key=plan_key,
         traffic_gb=traffic_gb,
+        addon_keys=",".join(a["key"] for a in addons) or None,
         amount=final_amount,
         original_amount=original_amount,
         promo_discount=promo_discount,
