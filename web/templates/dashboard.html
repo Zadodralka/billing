@@ -428,11 +428,29 @@
                 <i class="bi bi-chevron-right sub-action-chevron"></i>
             </a>
             {% else %}
+            {% if sub.remnawave_sub_id %}
             <button type="button" class="sub-action-row" onclick="openRenewModal('{{ sub.id }}', '{{ sub.plan_key }}')">
                 <span class="sub-action-icon"><i class="bi bi-arrow-repeat"></i></span>
                 <span class="sub-action-text"><span class="sub-action-title">Возобновить подписку</span></span>
                 <i class="bi bi-chevron-right sub-action-chevron"></i>
             </button>
+            <button type="button" class="sub-action-row" onclick="giveUpSubscription('{{ sub.id }}', this)">
+                <span class="sub-action-icon" style="background:var(--danger-soft);color:var(--danger);"><i class="bi bi-x-circle"></i></span>
+                <span class="sub-action-text"><span class="sub-action-title">Отказаться от подписки</span></span>
+                <i class="bi bi-chevron-right sub-action-chevron"></i>
+            </button>
+            {% else %}
+            {# Аккаунт уже удалён - сам ли пользователь отказался, или прошло больше
+               DELETE_AFTER_DAYS дней и его подчистил планировщик - продлевать нечего. #}
+            <a href="/dashboard/plans" class="sub-action-row">
+                <span class="sub-action-icon"><i class="bi bi-plus-circle"></i></span>
+                <span class="sub-action-text">
+                    <span class="sub-action-title">Оформить новую подписку</span>
+                    <span class="sub-action-sub">Аккаунт удалён - продлить эту нельзя</span>
+                </span>
+                <i class="bi bi-chevron-right sub-action-chevron"></i>
+            </a>
+            {% endif %}
             {% endif %}
         </div>
 
@@ -603,6 +621,29 @@ updateCountdowns();
 setInterval(updateCountdowns, 1000);
 
 function openSubModal(id) { openModal('subModal-' + id); }
+
+async function giveUpSubscription(subId, btn) {
+    if (!(await confirmAction(
+        'Аккаунт VPN будет удалён немедленно, восстановить конфиг будет нельзя - для доступа придётся оформлять новую подписку.',
+        { title: 'Отказаться от подписки?', okText: 'Отказаться' }
+    ))) return;
+
+    btn.disabled = true;
+    try {
+        const res = await fetch('/dashboard/subscriptions/' + subId + '/give-up', { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+            showSuccess('Вы отказались от подписки');
+            setTimeout(() => location.reload(), 800);
+        } else {
+            showError(data.error || 'Не удалось отказаться от подписки');
+            btn.disabled = false;
+        }
+    } catch (e) {
+        showError('Сетевая ошибка: ' + e.message);
+        btn.disabled = false;
+    }
+}
 
 function copyConfig(id) {
     const input = document.getElementById(id);

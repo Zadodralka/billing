@@ -187,3 +187,39 @@ async def link_email(user: User = Depends(require_user), email: str = Form(...),
         raise HTTPException(500, "Не удалось отправить письмо, попробуйте позже")
 
     return JSONResponse({"ok": True, "message": f"Письмо с подтверждением отправлено на {email}"})
+
+
+@router.post("/subscriptions/{sub_id}/give-up")
+async def give_up_subscription(sub_id: int, user: User = Depends(require_user), session: AsyncSession = Depends(get_db)):
+    """
+    Пользователь сам отказывается от истёкшей подписки, не дожидаясь автоудаления
+    планировщиком (см. DELETE_AFTER_DAYS в scheduler.py) - удаляет VPN-аккаунт
+    в Remnawave немедленно. Подписка остаётся в БД для истории (как и при обычном
+    автоудалении), просто remnawave_sub_id обнуляется - именно по этому полю
+    карточка в кабинете и бот понимают, что аккаунт больше не существует.
+    """
+    from core.models import Subscription, SubscriptionStatus
+
+    result = await session.execute(
+        select(Subscription).where(Subscription.id == sub_id, Subscription.user_id == user.id)
+    )
+    sub = result.scalar_one_or_none()
+    if not sub:
+        return JSONResponse({"ok": False, "error": "Подписка не найдена"}, status_code=404)
+    if sub.status != SubscriptionStatus.EXPIRED:
+        return JSONResponse({"ok": False, "error": "Отказаться можно только от истёкшей подписки"}, status_code=400)
+
+    if sub.remnawave_sub_id:
+        try:
+            await remnawave.delete_user(sub.remnawave_sub_id)
+            sub.remnawave_sub_id = None
+            sub.config_link = None
+        except Exception as e:
+            # Не мешаем пользователю "отказаться" из-за временной недоступности Remnawave -
+            # remnawave_sub_id намеренно НЕ трогаем, чтобы штатная очистка в scheduler.py
+            # (delete_old_expired_accounts) подхватила аккаунт позже и не потеряла его.
+            logger.warning(f"give_up_subscription: remnawave delete failed for sub {sub_id}: {e}")
+
+    await session.commit()
+    logger.info(f"give_up_subscription: user {user.id} gave up sub {sub_id}")
+    return JSONResponse({"ok": True})
