@@ -61,26 +61,6 @@
     {% endif %}
 </div>
 
-{% if addons %}
-<!-- Доп.опции - не привязаны к конкретному тарифу, применяются к любому выбранному
-     плану сверху (как переключатель трафика, только независимо от карточек). -->
-<div class="card" id="addonsCard" style="padding:1.1rem 1.2rem;margin-bottom:1.3rem;">
-    <label class="form-label" style="display:block;margin-bottom:.7rem;">➕ Дополнительные опции</label>
-    <div style="display:flex;flex-direction:column;gap:.6rem;">
-        {% for addon in addons %}
-        <div>
-            <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
-                <input type="checkbox" class="js-addon-check" value="{{ addon.key }}" data-price="{{ addon.price }}" style="width:auto;" onchange="onAddonToggle()">
-                <span style="color:#fff;font-weight:500;">{{ addon.name }}</span>
-                <span style="color:var(--accent);font-weight:600;margin-left:auto;white-space:nowrap;">+{{ addon.price }} ₽</span>
-            </label>
-            {% if addon.description %}<div style="color:var(--muted);font-size:.78rem;margin-left:2.1rem;margin-top:.15rem;">{{ addon.description }}</div>{% endif %}
-        </div>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
-
 {% set ref_plan = plans.values() | list | sort(attribute='days') | first %}
 <div class="plans-grid">
     {% for key, plan in plans.items() | sort(attribute='1.days') %}
@@ -111,6 +91,11 @@ let purchaseMode = 'self';
 const selectedTraffic = {};
 let promoDiscount = 0, promoCode = '', promoValidated = false, useBalance = false;
 const USER_BALANCE = {{ user.balance | default(0) }};
+const ADDONS = {{ addons | tojson }};  // доп.опции - подбираются в модалке "сборки" перед оплатой
+
+// Текущая "сборка" тарифа - что выбрано в открытой модалке (сбрасывается при каждом
+// новом открытии). planKey/mode/email не меняются на шаге доп.опций - только addonKeys.
+let modalContext = null;
 
 function isValidEmail(v) {
     return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);
@@ -130,8 +115,28 @@ function setPurchaseMode(mode) {
     else if (promoValidated) { _updateCardPrices(); }
 }
 
+// Клик по карточке открывает модалку "сборки": тариф+трафик уже выбраны на карточке,
+// здесь пользователь может доп.опциями (если они есть) собрать себе нужный набор
+// и только потом перейти к реальной оплате через ЮMoney - см. proceedToPayment().
 function handlePlanClick(planKey) {
-    if (purchaseMode === 'gift') { giftPlan(planKey); } else { buyPlan(planKey); }
+    let email = null;
+    if (purchaseMode === 'gift') {
+        const emailInput = document.getElementById('recipientEmail');
+        email = emailInput.value.trim().toLowerCase();
+        if (!isValidEmail(email)) {
+            emailInput.style.borderColor = '#ef5b5b';
+            emailInput.focus();
+            return;
+        }
+        emailInput.style.borderColor = '';
+    }
+
+    modalContext = { planKey, mode: purchaseMode, email, addonKeys: [] };
+    document.getElementById('payModalTitle').textContent = purchaseMode === 'gift' ? 'Оформление подарка' : 'Оформление подписки';
+    openModal('payModal');
+
+    if (ADDONS.length > 0) { renderAssemblyStep(); }
+    else { proceedToPayment(); }
 }
 
 function _trafficFor(planKey) {
@@ -140,12 +145,19 @@ function _trafficFor(planKey) {
     return defaultBtn ? parseInt(defaultBtn.dataset.traffic, 10) : 50;
 }
 
+function _planName(planKey) {
+    const toggle = document.querySelector(`.traffic-toggle[data-plan="${planKey}"]`);
+    const card = toggle ? toggle.closest('.plan-card') : null;
+    const nameEl = card ? card.querySelector('.plan-name') : null;
+    return nameEl ? nameEl.textContent : planKey;
+}
+
 function selectTraffic(btn, planKey) {
     const toggle = btn.parentElement;
     toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     selectedTraffic[planKey] = parseInt(btn.dataset.traffic, 10);
-    const price = _currentPrice(planKey);  // включает доп.опции, см. selectedAddonsSum()
+    const price = _currentPrice(planKey);
     if (promoValidated && promoDiscount > 0) {
         const disc = price - Math.floor(price * promoDiscount / 100);
         document.getElementById('price-' + planKey).innerHTML = disc + '<span>₽</span>';
@@ -182,27 +194,15 @@ async function validatePromo() {
     }
 }
 
-function selectedAddonKeys() {
-    return Array.from(document.querySelectorAll('.js-addon-check:checked')).map(cb => cb.value);
-}
-
-function selectedAddonsSum() {
-    return Array.from(document.querySelectorAll('.js-addon-check:checked'))
-        .reduce((sum, cb) => sum + parseInt(cb.dataset.price, 10), 0);
-}
-
-// Доп.опции общие для всех карточек - при переключении пересчитываем цены сразу везде
-function onAddonToggle() {
-    if (promoValidated) { _updateCardPrices(); } else { _clearCardPrices(); }
-}
-
+// Цена на карточке - тариф + выбранный трафик, БЕЗ доп.опций: они выбираются уже
+// внутри модалки "сборки" (см. renderAssemblyStep), карточки их не показывают.
 function _currentPrice(planKey) {
     const toggle = document.querySelector(`.traffic-toggle[data-plan="${planKey}"]`);
     if (!toggle) return 0;
     const base = parseInt(toggle.dataset.basePrice, 10);
     const extra = parseInt(toggle.dataset.extra, 10);
     const traffic = selectedTraffic[planKey] !== undefined ? selectedTraffic[planKey] : 50;
-    return (traffic === 0 ? base + extra : base) + selectedAddonsSum();
+    return traffic === 0 ? base + extra : base;
 }
 
 function _updateCardPrices() {
@@ -228,14 +228,85 @@ function _clearCardPrices() {
     });
 }
 
-async function buyPlan(planKey) {
+// ── Шаг "сборки" внутри модалки: тариф+трафик уже выбраны на карточке, здесь -
+// только доп.опции тумблерами (красивый .toggle-switch из base.html, тот же
+// компонент, что и в админке) и итоговая сумма. Вызывается заново при каждом
+// тумблере, чтобы сумма в шапке обновлялась мгновенно. ──
+function renderAssemblyStep() {
+    const { planKey, mode, addonKeys } = modalContext;
     const traffic = _trafficFor(planKey);
-    document.getElementById('payModalTitle').textContent = 'Оплата подписки';
-    openModal('payModal');
+    const trafficLabel = traffic === 0 ? 'Безлимит' : traffic + ' GB';
+    const addonsSum = addonKeys.reduce((sum, key) => {
+        const addon = ADDONS.find(a => a.key === key);
+        return sum + (addon ? addon.price : 0);
+    }, 0);
+    const total = _currentPrice(planKey) + addonsSum;
+
+    const addonsHtml = ADDONS.map(addon => `
+        <label class="toggle-row" style="justify-content:space-between;margin-bottom:.5rem;">
+            <span style="display:flex;align-items:center;gap:.6rem;">
+                <span class="toggle-switch">
+                    <input type="checkbox" ${addonKeys.includes(addon.key) ? 'checked' : ''} onchange="toggleModalAddon('${addon.key}')">
+                    <span class="toggle-slider"></span>
+                </span>
+                <span style="color:#fff;">${addon.name}</span>
+            </span>
+            <span style="color:var(--accent);font-weight:600;white-space:nowrap;">+${addon.price} ₽</span>
+        </label>
+        ${addon.description ? `<div style="color:var(--muted);font-size:.78rem;margin:-.3rem 0 .6rem 3.1rem;">${addon.description}</div>` : ''}
+    `).join('');
+
+    document.getElementById('payModalBody').innerHTML = `
+        <div class="pay-summary" style="margin-bottom:1.1rem;">
+            <div class="pname">${_planName(planKey)} · ${trafficLabel}${mode === 'gift' ? ' · в подарок' : ''}</div>
+            <div class="pamount">${total} ₽</div>
+        </div>
+        <div class="form-label" style="margin-bottom:.6rem;">➕ Дополнительные опции</div>
+        ${addonsHtml}
+        <button type="button" class="btn btn-accent" style="width:100%;margin-top:.4rem;" onclick="proceedToPayment()">Перейти к оплате</button>
+    `;
+}
+
+function toggleModalAddon(key) {
+    const keys = modalContext.addonKeys;
+    const idx = keys.indexOf(key);
+    if (idx >= 0) { keys.splice(idx, 1); } else { keys.push(key); }
+    renderAssemblyStep();
+}
+
+// ── Собранный тариф подтверждён - создаём реальный счёт и показываем ссылку на ЮMoney
+// (уже без тумблеров - выбор опций к этому моменту закончен). ──
+async function proceedToPayment() {
+    const { planKey, mode, email, addonKeys } = modalContext;
+    const traffic = _trafficFor(planKey);
     document.getElementById('payModalBody').innerHTML = `<div class="pay-loading"><div class="spinner"></div><span style="color:var(--muted);font-size:.85rem;">Создаём счёт…</span></div>`;
+
+    if (mode === 'gift') {
+        const res = await fetch('/gift/create', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({plan_key: planKey, traffic_gb: traffic, addon_keys: addonKeys, recipient_email: email})
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            document.getElementById('payModalBody').innerHTML = `<div style="text-align:center;padding:1.5rem 0;color:#ef5b5b;">${err.detail || 'Не удалось создать платёж'}</div>`;
+            return;
+        }
+        const data = await res.json();
+        if (data.free) { showGiftSent(data.recipient_email); return; }
+        document.getElementById('payModalBody').innerHTML = `
+            <div class="pay-summary">
+                <div class="pname">${data.plan_name} · в подарок для ${data.recipient_email}</div>
+                <div class="pamount">${data.amount} ₽</div>
+            </div>
+            <a href="${data.payment_url}" target="_blank" class="pay-cta">Оплатить через ЮMoney</a>
+            <p class="pay-hint">Окно обновится автоматически после оплаты</p>`;
+        startPolling(data.label, () => showGiftSent(data.recipient_email), '/gift/status/');
+        return;
+    }
+
     const res = await fetch('/payment/create', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({plan_key: planKey, traffic_gb: traffic, addon_keys: selectedAddonKeys(), promo_code: promoValidated ? promoCode : '', use_balance: useBalance && USER_BALANCE > 0})
+        body: JSON.stringify({plan_key: planKey, traffic_gb: traffic, addon_keys: addonKeys, promo_code: promoValidated ? promoCode : '', use_balance: useBalance && USER_BALANCE > 0})
     });
     const data = await res.json();
     if (res.status === 409 && data.error === 'pending_payment_exists') {
@@ -261,47 +332,6 @@ async function buyPlan(planKey) {
         <a href="${data.payment_url}" target="_blank" class="pay-cta">Оплатить через ЮMoney</a>
         <p class="pay-hint">Окно обновится автоматически после оплаты</p>`;
     startPolling(data.label, () => { window.location.href = '/dashboard'; });
-}
-
-async function giftPlan(planKey) {
-    const emailInput = document.getElementById('recipientEmail');
-    const email = emailInput.value.trim().toLowerCase();
-    if (!isValidEmail(email)) {
-        emailInput.style.borderColor = '#ef5b5b';
-        emailInput.focus();
-        return;
-    }
-    emailInput.style.borderColor = '';
-    const traffic = _trafficFor(planKey);
-
-    document.getElementById('payModalTitle').textContent = 'Оформление подарка';
-    openModal('payModal');
-    document.getElementById('payModalBody').innerHTML = `<div class="pay-loading"><div class="spinner"></div><span style="color:var(--muted);font-size:.85rem;">Создаём счёт…</span></div>`;
-
-    const res = await fetch('/gift/create', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({plan_key: planKey, traffic_gb: traffic, addon_keys: selectedAddonKeys(), recipient_email: email})
-    });
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        document.getElementById('payModalBody').innerHTML = `<div style="text-align:center;padding:1.5rem 0;color:#ef5b5b;">${err.detail || 'Не удалось создать платёж'}</div>`;
-        return;
-    }
-    const data = await res.json();
-
-    if (data.free) {
-        showGiftSent(data.recipient_email);
-        return;
-    }
-
-    document.getElementById('payModalBody').innerHTML = `
-        <div class="pay-summary">
-            <div class="pname">${data.plan_name} · в подарок для ${data.recipient_email}</div>
-            <div class="pamount">${data.amount} ₽</div>
-        </div>
-        <a href="${data.payment_url}" target="_blank" class="pay-cta">Оплатить через ЮMoney</a>
-        <p class="pay-hint">Окно обновится автоматически после оплаты</p>`;
-    startPolling(data.label, () => showGiftSent(data.recipient_email), '/gift/status/');
 }
 
 function showGiftSent(email) {
