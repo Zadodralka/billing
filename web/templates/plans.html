@@ -41,30 +41,14 @@
     </div>
 </div>
 
-<!-- Промокод и баланс -->
-<div class="card" id="promoBalanceCard" style="padding:1.1rem 1.2rem;margin-bottom:1.3rem;display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-start;">
-    <div style="flex:1;min-width:240px;">
-        <label class="form-label">🏷 Промокод</label>
-        <div style="display:flex;gap:.5rem;">
-            <input type="text" id="promoInput" placeholder="UNLOCK20" style="flex:1;text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()">
-            <button class="btn btn-outline-1" onclick="validatePromo()" style="white-space:nowrap;">Применить</button>
-        </div>
-        <div id="promoStatus" style="font-size:.78rem;margin-top:.35rem;height:1em;"></div>
-    </div>
-    {% if user.balance > 0 %}
-    <div style="flex:0 0 auto;padding-top:1.4rem;">
-        <label style="display:flex;align-items:center;gap:.55rem;cursor:pointer;color:#9aa5ba;font-size:.88rem;">
-            <input type="checkbox" id="useBalanceCheck" style="width:auto;" onchange="useBalance=this.checked">
-            Использовать баланс <strong style="color:var(--accent);">({{ user.balance }} ₽)</strong>
-        </label>
-    </div>
-    {% endif %}
-</div>
-
+{# Трафик, доп.опции, промокод и баланс больше не выбираются здесь на странице -
+   всё это (см. renderAssemblyStep в скрипте ниже) происходит в модалке "сборки",
+   которая открывается по клику на карточку. Карточки ниже показывают только
+   базовую цену и параметры тарифа. #}
 {% set ref_plan = plans.values() | list | sort(attribute='days') | first %}
 <div class="plans-grid">
     {% for key, plan in plans.items() | sort(attribute='1.days') %}
-        {{ plan_card(key, plan, ref_plan, true, 'Купить', "handlePlanClick('" ~ key ~ "')") }}
+        {{ plan_card(key, plan, ref_plan, 'Купить', "handlePlanClick('" ~ key ~ "')") }}
     {% endfor %}
 </div>
 
@@ -88,13 +72,14 @@
 <script>
 let paymentPollInterval = null;
 let purchaseMode = 'self';
-const selectedTraffic = {};
-let promoDiscount = 0, promoCode = '', promoValidated = false, useBalance = false;
+let promoDiscount = 0, promoCode = '', promoValidated = false, promoError = '', useBalance = false;
 const USER_BALANCE = {{ user.balance | default(0) }};
-const ADDONS = {{ addons | tojson }};  // доп.опции - подбираются в модалке "сборки" перед оплатой
+const ADDONS = {{ addons | tojson }};       // доп.опции - тумблеры в модалке "сборки"
+const PLANS_DATA = {{ plans | tojson }};    // {key: {name, days, price, traffic_gb, unlimited_extra, ...}}
 
-// Текущая "сборка" тарифа - что выбрано в открытой модалке (сбрасывается при каждом
-// новом открытии). planKey/mode/email не меняются на шаге доп.опций - только addonKeys.
+// Текущая "сборка" тарифа - что выбрано в открытой модалке. Сбрасывается заново
+// при каждом клике на карточку (promoCode/useBalance намеренно живут дольше модалки -
+// это выбор пользователя "на сессию", а не привязанный к конкретной покупке).
 let modalContext = null;
 
 function isValidEmail(v) {
@@ -107,17 +92,12 @@ function setPurchaseMode(mode) {
     document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
     document.getElementById('giftRecipientWrap').style.display = isGift ? 'block' : 'none';
     document.getElementById('giftHint').style.display = isGift ? 'block' : 'none';
-    // Промокод/баланс пока не поддержаны для подарков - прячем, чтобы не путать
-    // отображаемую цену с реально списываемой суммой.
-    document.getElementById('promoBalanceCard').style.display = isGift ? 'none' : 'flex';
     document.querySelectorAll('.plan-buy-btn').forEach(btn => { btn.textContent = isGift ? 'Подарить' : 'Купить'; });
-    if (isGift) { _clearCardPrices(); }
-    else if (promoValidated) { _updateCardPrices(); }
 }
 
-// Клик по карточке открывает модалку "сборки": тариф+трафик уже выбраны на карточке,
-// здесь пользователь может доп.опциями (если они есть) собрать себе нужный набор
-// и только потом перейти к реальной оплате через ЮMoney - см. proceedToPayment().
+// Клик по карточке открывает модалку "сборки": здесь пользователь тумблерами
+// выбирает трафик, доп.опции, вводит промокод/баланс и видит итоговую сумму -
+// и только по кнопке "Перейти к оплате" создаётся реальный счёт (proceedToPayment).
 function handlePlanClick(planKey) {
     let email = null;
     if (purchaseMode === 'gift') {
@@ -131,140 +111,16 @@ function handlePlanClick(planKey) {
         emailInput.style.borderColor = '';
     }
 
-    modalContext = { planKey, mode: purchaseMode, email, addonKeys: [] };
+    const plan = PLANS_DATA[planKey];
+    modalContext = { planKey, mode: purchaseMode, email, addonKeys: [], traffic: plan.traffic_gb };
     document.getElementById('payModalTitle').textContent = purchaseMode === 'gift' ? 'Оформление подарка' : 'Оформление подписки';
     openModal('payModal');
-
-    if (ADDONS.length > 0) { renderAssemblyStep(); }
-    else { proceedToPayment(); }
+    renderAssemblyStep();
 }
 
-function _trafficFor(planKey) {
-    if (selectedTraffic[planKey] !== undefined) return selectedTraffic[planKey];
-    const defaultBtn = document.querySelector(`.traffic-toggle[data-plan="${planKey}"] button.active`);
-    return defaultBtn ? parseInt(defaultBtn.dataset.traffic, 10) : 50;
-}
-
-function _planName(planKey) {
-    const toggle = document.querySelector(`.traffic-toggle[data-plan="${planKey}"]`);
-    const card = toggle ? toggle.closest('.plan-card') : null;
-    const nameEl = card ? card.querySelector('.plan-name') : null;
-    return nameEl ? nameEl.textContent : planKey;
-}
-
-function selectTraffic(btn, planKey) {
-    const toggle = btn.parentElement;
-    toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    selectedTraffic[planKey] = parseInt(btn.dataset.traffic, 10);
-    const price = _currentPrice(planKey);
-    if (promoValidated && promoDiscount > 0) {
-        const disc = price - Math.floor(price * promoDiscount / 100);
-        document.getElementById('price-' + planKey).innerHTML = disc + '<span>₽</span>';
-        const origEl = document.getElementById('price-original-' + planKey);
-        if (origEl) { origEl.textContent = price + ' ₽'; origEl.style.display = 'block'; }
-    } else {
-        document.getElementById('price-' + planKey).innerHTML = price + '<span>₽</span>';
-        const origEl = document.getElementById('price-original-' + planKey);
-        if (origEl) origEl.style.display = 'none';
-    }
-}
-
-async function validatePromo() {
-    const code = document.getElementById('promoInput').value.trim().toUpperCase();
-    const statusEl = document.getElementById('promoStatus');
-    if (!code) return;
-    statusEl.textContent = 'Проверяем…'; statusEl.style.color = 'var(--muted)';
-    promoValidated = false; promoDiscount = 0;
-    const res = await fetch('/payment/validate-promo', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({promo_code: code}),
-    });
-    const data = await res.json();
-    if (data.valid) {
-        promoDiscount = data.discount_percent; promoCode = code; promoValidated = true;
-        statusEl.textContent = `✅ Скидка ${data.discount_percent}% применена!`;
-        statusEl.style.color = 'var(--accent)';
-        _updateCardPrices();
-    } else {
-        promoCode = ''; promoDiscount = 0;
-        statusEl.textContent = `❌ ${data.error}`;
-        statusEl.style.color = '#ef5b5b';
-        _clearCardPrices();
-    }
-}
-
-// Цена на карточке - тариф + выбранный трафик, БЕЗ доп.опций: они выбираются уже
-// внутри модалки "сборки" (см. renderAssemblyStep), карточки их не показывают.
-function _currentPrice(planKey) {
-    const toggle = document.querySelector(`.traffic-toggle[data-plan="${planKey}"]`);
-    if (!toggle) return 0;
-    const base = parseInt(toggle.dataset.basePrice, 10);
-    const extra = parseInt(toggle.dataset.extra, 10);
-    const traffic = selectedTraffic[planKey] !== undefined ? selectedTraffic[planKey] : 50;
-    return traffic === 0 ? base + extra : base;
-}
-
-function _updateCardPrices() {
-    document.querySelectorAll('.traffic-toggle').forEach(toggle => {
-        const k = toggle.dataset.plan;
-        const full = _currentPrice(k);
-        const disc = full - Math.floor(full * promoDiscount / 100);  // формула совпадает с бэкендом
-        const priceEl = document.getElementById('price-' + k);
-        const origEl = document.getElementById('price-original-' + k);
-        if (priceEl) priceEl.innerHTML = disc + '<span>₽</span>';
-        if (origEl) { origEl.textContent = full + ' ₽'; origEl.style.display = 'block'; }
-    });
-}
-
-function _clearCardPrices() {
-    document.querySelectorAll('.traffic-toggle').forEach(toggle => {
-        const k = toggle.dataset.plan;
-        const full = _currentPrice(k);
-        const priceEl = document.getElementById('price-' + k);
-        const origEl = document.getElementById('price-original-' + k);
-        if (priceEl) priceEl.innerHTML = full + '<span>₽</span>';
-        if (origEl) origEl.style.display = 'none';
-    });
-}
-
-// ── Шаг "сборки" внутри модалки: тариф+трафик уже выбраны на карточке, здесь -
-// только доп.опции тумблерами (красивый .toggle-switch из base.html, тот же
-// компонент, что и в админке) и итоговая сумма. Вызывается заново при каждом
-// тумблере, чтобы сумма в шапке обновлялась мгновенно. ──
-function renderAssemblyStep() {
-    const { planKey, mode, addonKeys } = modalContext;
-    const traffic = _trafficFor(planKey);
-    const trafficLabel = traffic === 0 ? 'Безлимит' : traffic + ' GB';
-    const addonsSum = addonKeys.reduce((sum, key) => {
-        const addon = ADDONS.find(a => a.key === key);
-        return sum + (addon ? addon.price : 0);
-    }, 0);
-    const total = _currentPrice(planKey) + addonsSum;
-
-    const addonsHtml = ADDONS.map(addon => `
-        <label class="toggle-row" style="justify-content:space-between;margin-bottom:.5rem;">
-            <span style="display:flex;align-items:center;gap:.6rem;">
-                <span class="toggle-switch">
-                    <input type="checkbox" ${addonKeys.includes(addon.key) ? 'checked' : ''} onchange="toggleModalAddon('${addon.key}')">
-                    <span class="toggle-slider"></span>
-                </span>
-                <span style="color:#fff;">${addon.name}</span>
-            </span>
-            <span style="color:var(--accent);font-weight:600;white-space:nowrap;">+${addon.price} ₽</span>
-        </label>
-        ${addon.description ? `<div style="color:var(--muted);font-size:.78rem;margin:-.3rem 0 .6rem 3.1rem;">${addon.description}</div>` : ''}
-    `).join('');
-
-    document.getElementById('payModalBody').innerHTML = `
-        <div class="pay-summary" style="margin-bottom:1.1rem;">
-            <div class="pname">${_planName(planKey)} · ${trafficLabel}${mode === 'gift' ? ' · в подарок' : ''}</div>
-            <div class="pamount">${total} ₽</div>
-        </div>
-        <div class="form-label" style="margin-bottom:.6rem;">➕ Дополнительные опции</div>
-        ${addonsHtml}
-        <button type="button" class="btn btn-accent" style="width:100%;margin-top:.4rem;" onclick="proceedToPayment()">Перейти к оплате</button>
-    `;
+function setModalTraffic(value) {
+    modalContext.traffic = value;
+    renderAssemblyStep();
 }
 
 function toggleModalAddon(key) {
@@ -274,11 +130,113 @@ function toggleModalAddon(key) {
     renderAssemblyStep();
 }
 
-// ── Собранный тариф подтверждён - создаём реальный счёт и показываем ссылку на ЮMoney
-// (уже без тумблеров - выбор опций к этому моменту закончен). ──
+function toggleModalBalance(checked) {
+    useBalance = checked;
+    renderAssemblyStep();
+}
+
+async function applyModalPromo() {
+    const input = document.getElementById('modalPromoInput');
+    const code = input.value.trim().toUpperCase();
+    if (!code) return;
+    promoError = '';
+    const res = await fetch('/payment/validate-promo', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({promo_code: code}),
+    });
+    const data = await res.json();
+    if (data.valid) {
+        promoDiscount = data.discount_percent; promoCode = code; promoValidated = true;
+    } else {
+        promoValidated = false; promoDiscount = 0; promoCode = code;
+        promoError = data.error || 'Промокод не найден';
+    }
+    renderAssemblyStep();
+}
+
+// ── Шаг "сборки": трафик и доп.опции - тумблерами, промокод и баланс - для себя
+// (подаркам скидки пока не положены, см. комментарий в старой версии страницы).
+// Пересчитывает и перерисовывает весь блок при каждом изменении - экран небольшой,
+// это проще и надёжнее точечных DOM-патчей. ──
+function renderAssemblyStep() {
+    const { planKey, mode, addonKeys, traffic } = modalContext;
+    const plan = PLANS_DATA[planKey];
+
+    const trafficPrice = traffic === 0 ? plan.price + plan.unlimited_extra : plan.price;
+    const addonsSum = addonKeys.reduce((sum, key) => {
+        const addon = ADDONS.find(a => a.key === key);
+        return sum + (addon ? addon.price : 0);
+    }, 0);
+    const subtotal = trafficPrice + addonsSum;
+    const afterPromo = (mode !== 'gift' && promoValidated && promoDiscount > 0)
+        ? subtotal - Math.floor(subtotal * promoDiscount / 100) : subtotal;
+    const balanceSpent = (mode !== 'gift' && useBalance && USER_BALANCE > 0) ? Math.min(USER_BALANCE, afterPromo) : 0;
+    const total = Math.max(0, afterPromo - balanceSpent);
+
+    const trafficHtml = plan.traffic_gb === 0 ? '' : `
+        <div class="form-label" style="margin-bottom:.6rem;">📊 Трафик</div>
+        <div class="traffic-toggle" style="margin-bottom:1.1rem;">
+            <button type="button" class="${traffic !== 0 ? 'active' : ''}" onclick="setModalTraffic(${plan.traffic_gb})">${plan.traffic_gb} GB — ${plan.price} ₽</button>
+            <button type="button" class="${traffic === 0 ? 'active' : ''}" onclick="setModalTraffic(0)">♾ Безлимит — ${plan.price + plan.unlimited_extra} ₽</button>
+        </div>`;
+
+    const addonsHtml = ADDONS.length ? `
+        <div class="form-label" style="margin-bottom:.6rem;">➕ Дополнительные опции</div>
+        ${ADDONS.map(addon => `
+            <label class="toggle-row" style="justify-content:space-between;margin-bottom:.5rem;">
+                <span style="display:flex;align-items:center;gap:.6rem;">
+                    <span class="toggle-switch">
+                        <input type="checkbox" ${addonKeys.includes(addon.key) ? 'checked' : ''} onchange="toggleModalAddon('${addon.key}')">
+                        <span class="toggle-slider"></span>
+                    </span>
+                    <span style="color:#fff;">${addon.name}</span>
+                </span>
+                <span style="color:var(--accent);font-weight:600;white-space:nowrap;">+${addon.price} ₽</span>
+            </label>
+            ${addon.description ? `<div style="color:var(--muted);font-size:.78rem;margin:-.3rem 0 .6rem 3.1rem;">${addon.description}</div>` : ''}
+        `).join('')}
+        <div style="margin-bottom:.6rem;"></div>` : '';
+
+    // Промокод и баланс - только для покупки себе (см. комментарий выше)
+    const promoHtml = mode === 'gift' ? '' : `
+        <div style="margin-bottom:1.1rem;">
+            <label class="form-label">🏷 Промокод</label>
+            <div style="display:flex;gap:.5rem;">
+                <input type="text" id="modalPromoInput" value="${promoCode}" placeholder="UNLOCK20" style="flex:1;text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()">
+                <button type="button" class="btn btn-outline-1" onclick="applyModalPromo()" style="white-space:nowrap;">Применить</button>
+            </div>
+            <div style="font-size:.78rem;margin-top:.35rem;min-height:1em;color:${promoValidated ? 'var(--accent)' : '#ef5b5b'};">
+                ${promoValidated ? `✅ Скидка ${promoDiscount}% применена!` : (promoError ? `❌ ${promoError}` : '')}
+            </div>
+            ${USER_BALANCE > 0 ? `
+            <label style="display:flex;align-items:center;gap:.55rem;cursor:pointer;color:#9aa5ba;font-size:.88rem;margin-top:.7rem;">
+                <input type="checkbox" ${useBalance ? 'checked' : ''} style="width:auto;" onchange="toggleModalBalance(this.checked)">
+                Использовать баланс <strong style="color:var(--accent);">(${USER_BALANCE} ₽)</strong>
+            </label>` : ''}
+        </div>`;
+
+    let discHtml = '';
+    if (mode !== 'gift' && promoValidated && promoDiscount > 0) discHtml += `<div style="color:var(--accent);font-size:.8rem;margin:.2rem 0;">🏷 Промокод: -${subtotal - afterPromo} ₽</div>`;
+    if (balanceSpent > 0) discHtml += `<div style="color:var(--accent);font-size:.8rem;margin:.2rem 0;">💰 Баланс: -${balanceSpent} ₽</div>`;
+
+    document.getElementById('payModalBody').innerHTML = `
+        <div class="pay-summary" style="margin-bottom:1.1rem;">
+            <div class="pname">${plan.name}${mode === 'gift' ? ' · в подарок' : ''}</div>
+            ${subtotal !== total ? `<div style="color:var(--muted);font-size:.8rem;text-decoration:line-through;">${subtotal} ₽</div>` : ''}
+            ${discHtml}
+            <div class="pamount">${total} ₽</div>
+        </div>
+        ${trafficHtml}
+        ${addonsHtml}
+        ${promoHtml}
+        <button type="button" class="btn btn-accent" style="width:100%;margin-top:.4rem;" onclick="proceedToPayment()">Перейти к оплате</button>
+    `;
+}
+
+// ── Сборка подтверждена - создаём реальный счёт и показываем ссылку на ЮMoney
+// (уже без тумблеров - выбор к этому моменту закончен). ──
 async function proceedToPayment() {
-    const { planKey, mode, email, addonKeys } = modalContext;
-    const traffic = _trafficFor(planKey);
+    const { planKey, mode, email, addonKeys, traffic } = modalContext;
     document.getElementById('payModalBody').innerHTML = `<div class="pay-loading"><div class="spinner"></div><span style="color:var(--muted);font-size:.85rem;">Создаём счёт…</span></div>`;
 
     if (mode === 'gift') {
