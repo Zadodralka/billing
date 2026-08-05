@@ -92,4 +92,19 @@
     .pay-loading { display: flex; flex-direction: column; align-items: center; gap: .8rem; padding: 1rem 0; }
     .spinner { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--panel-3); border-top-color: var(--accent); animation: spin .7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Заголовки разделов в модалке "сборки" тарифа (трафик/опции/промокод) -
+       иконка в цветном кружке вместо голого эмодзи, тот же приём, что и у
+       card-icon на лендинге и sub-action-icon в кабинете. ── */
+    .assembly-label {
+        display: flex; align-items: center; gap: .55rem; margin-bottom: .6rem;
+        font-size: .82rem; font-weight: 600; color: #9aa5ba;
+    }
+    .assembly-label .assembly-label-icon {
+        width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center; font-size: .78rem;
+    }
+    .assembly-label .assembly-label-icon.blue   { background: var(--blue-soft); color: var(--blue); }
+    .assembly-label .assembly-label-icon.accent { background: var(--accent-soft); color: var(--accent); }
+    .assembly-label .assembly-label-icon.gold   { background: var(--gold-soft); color: var(--gold); }
 </style>

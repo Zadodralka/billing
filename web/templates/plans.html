@@ -174,14 +174,14 @@ function renderAssemblyStep() {
     const total = Math.max(0, afterPromo - balanceSpent);
 
     const trafficHtml = plan.traffic_gb === 0 ? '' : `
-        <div class="form-label" style="margin-bottom:.6rem;">📊 Трафик</div>
+        <div class="assembly-label"><span class="assembly-label-icon blue"><i class="bi bi-speedometer2"></i></span> Трафик</div>
         <div class="traffic-toggle" style="margin-bottom:1.1rem;">
             <button type="button" class="${traffic !== 0 ? 'active' : ''}" onclick="setModalTraffic(${plan.traffic_gb})">${plan.traffic_gb} GB — ${plan.price} ₽</button>
             <button type="button" class="${traffic === 0 ? 'active' : ''}" onclick="setModalTraffic(0)">♾ Безлимит — ${plan.price + plan.unlimited_extra} ₽</button>
         </div>`;
 
     const addonsHtml = ADDONS.length ? `
-        <div class="form-label" style="margin-bottom:.6rem;">➕ Дополнительные опции</div>
+        <div class="assembly-label"><span class="assembly-label-icon accent"><i class="bi bi-plus-lg"></i></span> Дополнительные опции</div>
         ${ADDONS.map(addon => `
             <label class="toggle-row" style="justify-content:space-between;margin-bottom:.5rem;">
                 <span style="display:flex;align-items:center;gap:.6rem;">
@@ -200,7 +200,7 @@ function renderAssemblyStep() {
     // Промокод и баланс - только для покупки себе (см. комментарий выше)
     const promoHtml = mode === 'gift' ? '' : `
         <div style="margin-bottom:1.1rem;">
-            <label class="form-label">🏷 Промокод</label>
+            <div class="assembly-label"><span class="assembly-label-icon gold"><i class="bi bi-tag"></i></span> Промокод</div>
             <div style="display:flex;gap:.5rem;">
                 <input type="text" id="modalPromoInput" value="${promoCode}" placeholder="UNLOCK20" style="flex:1;text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()">
                 <button type="button" class="btn btn-outline-1" onclick="applyModalPromo()" style="white-space:nowrap;">Применить</button>
