@@ -15,7 +15,7 @@ from core.plans import get_active_plans
 from core.remnawave import remnawave
 from core.config import settings
 from core.timezone import to_local
-from bot.keyboards.main import back_to_menu, subscription_actions_row
+from bot.keyboards.main import back_to_menu, subscription_actions_row, expired_subscription_actions_row
 
 router = Router()
 
@@ -33,6 +33,19 @@ async def _load_active_subscriptions(user_id: int, session: AsyncSession) -> lis
     return [
         s for s in user.subscriptions
         if s.status == SubscriptionStatus.ACTIVE and (not s.expires_at or s.expires_at > now)
+    ]
+
+
+async def _load_giveupable_subscriptions(user_id: int, session: AsyncSession) -> list[Subscription]:
+    """Истёкшие подписки, чей VPN-аккаунт в Remnawave ещё не удалён (см. DELETE_AFTER_DAYS
+    в scheduler.py) - можно либо продлить, либо явно отказаться (см. sub:giveup:)."""
+    result = await session.execute(
+        select(User).where(User.id == user_id).options(selectinload(User.subscriptions))
+    )
+    user = result.scalar_one()
+    return [
+        s for s in user.subscriptions
+        if s.status == SubscriptionStatus.EXPIRED and s.remnawave_sub_id
     ]
 
 
@@ -88,8 +101,9 @@ async def _send_subscription_qr(target: Message, sub: Subscription, plan_name: s
 @router.callback_query(F.data == "menu:subs")
 async def cb_my_subs(callback: CallbackQuery, user: User, session: AsyncSession):
     active = await _load_active_subscriptions(user.id, session)
+    expired = await _load_giveupable_subscriptions(user.id, session)
 
-    if not active:
+    if not active and not expired:
         await callback.message.edit_text(
             "📋 <b>Мои подписки</b>\n\n"
             "У вас нет активных подписок.\n"
@@ -101,29 +115,41 @@ async def cb_my_subs(callback: CallbackQuery, user: User, session: AsyncSession)
         return
 
     plans = await get_active_plans(session)
-
-    # Запросы расхода трафика идут параллельно, а не по очереди - иначе при
-    # недоступности/медленности Remnawave открытие "Мои подписки" с несколькими
-    # активными подписками ждало бы каждый запрос (до 30с) последовательно.
-    usage_results = await asyncio.gather(*(
-        remnawave.get_traffic_usage_gb(sub.remnawave_sub_id) if sub.remnawave_sub_id else _none()
-        for sub in active
-    ))
-
-    lines = ["📋 <b>Мои активные подписки:</b>"]
+    lines = []
     buttons = []
-    for i, (sub, used_gb) in enumerate(zip(active, usage_results), start=1):
-        plan_name = plans.get(sub.plan_key, {}).get("name", sub.plan_key)
-        expires = to_local(sub.expires_at).strftime("%d.%m.%Y") if sub.expires_at else "—"
-        traffic = "Безлимит" if sub.traffic_gb == 0 else f"{sub.traffic_gb} GB"
 
-        usage_line = ""
-        if used_gb is not None:
-            limit_part = "" if sub.traffic_gb == 0 else f" из {sub.traffic_gb} GB"
-            usage_line = f"\n📊 Использовано: {used_gb} GB{limit_part}"
+    if active:
+        # Запросы расхода трафика идут параллельно, а не по очереди - иначе при
+        # недоступности/медленности Remnawave открытие "Мои подписки" с несколькими
+        # активными подписками ждало бы каждый запрос (до 30с) последовательно.
+        usage_results = await asyncio.gather(*(
+            remnawave.get_traffic_usage_gb(sub.remnawave_sub_id) if sub.remnawave_sub_id else _none()
+            for sub in active
+        ))
 
-        lines.append(f"\n<b>{i}. {plan_name}</b> · {traffic}\n📅 До {expires}{usage_line}")
-        buttons.append(subscription_actions_row(sub.id))
+        lines.append("📋 <b>Мои активные подписки:</b>")
+        for i, (sub, used_gb) in enumerate(zip(active, usage_results), start=1):
+            plan_name = plans.get(sub.plan_key, {}).get("name", sub.plan_key)
+            expires = to_local(sub.expires_at).strftime("%d.%m.%Y") if sub.expires_at else "—"
+            traffic = "Безлимит" if sub.traffic_gb == 0 else f"{sub.traffic_gb} GB"
+
+            usage_line = ""
+            if used_gb is not None:
+                limit_part = "" if sub.traffic_gb == 0 else f" из {sub.traffic_gb} GB"
+                usage_line = f"\n📊 Использовано: {used_gb} GB{limit_part}"
+
+            lines.append(f"\n<b>{i}. {plan_name}</b> · {traffic}\n📅 До {expires}{usage_line}")
+            buttons.append(subscription_actions_row(sub.id))
+
+    if expired:
+        # Аккаунт ещё жив (не прошло DELETE_AFTER_DAYS дней) - можно продлить или
+        # явно отказаться, не дожидаясь автоудаления планировщиком.
+        lines.append("\n⏳ <b>Истёкшие (можно возобновить):</b>")
+        for sub in expired:
+            plan_name = plans.get(sub.plan_key, {}).get("name", sub.plan_key)
+            expired_on = to_local(sub.expires_at).strftime("%d.%m.%Y") if sub.expires_at else "—"
+            lines.append(f"\n<b>{plan_name}</b>\n📅 Истекла {expired_on}")
+            buttons.append(expired_subscription_actions_row(sub.id))
 
     lines.append(f"\n🌐 Полное управление: <a href='{settings.webapp_url}/dashboard'>Личный кабинет</a>")
     buttons.append([InlineKeyboardButton(text="← Главное меню", callback_data="menu:main")])
@@ -184,3 +210,70 @@ async def cb_sub_config(callback: CallbackQuery, user: User, session: AsyncSessi
     plan_name = plans.get(sub.plan_key, {}).get("name", sub.plan_key)
     await callback.answer()
     await _send_subscription_qr(callback.message, sub, plan_name)
+
+
+# ===== Отказ от истёкшей подписки — шаг 1: подтверждение =====
+@router.callback_query(F.data.startswith("sub:giveup:"))
+async def cb_sub_giveup_confirm(callback: CallbackQuery, user: User, session: AsyncSession):
+    sub_id = int(callback.data.split(":")[2])
+    result = await session.execute(
+        select(Subscription).where(Subscription.id == sub_id, Subscription.user_id == user.id)
+    )
+    sub = result.scalar_one_or_none()
+    if not sub:
+        await callback.answer("Подписка не найдена", show_alert=True)
+        return
+    if sub.status != SubscriptionStatus.EXPIRED:
+        await callback.answer("Отказаться можно только от истёкшей подписки", show_alert=True)
+        return
+
+    plans = await get_active_plans(session)
+    plan_name = plans.get(sub.plan_key, {}).get("name", sub.plan_key)
+
+    await callback.message.edit_text(
+        f"⚠️ <b>Отказаться от подписки «{plan_name}»?</b>\n\n"
+        "VPN-аккаунт будет удалён немедленно, восстановить конфиг будет нельзя — "
+        "для доступа придётся оформлять новую подписку.",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Да, отказаться", callback_data=f"sub:giveup_confirm:{sub_id}")],
+            [InlineKeyboardButton(text="← Назад", callback_data="menu:subs")],
+        ]),
+    )
+    await callback.answer()
+
+
+# ===== Отказ от истёкшей подписки — шаг 2: удаление аккаунта =====
+@router.callback_query(F.data.startswith("sub:giveup_confirm:"))
+async def cb_sub_giveup_execute(callback: CallbackQuery, user: User, session: AsyncSession):
+    sub_id = int(callback.data.split(":")[2])
+    result = await session.execute(
+        select(Subscription).where(Subscription.id == sub_id, Subscription.user_id == user.id)
+    )
+    sub = result.scalar_one_or_none()
+    if not sub:
+        await callback.answer("Подписка не найдена", show_alert=True)
+        return
+    if sub.status != SubscriptionStatus.EXPIRED:
+        await callback.answer("Отказаться можно только от истёкшей подписки", show_alert=True)
+        return
+
+    if sub.remnawave_sub_id:
+        try:
+            await remnawave.delete_user(sub.remnawave_sub_id)
+            sub.remnawave_sub_id = None
+            sub.config_link = None
+        except Exception as e:
+            # Не мешаем пользователю "отказаться" из-за временной недоступности Remnawave -
+            # remnawave_sub_id намеренно НЕ трогаем, штатная очистка в scheduler.py
+            # (delete_old_expired_accounts) подхватит аккаунт позже и не потеряет его.
+            import logging
+            logging.getLogger("bot.subscriptions").warning(f"sub:giveup: remnawave delete failed for sub {sub_id}: {e}")
+
+    await session.commit()
+
+    await callback.message.edit_text(
+        "✅ Вы отказались от подписки. Аккаунт VPN удалён.",
+        reply_markup=back_to_menu(),
+    )
+    await callback.answer()

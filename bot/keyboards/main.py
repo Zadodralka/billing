@@ -72,6 +72,15 @@ def subscription_actions_row(sub_id: int) -> list[InlineKeyboardButton]:
     ]
 
 
+def expired_subscription_actions_row(sub_id: int) -> list[InlineKeyboardButton]:
+    """Ряд действий для истёкшей, но ещё не удалённой подписки (аккаунт в Remnawave
+    жив до DELETE_AFTER_DAYS дней, см. scheduler.py) - тот же выбор, что и в вебе."""
+    return [
+        InlineKeyboardButton(text="🔁 Возобновить", callback_data=f"sub:renew:{sub_id}"),
+        InlineKeyboardButton(text="❌ Отказаться", callback_data=f"sub:giveup:{sub_id}"),
+    ]
+
+
 def payment_keyboard(payment_url: str, label: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💳 Оплатить через ЮМани", url=payment_url)],
