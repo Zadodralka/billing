@@ -78,6 +78,47 @@ async def test_expired_subscription_kept_active_if_remnawave_fails(db_session):
     assert sub.status == SubscriptionStatus.ACTIVE  # остаётся видимой для ретрая
 
 
+async def test_notify_failure_does_not_roll_back_expired_status(db_session):
+    """Регрессия: раньше весь проход коммитился одним общим commit() в конце -
+    необработанное исключение при уведомлении по ОДНОЙ подписке откатывало
+    несохранённый EXPIRED статус у ВСЕХ подписок этого прохода, хотя доступ
+    в Remnawave для них уже был реально отключён (внешний вызов не откатить -
+    получался рассинхрон "в Remnawave expired, в биллинге active")."""
+    import scheduler
+    user1 = await _mk_user(db_session, telegram_id=101)
+    user2 = await _mk_user(db_session, telegram_id=102)
+    sub1 = Subscription(
+        user_id=user1.id, plan_key="1m", traffic_gb=50,
+        status=SubscriptionStatus.ACTIVE, remnawave_sub_id="uuid-1",
+        expires_at=datetime.utcnow() - timedelta(hours=2),
+    )
+    sub2 = Subscription(
+        user_id=user2.id, plan_key="1m", traffic_gb=50,
+        status=SubscriptionStatus.ACTIVE, remnawave_sub_id="uuid-2",
+        expires_at=datetime.utcnow() - timedelta(hours=1),
+    )
+    db_session.add_all([sub1, sub2])
+    await db_session.commit()
+
+    async def tg_side_effect(chat_id, *a, **kw):
+        if chat_id == 101:
+            raise Exception("boom")
+        return True
+
+    with _patch_session_factory(db_session), \
+         patch("scheduler.remnawave.disable_user", new=AsyncMock()), \
+         patch("scheduler.send_telegram", new=AsyncMock(side_effect=tg_side_effect)):
+        await scheduler.disable_expired_subscriptions()
+
+    await db_session.refresh(sub1)
+    await db_session.refresh(sub2)
+    # Сбой уведомления по sub1 не должен откатывать даже её собственный статус
+    # (он коммитится раньше, до попытки уведомления) - и тем более не должен
+    # задевать sub2, обработанную в том же проходе.
+    assert sub1.status == SubscriptionStatus.EXPIRED
+    assert sub2.status == SubscriptionStatus.EXPIRED
+
+
 async def test_expiry_reminder_sent_once(db_session):
     import scheduler
     user = await _mk_user(db_session, email="u@example.com")

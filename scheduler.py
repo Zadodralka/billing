@@ -66,29 +66,44 @@ async def disable_expired_subscriptions():
             sub.status = SubscriptionStatus.EXPIRED
             disabled_count += 1
 
+            # Коммитим смену статуса СРАЗУ, отдельно от уведомлений ниже - раньше это
+            # делалось одним коммитом на весь цикл в конце функции, и необработанное
+            # исключение (например в блоке уведомлений) для ОДНОЙ подписки откатывало
+            # несохранённые изменения статуса у ВСЕХ подписок этого прохода, хотя
+            # доступ в Remnawave для них уже реально отключён - внешний вызов не
+            # откатить, и получался рассинхрон "в Remnawave expired, в биллинге active".
+            try:
+                await session.commit()
+            except Exception as e:
+                logger.error(f"Failed to commit EXPIRED status for sub {sub.id}: {e}")
+                continue
+
             # Уведомляем и в Telegram, и на email независимо - у пользователя может
             # быть привязан только один из способов входа, а пропущенное уведомление
-            # об истечении почти наверняка означает непродлённую подписку.
-            result = await session.execute(select(User).where(User.id == sub.user_id))
-            user = result.scalar_one_or_none()
-            if user and user.telegram_id:
-                await send_telegram(
-                    user.telegram_id,
-                    "⚠️ <b>Подписка истекла</b>\n\n"
-                    "Доступ к VPN заблокирован.\n"
-                    "Зайдите в личный кабинет, чтобы продлить подписку.",
-                )
-            if user and user.email:
-                try:
-                    from core.plans import get_plan
-                    from core.email import send_subscription_expired_email
-                    plan = await get_plan(session, sub.plan_key)
-                    await send_subscription_expired_email(user.email, plan["name"] if plan else sub.plan_key)
-                except Exception as e:
-                    logger.warning(f"Failed to send expiry email to {user.email}: {e}")
+            # об истечении почти наверняка означает непродлённую подписку. Статус уже
+            # сохранён выше, поэтому сбой здесь не мешает обработке остальных подписок.
+            try:
+                result = await session.execute(select(User).where(User.id == sub.user_id))
+                user = result.scalar_one_or_none()
+                if user and user.telegram_id:
+                    await send_telegram(
+                        user.telegram_id,
+                        "⚠️ <b>Подписка истекла</b>\n\n"
+                        "Доступ к VPN заблокирован.\n"
+                        "Зайдите в личный кабинет, чтобы продлить подписку.",
+                    )
+                if user and user.email:
+                    try:
+                        from core.plans import get_plan
+                        from core.email import send_subscription_expired_email
+                        plan = await get_plan(session, sub.plan_key)
+                        await send_subscription_expired_email(user.email, plan["name"] if plan else sub.plan_key)
+                    except Exception as e:
+                        logger.warning(f"Failed to send expiry email to {user.email}: {e}")
+            except Exception as e:
+                logger.error(f"Failed to notify user for expired sub {sub.id}: {e}")
 
         if disabled_count:
-            await session.commit()
             logger.info(f"Disabled {disabled_count} expired subscription(s)")
 
 
