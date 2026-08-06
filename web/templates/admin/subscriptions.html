@@ -9,12 +9,13 @@
     </div>
 </div>
 
+{% set status_labels = {"active": "Активна", "expired": "Истекла", "cancelled": "Остановлена", "pending": "Ожидает"} %}
 <form method="GET" style="display:flex;gap:.6rem;margin-bottom:1.2rem;max-width:560px;flex-wrap:wrap;">
     <input type="text" name="q" value="{{ q }}" placeholder="Поиск по пользователю или ID…" style="flex:1;min-width:220px;">
     <select name="status" style="width:auto;">
         <option value="">Все статусы</option>
         {% for s in statuses %}
-        <option value="{{ s.value }}" {% if status == s.value %}selected{% endif %}>{{ s.value }}</option>
+        <option value="{{ s.value }}" {% if status == s.value %}selected{% endif %}>{{ status_labels.get(s.value, s.value) }}</option>
         {% endfor %}
     </select>
     <button type="submit" class="btn btn-outline-1"><i class="bi bi-search"></i></button>
@@ -32,8 +33,10 @@
                 <td>{{ sub.user.display_name }}</td>
                 <td>{{ plans.get(sub.plan_key, {}).get('name', sub.plan_key) }}</td>
                 <td id="sub-status-{{ sub.id }}">
-                    {% if sub.status.value == 'active' and sub.is_active %}<span class="badge badge-on">Активна</span>
+                    {% if sub.status.value == 'active' %}<span class="badge badge-on">Активна</span>
+                    {% elif sub.status.value == 'expired' %}<span class="badge badge-mid">Истекла</span>
                     {% elif sub.status.value == 'cancelled' %}<span class="badge badge-off">Остановлена</span>
+                    {% elif sub.status.value == 'pending' %}<span class="badge badge-neutral">Ожидает</span>
                     {% else %}<span class="badge badge-neutral">{{ sub.status.value }}</span>{% endif %}
                 </td>
                 <td class="mono" style="color:var(--muted);font-size:.8rem;">{{ (sub.starts_at | localtime).strftime('%d.%m.%Y') if sub.starts_at else '—' }}</td>
@@ -75,8 +78,10 @@
                 <div style="color:var(--muted);font-size:.8rem;margin-top:.15rem;">{{ plans.get(sub.plan_key, {}).get('name', sub.plan_key) }}</div>
             </div>
             <div style="display:flex;align-items:center;gap:.5rem;flex-shrink:0;">
-                {% if sub.status.value == 'active' and sub.is_active %}<span class="badge badge-on">Активна</span>
+                {% if sub.status.value == 'active' %}<span class="badge badge-on">Активна</span>
+                {% elif sub.status.value == 'expired' %}<span class="badge badge-mid">Истекла</span>
                 {% elif sub.status.value == 'cancelled' %}<span class="badge badge-off">Остановлена</span>
+                {% elif sub.status.value == 'pending' %}<span class="badge badge-neutral">Ожидает</span>
                 {% else %}<span class="badge badge-neutral">{{ sub.status.value }}</span>{% endif %}
                 <i class="bi bi-chevron-right" style="color:var(--muted);"></i>
             </div>
