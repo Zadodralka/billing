@@ -127,35 +127,49 @@ async def notify_expiring_soon():
 
         count = 0
         for sub in expiring:
-            user_result = await session.execute(select(User).where(User.id == sub.user_id))
-            user = user_result.scalar_one_or_none()
             sub.expiry_reminder_sent = True
 
-            days_left = (sub.expires_at - now).days
-            expires_str = to_local(sub.expires_at).strftime('%d.%m.%Y')
-            # Оба канала независимо - см. комментарий в disable_expired_subscriptions
-            if user and user.telegram_id:
-                await send_telegram(
-                    user.telegram_id,
-                    f"⏳ <b>Подписка скоро истекает</b>\n\n"
-                    f"Осталось {days_left} дн. (до {expires_str}).\n"
-                    "Продлите заранее, чтобы доступ к VPN не прерывался — "
-                    "кнопка «🔁 Продлить» в разделе «Мои подписки» в боте.",
-                )
-            if user and user.email:
-                try:
-                    from core.plans import get_plan
-                    from core.email import send_expiry_reminder_email
-                    plan = await get_plan(session, sub.plan_key)
-                    await send_expiry_reminder_email(
-                        user.email, plan["name"] if plan else sub.plan_key, days_left, expires_str,
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to send expiry reminder email to {user.email}: {e}")
+            # Коммитим флаг СРАЗУ, до попытки уведомления - иначе сбой при отправке
+            # одной подписке (или в запросе пользователя ниже) откатывает флаг у всех
+            # подписок этого прохода, и уже отправленные напоминания задваиваются на
+            # следующем часовом цикле (тот же класс бага, что и в
+            # disable_expired_subscriptions, только с задвоением вместо потери).
+            try:
+                await session.commit()
+            except Exception as e:
+                logger.error(f"Failed to commit expiry_reminder_sent for sub {sub.id}: {e}")
+                continue
             count += 1
 
+            try:
+                user_result = await session.execute(select(User).where(User.id == sub.user_id))
+                user = user_result.scalar_one_or_none()
+
+                days_left = (sub.expires_at - now).days
+                expires_str = to_local(sub.expires_at).strftime('%d.%m.%Y')
+                # Оба канала независимо - см. комментарий в disable_expired_subscriptions
+                if user and user.telegram_id:
+                    await send_telegram(
+                        user.telegram_id,
+                        f"⏳ <b>Подписка скоро истекает</b>\n\n"
+                        f"Осталось {days_left} дн. (до {expires_str}).\n"
+                        "Продлите заранее, чтобы доступ к VPN не прерывался — "
+                        "кнопка «🔁 Продлить» в разделе «Мои подписки» в боте.",
+                    )
+                if user and user.email:
+                    try:
+                        from core.plans import get_plan
+                        from core.email import send_expiry_reminder_email
+                        plan = await get_plan(session, sub.plan_key)
+                        await send_expiry_reminder_email(
+                            user.email, plan["name"] if plan else sub.plan_key, days_left, expires_str,
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to send expiry reminder email to {user.email}: {e}")
+            except Exception as e:
+                logger.error(f"Failed to notify user for expiring sub {sub.id}: {e}")
+
         if count:
-            await session.commit()
             logger.info(f"Sent expiry reminder for {count} subscription(s)")
 
 
@@ -188,40 +202,52 @@ async def notify_zero_traffic_subscriptions():
                 continue
 
             sub.zero_traffic_checked = True
+
+            # Коммитим флаг СРАЗУ, до попытки уведомления - иначе сбой на одной
+            # подписке откатывает флаг у всех подписок этого прохода, и уже
+            # проверенные задваиваются на следующем часовом цикле (тот же класс
+            # бага, что и в disable_expired_subscriptions/notify_expiring_soon).
+            try:
+                await session.commit()
+            except Exception as e:
+                logger.error(f"Failed to commit zero_traffic_checked for sub {sub.id}: {e}")
+                continue
             checked_count += 1
 
             if used_gb > 0:
                 continue
 
-            user_result = await session.execute(select(User).where(User.id == sub.user_id))
-            user = user_result.scalar_one_or_none()
-            if not user:
-                continue
+            try:
+                user_result = await session.execute(select(User).where(User.id == sub.user_id))
+                user = user_result.scalar_one_or_none()
+                if not user:
+                    continue
 
-            from core.plans import get_plan
-            plan = await get_plan(session, sub.plan_key)
-            plan_name = plan["name"] if plan else sub.plan_key
+                from core.plans import get_plan
+                plan = await get_plan(session, sub.plan_key)
+                plan_name = plan["name"] if plan else sub.plan_key
 
-            if user.telegram_id:
-                await send_telegram(
-                    user.telegram_id,
-                    f"📡 <b>Не видим активности по подписке «{plan_name}»</b>\n\n"
-                    "Похоже, конфиг ещё не подключён — трафик по подписке пока нулевой.\n"
-                    "Если не получается подключиться — напишите в поддержку, поможем.\n"
-                    "Если ещё не приступали — конфиг ждёт в разделе «🔑 QR-код подключения».",
-                )
+                if user.telegram_id:
+                    await send_telegram(
+                        user.telegram_id,
+                        f"📡 <b>Не видим активности по подписке «{plan_name}»</b>\n\n"
+                        "Похоже, конфиг ещё не подключён — трафик по подписке пока нулевой.\n"
+                        "Если не получается подключиться — напишите в поддержку, поможем.\n"
+                        "Если ещё не приступали — конфиг ждёт в разделе «🔑 QR-код подключения».",
+                    )
 
-            if user.email:
-                try:
-                    from core.email import send_zero_traffic_email
-                    await send_zero_traffic_email(user.email, plan_name)
-                except Exception as e:
-                    logger.warning(f"Failed to send zero-traffic email to {user.email}: {e}")
+                if user.email:
+                    try:
+                        from core.email import send_zero_traffic_email
+                        await send_zero_traffic_email(user.email, plan_name)
+                    except Exception as e:
+                        logger.warning(f"Failed to send zero-traffic email to {user.email}: {e}")
 
-            notified_count += 1
+                notified_count += 1
+            except Exception as e:
+                logger.error(f"Failed to notify user for zero-traffic sub {sub.id}: {e}")
 
         if checked_count:
-            await session.commit()
             logger.info(f"Zero-traffic check: checked {checked_count} subscription(s), notified {notified_count}")
 
 
@@ -287,31 +313,48 @@ async def expire_stale_pending_payments():
             logger.info(f"Expired {count} stale pending payment(s), refunded balances")
 
 
+async def _report_step_failure(step_name: str, error: Exception):
+    """Шаг цикла упал целиком - лог уже есть в вызывающем коде, здесь только
+    дублируем это админу в Telegram, чтобы не узнавать о таком постфактум от
+    пользователя (см. историю с рассинхроном disable_expired_subscriptions -
+    без алерта такой сбой был виден только в docker logs)."""
+    try:
+        from core.admin_notify import notify_admins_scheduler_step_failed
+        await notify_admins_scheduler_step_failed(step_name, error)
+    except Exception as notify_error:
+        logger.error(f"Failed to notify admins about {step_name} failure: {notify_error}")
+
+
 async def run_cycle():
     try:
         await disable_expired_subscriptions()
     except Exception as e:
         logger.error(f"disable_expired_subscriptions failed: {e}")
+        await _report_step_failure("disable_expired_subscriptions", e)
 
     try:
         await notify_expiring_soon()
     except Exception as e:
         logger.error(f"notify_expiring_soon failed: {e}")
+        await _report_step_failure("notify_expiring_soon", e)
 
     try:
         await notify_zero_traffic_subscriptions()
     except Exception as e:
         logger.error(f"notify_zero_traffic_subscriptions failed: {e}")
+        await _report_step_failure("notify_zero_traffic_subscriptions", e)
 
     try:
         await delete_old_expired_accounts()
     except Exception as e:
         logger.error(f"delete_old_expired_accounts failed: {e}")
+        await _report_step_failure("delete_old_expired_accounts", e)
 
     try:
         await expire_stale_pending_payments()
     except Exception as e:
         logger.error(f"expire_stale_pending_payments failed: {e}")
+        await _report_step_failure("expire_stale_pending_payments", e)
 
 
 async def _heartbeat_loop():
