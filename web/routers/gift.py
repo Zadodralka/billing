@@ -59,7 +59,22 @@ async def create_gift_payment(request: Request, user: User = Depends(require_use
     traffic_gb = data.get("traffic_gb", plan.get("traffic_gb", 50))
     addon_keys_in = data.get("addon_keys") or []
     addons = await get_addons_by_keys(session, addon_keys_in)
-    amount = plan["price"] + (plan.get("unlimited_extra", 0) if traffic_gb == 0 else 0) + addons_price(addons)
+    original_amount = plan["price"] + (plan.get("unlimited_extra", 0) if traffic_gb == 0 else 0) + addons_price(addons)
+
+    # Промокод - скидка считается покупателю (user_id), лимит "один раз на
+    # пользователя" проверяется по нему же, а не по получателю подарка.
+    # Баланс для подарков не поддержан - см. комментарий в plans.html.
+    promo_code_str = (data.get("promo_code") or "").strip().upper()
+    promo_discount = 0
+    promo_obj = None
+    if promo_code_str:
+        from core.promo_referral import validate_promo_code
+        promo_result = await validate_promo_code(promo_code_str, user.id, session)
+        if promo_result["valid"]:
+            promo_obj = promo_result["promo_code"]
+            promo_discount = int(original_amount * promo_obj.discount_percent / 100)
+
+    amount = max(0, original_amount - promo_discount)
 
     label = yoomoney.generate_label()
     payment = Payment(
@@ -68,7 +83,9 @@ async def create_gift_payment(request: Request, user: User = Depends(require_use
         traffic_gb=traffic_gb,
         addon_keys=",".join(a["key"] for a in addons) or None,
         amount=amount,
-        original_amount=amount,
+        original_amount=original_amount,
+        promo_discount=promo_discount,
+        promo_code_id=promo_obj.id if promo_obj else None,
         label=label,
         is_gift=True,
         gift_recipient_email=recipient_email,
@@ -94,6 +111,7 @@ async def create_gift_payment(request: Request, user: User = Depends(require_use
     )
     return JSONResponse({
         "payment_url": pay_url, "label": label, "amount": amount,
+        "original_amount": original_amount, "promo_discount": promo_discount,
         "plan_name": plan["name"], "recipient_email": recipient_email, "free": False,
     })
 

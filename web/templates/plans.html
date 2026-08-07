@@ -168,7 +168,11 @@ function renderAssemblyStep() {
         return sum + (addon ? addon.price : 0);
     }, 0);
     const subtotal = trafficPrice + addonsSum;
-    const afterPromo = (mode !== 'gift' && promoValidated && promoDiscount > 0)
+    // Промокод работает и для подарков (скидка считается покупателю, у него же
+    // проверяется лимит "один раз на пользователя" - см. validate_promo_code).
+    // Баланс - только для покупки себе: списывать баланс покупателя за чужую
+    // подписку не просили, и сама механика подарков сейчас так не думает.
+    const afterPromo = (promoValidated && promoDiscount > 0)
         ? subtotal - Math.floor(subtotal * promoDiscount / 100) : subtotal;
     const balanceSpent = (mode !== 'gift' && useBalance && USER_BALANCE > 0) ? Math.min(USER_BALANCE, afterPromo) : 0;
     const total = Math.max(0, afterPromo - balanceSpent);
@@ -197,8 +201,8 @@ function renderAssemblyStep() {
         `).join('')}
         <div style="margin-bottom:.6rem;"></div>` : '';
 
-    // Промокод и баланс - только для покупки себе (см. комментарий выше)
-    const promoHtml = mode === 'gift' ? '' : `
+    // Баланс - только для покупки себе (см. комментарий выше), промокод - для обоих режимов
+    const promoHtml = `
         <div style="margin-bottom:1.1rem;">
             <div class="assembly-label"><span class="assembly-label-icon gold"><i class="bi bi-tag"></i></span> Промокод</div>
             <div style="display:flex;gap:.5rem;">
@@ -208,7 +212,7 @@ function renderAssemblyStep() {
             <div style="font-size:.78rem;margin-top:.35rem;min-height:1em;color:${promoValidated ? 'var(--accent)' : '#ef5b5b'};">
                 ${promoValidated ? `✅ Скидка ${promoDiscount}% применена!` : (promoError ? `❌ ${promoError}` : '')}
             </div>
-            ${USER_BALANCE > 0 ? `
+            ${mode !== 'gift' && USER_BALANCE > 0 ? `
             <label style="display:flex;align-items:center;gap:.55rem;cursor:pointer;color:#9aa5ba;font-size:.88rem;margin-top:.7rem;">
                 <input type="checkbox" ${useBalance ? 'checked' : ''} style="width:auto;" onchange="toggleModalBalance(this.checked)">
                 Использовать баланс <strong style="color:var(--accent);">(${USER_BALANCE} ₽)</strong>
@@ -216,7 +220,7 @@ function renderAssemblyStep() {
         </div>`;
 
     let discHtml = '';
-    if (mode !== 'gift' && promoValidated && promoDiscount > 0) discHtml += `<div style="color:var(--accent);font-size:.8rem;margin:.2rem 0;">🏷 Промокод: -${subtotal - afterPromo} ₽</div>`;
+    if (promoValidated && promoDiscount > 0) discHtml += `<div style="color:var(--accent);font-size:.8rem;margin:.2rem 0;">🏷 Промокод: -${subtotal - afterPromo} ₽</div>`;
     if (balanceSpent > 0) discHtml += `<div style="color:var(--accent);font-size:.8rem;margin:.2rem 0;">💰 Баланс: -${balanceSpent} ₽</div>`;
 
     document.getElementById('payModalBody').innerHTML = `
@@ -242,7 +246,7 @@ async function proceedToPayment() {
     if (mode === 'gift') {
         const res = await fetch('/gift/create', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({plan_key: planKey, traffic_gb: traffic, addon_keys: addonKeys, recipient_email: email})
+            body: JSON.stringify({plan_key: planKey, traffic_gb: traffic, addon_keys: addonKeys, recipient_email: email, promo_code: promoValidated ? promoCode : ''})
         });
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
@@ -251,9 +255,13 @@ async function proceedToPayment() {
         }
         const data = await res.json();
         if (data.free) { showGiftSent(data.recipient_email); return; }
+        const giftDiscHtml = data.promo_discount > 0
+            ? `<div style="color:var(--accent);font-size:.8rem;margin:.2rem 0;">🏷 Промокод: -${data.promo_discount} ₽</div>` : '';
         document.getElementById('payModalBody').innerHTML = `
             <div class="pay-summary">
                 <div class="pname">${data.plan_name} · в подарок для ${data.recipient_email}</div>
+                ${data.original_amount !== data.amount ? `<div style="color:var(--muted);font-size:.8rem;text-decoration:line-through;">${data.original_amount} ₽</div>` : ''}
+                ${giftDiscHtml}
                 <div class="pamount">${data.amount} ₽</div>
             </div>
             <a href="${data.payment_url}" target="_blank" class="pay-cta">Оплатить через ЮMoney</a>
