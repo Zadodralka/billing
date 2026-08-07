@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Email-рассылка — Админ{% endblock %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>Email-рассылка</h1>
+        <div class="sub">Письмо уходит в оформлении остальных писем сервиса (см. core/email.py: _simple_notice_html)</div>
+    </div>
+</div>
+
+<div class="card" style="padding:1.3rem;max-width:640px;">
+    <label class="form-label">Кому</label>
+    <select id="bcSegment" style="margin-bottom:1rem;">
+        {% for key, label in segments.items() %}
+        <option value="{{ key }}">{{ label }} — {{ counts.get(key, 0) }} чел.</option>
+        {% endfor %}
+    </select>
+
+    <label class="form-label">Тема письма</label>
+    <input type="text" id="bcSubject" placeholder="Подарите VPN другу 🎁" style="margin-bottom:1rem;">
+
+    <div style="display:grid;grid-template-columns:72px 1fr;gap:.8rem;margin-bottom:1rem;">
+        <div>
+            <label class="form-label">Эмодзи</label>
+            <input type="text" id="bcEmoji" value="📣" maxlength="4">
+        </div>
+        <div>
+            <label class="form-label">Заголовок в письме</label>
+            <input type="text" id="bcTitle" placeholder="Подарите подписку другу">
+        </div>
+    </div>
+
+    <label class="form-label">Текст письма</label>
+    <textarea id="bcBody" rows="6" placeholder="Пустая строка между абзацами" style="margin-bottom:1rem;width:100%;resize:vertical;font-family:inherit;padding:.6rem .8rem;background:var(--panel-2);border:1px solid var(--border);border-radius:9px;color:var(--text);"></textarea>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1rem;">
+        <div>
+            <label class="form-label">Текст кнопки</label>
+            <input type="text" id="bcCtaText" value="Подарить подписку">
+        </div>
+        <div>
+            <label class="form-label">Ссылка кнопки</label>
+            <input type="text" id="bcCtaUrl" placeholder="{{ request.url.scheme }}://{{ request.url.netloc }}/dashboard/plans">
+        </div>
+    </div>
+
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;padding:.9rem 0;border-top:1px solid var(--border);margin-top:.4rem;">
+        <input type="email" id="bcTestEmail" placeholder="ваш email для теста" style="flex:1;min-width:200px;">
+        <button type="button" class="btn btn-outline-1" id="bcTestBtn">Отправить тест</button>
+    </div>
+
+    <button type="button" class="btn btn-accent" style="width:100%;" id="bcSendBtn">Отправить рассылку</button>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const BC_COUNTS = {{ counts | tojson }};
+const BC_LABELS = {{ segments | tojson }};
+
+function bcCollectFields() {
+    return {
+        subject: document.getElementById('bcSubject').value.trim(),
+        emoji: document.getElementById('bcEmoji').value.trim() || '📣',
+        title: document.getElementById('bcTitle').value.trim(),
+        body_text: document.getElementById('bcBody').value.trim(),
+        cta_text: document.getElementById('bcCtaText').value.trim() || 'Личный кабинет',
+        cta_url: document.getElementById('bcCtaUrl').value.trim(),
+    };
+}
+
+function bcValidate(fields) {
+    if (!fields.subject || !fields.title || !fields.body_text) {
+        showError('Заполните тему, заголовок и текст письма');
+        return false;
+    }
+    return true;
+}
+
+document.getElementById('bcTestBtn').addEventListener('click', async () => {
+    const fields = bcCollectFields();
+    if (!bcValidate(fields)) return;
+    const testEmail = document.getElementById('bcTestEmail').value.trim();
+    if (!testEmail) { showError('Укажите email для теста'); return; }
+
+    const btn = document.getElementById('bcTestBtn');
+    btn.disabled = true;
+    try {
+        const formData = new FormData();
+        formData.append('test_email', testEmail);
+        Object.entries(fields).forEach(([k, v]) => formData.append(k, v));
+        const res = await fetch('/admin/email-broadcast/test', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.ok) { showSuccess('Тестовое письмо отправлено на ' + testEmail); }
+        else { showError('Не удалось отправить: ' + (data.error || 'ошибка')); }
+    } catch (err) { showError('Сетевая ошибка: ' + err.message); }
+    btn.disabled = false;
+});
+
+document.getElementById('bcSendBtn').addEventListener('click', async () => {
+    const fields = bcCollectFields();
+    if (!bcValidate(fields)) return;
+    const segment = document.getElementById('bcSegment').value;
+    const count = BC_COUNTS[segment] || 0;
+
+    if (!(await confirmAction(
+        `Письмо уйдёт ${count} получател${count % 10 === 1 && count % 100 !== 11 ? 'ю' : 'ям'} (${BC_LABELS[segment]}). Отменить рассылку после отправки нельзя.`,
+        { title: 'Отправить рассылку?', okText: 'Отправить' }
+    ))) return;
+
+    const btn = document.getElementById('bcSendBtn');
+    btn.disabled = true;
+    try {
+        const formData = new FormData();
+        formData.append('segment', segment);
+        Object.entries(fields).forEach(([k, v]) => formData.append(k, v));
+        const res = await fetch('/admin/email-broadcast/send', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.ok) {
+            showSuccess(`Рассылка запущена (${data.count} получателей). Итог придёт в Telegram.`);
+        } else {
+            showError('Не удалось запустить: ' + (data.error || 'ошибка'));
+        }
+    } catch (err) { showError('Сетевая ошибка: ' + err.message); }
+    btn.disabled = false;
+});
+</script>
+{% endblock %}

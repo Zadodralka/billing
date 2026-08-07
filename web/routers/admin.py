@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends, Form, HTTPException
+from fastapi import APIRouter, Request, Depends, Form, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1112,3 +1112,130 @@ async def delete_addon(addon_id: int, admin: User = Depends(require_admin), sess
         await session.rollback()
         logger.error(f"delete_addon failed: {traceback.format_exc()}")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+# ───────────── Email-рассылка (маркетинговые письма) ─────────────
+# Шаблон письма - core/email.py: _simple_notice_html (тот же каркас, что и у
+# остальных писем сервиса) + send_marketing_email, который его использует.
+
+_EMAIL_BROADCAST_SEGMENTS = {
+    "active": "С активной подпиской",
+    "all": "Все с привязанным email",
+}
+
+
+async def _email_broadcast_recipients(session: AsyncSession, segment: str) -> list[str]:
+    if segment == "active":
+        now = datetime.utcnow()
+        result = await session.execute(
+            select(User.email)
+            .join(Subscription, Subscription.user_id == User.id)
+            .where(
+                User.email.is_not(None),
+                Subscription.status == SubscriptionStatus.ACTIVE,
+                (Subscription.expires_at.is_(None)) | (Subscription.expires_at > now),
+            )
+            .distinct()
+        )
+    else:
+        result = await session.execute(select(User.email).where(User.email.is_not(None)))
+    return [e for e in result.scalars().all() if e]
+
+
+@router.get("/email-broadcast", response_class=HTMLResponse)
+async def admin_email_broadcast(request: Request, admin: User = Depends(require_admin), session: AsyncSession = Depends(get_db)):
+    counts = {key: len(await _email_broadcast_recipients(session, key)) for key in _EMAIL_BROADCAST_SEGMENTS}
+    return templates.TemplateResponse(request, "admin/email_broadcast.html", {
+        "user": admin,
+        "segments": _EMAIL_BROADCAST_SEGMENTS,
+        "counts": counts,
+    })
+
+
+@router.post("/email-broadcast/test")
+async def email_broadcast_test(
+    admin: User = Depends(require_admin),
+    test_email: str = Form(...),
+    subject: str = Form(...),
+    emoji: str = Form("📣"),
+    title: str = Form(...),
+    body_text: str = Form(...),
+    cta_text: str = Form("Личный кабинет"),
+    cta_url: str = Form(""),
+):
+    from core.email import send_marketing_email
+    from core.config import settings
+
+    test_email = test_email.strip()
+    cta_url = cta_url.strip() or f"{settings.webapp_url}/dashboard"
+    if not test_email:
+        return JSONResponse({"ok": False, "error": "Укажите email для теста"}, status_code=400)
+
+    try:
+        await send_marketing_email(test_email, subject, emoji, title, body_text, cta_text, cta_url)
+        logger.info(f"Admin {admin.id} sent test broadcast email to {test_email}")
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        logger.error(f"email_broadcast_test failed: {traceback.format_exc()}")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+async def _run_email_broadcast(
+    recipients: list[str], subject: str, emoji: str, title: str,
+    body_text: str, cta_text: str, cta_url: str,
+):
+    """Фоновая задача (BackgroundTasks) - рассылка на сотни адресов через send_email()
+    (новое TLS-соединение на каждое письмо) может идти минуты, держать HTTP-запрос
+    админки открытым всё это время не годится. Пауза раз в 20 писем - та же
+    предосторожность, что и у Telegram-рассылки в bot/handlers/admin.py, чтобы не
+    упереться в лимиты SMTP-провайдера."""
+    import asyncio
+    from core.email import send_marketing_email
+    from core.notify import send_telegram_to_admins
+
+    sent, failed = 0, 0
+    for i, email in enumerate(recipients, start=1):
+        try:
+            await send_marketing_email(email, subject, emoji, title, body_text, cta_text, cta_url)
+            sent += 1
+        except Exception as e:
+            failed += 1
+            logger.warning(f"email_broadcast: failed to send to {email}: {e}")
+        if i % 20 == 0:
+            await asyncio.sleep(1)
+
+    logger.info(f"email_broadcast finished: sent={sent} failed={failed} total={len(recipients)}")
+    await send_telegram_to_admins(
+        f"✉️ <b>Email-рассылка завершена</b>\n\n"
+        f"Тема: {subject}\n"
+        f"Отправлено: {sent}\n"
+        f"Ошибок: {failed}"
+    )
+
+
+@router.post("/email-broadcast/send")
+async def email_broadcast_send(
+    background_tasks: BackgroundTasks,
+    admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_db),
+    segment: str = Form(...),
+    subject: str = Form(...),
+    emoji: str = Form("📣"),
+    title: str = Form(...),
+    body_text: str = Form(...),
+    cta_text: str = Form("Личный кабинет"),
+    cta_url: str = Form(""),
+):
+    if segment not in _EMAIL_BROADCAST_SEGMENTS:
+        return JSONResponse({"ok": False, "error": "Неверный сегмент получателей"}, status_code=400)
+
+    from core.config import settings
+    cta_url = cta_url.strip() or f"{settings.webapp_url}/dashboard"
+
+    recipients = await _email_broadcast_recipients(session, segment)
+    if not recipients:
+        return JSONResponse({"ok": False, "error": "Нет получателей в выбранном сегменте"}, status_code=400)
+
+    logger.info(f"Admin {admin.id} started email broadcast to segment '{segment}' ({len(recipients)} recipients)")
+    background_tasks.add_task(_run_email_broadcast, recipients, subject, emoji, title, body_text, cta_text, cta_url)
+    return JSONResponse({"ok": True, "count": len(recipients)})

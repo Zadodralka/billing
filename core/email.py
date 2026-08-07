@@ -582,3 +582,37 @@ async def send_subscription_expired_email(recipient_email: str, plan_name: str):
         ),
     )
     await send_email(recipient_email, "⚠️ Подписка истекла — доступ заблокирован — Unlockless VPN", html)
+
+
+def _text_to_paragraphs_html(text: str) -> str:
+    """Превращает обычный текст из формы админки в HTML-абзацы того же стиля,
+    что и в остальных письмах (см. body_html выше) - пустая строка разделяет
+    абзацы, одиночный перенос внутри абзаца становится <br>. Экранируем
+    пользовательский ввод - это админка, но письмо всё равно уходит как HTML."""
+    paragraphs = [p.strip() for p in text.strip().split("\n\n") if p.strip()]
+    return "".join(
+        f'<p style="color: #4b5565; font-size: 15px; line-height: 1.6; margin-bottom: 20px;">'
+        f'{escape(p).replace(chr(10), "<br>")}</p>'
+        for p in paragraphs
+    )
+
+
+async def send_marketing_email(
+    recipient_email: str, subject: str, emoji: str, title: str,
+    body_text: str, cta_text: str, cta_url: str,
+):
+    """Одно письмо для рассылки из /admin/email-broadcast - тема/заголовок/текст/
+    кнопка задаются в форме админки, визуальный каркас - тот же _simple_notice_html,
+    что и у остальных писем сервиса (см. функции выше)."""
+    html = _simple_notice_html(
+        emoji=emoji,
+        title=title,
+        body_html=_text_to_paragraphs_html(body_text),
+        cta_text=cta_text,
+        cta_url=cta_url,
+        footer_note=(
+            "Это письмо отправлено вам как пользователю "
+            f"<a href='{settings.webapp_url}' style='color: #97a1b0; text-decoration: underline;'>Unlockless VPN</a>."
+        ),
+    )
+    await send_email(recipient_email, subject, html)
