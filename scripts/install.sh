@@ -81,6 +81,11 @@ if grep -q "^POSTGRES_PASSWORD=$" .env 2>/dev/null; then
 fi
 
 _env_set REDIS_URL "redis://redis:6379/0"
+# Пустая строка здесь роняет старт приложения (не парсится как число) -
+# подставляем те же дефолты, что и так использовались бы, будь переменная
+# просто не задана (core/config.py: smtp_port=465, session_max_age=86400).
+_env_set SMTP_PORT "465"
+_env_set SESSION_MAX_AGE "86400"
 
 # Список того, что знает только оператор и сгенерировать нельзя.
 REQUIRED_VARS="BOT_TOKEN ADMIN_IDS YOOMONEY_RECEIVER YOOMONEY_SECRET REMNAWAVE_URL REMNAWAVE_TOKEN SMTP_HOST SMTP_USER SMTP_PASS SMTP_FROM WEBAPP_URL"
