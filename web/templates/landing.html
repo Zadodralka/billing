@@ -34,6 +34,10 @@
 
     {% include "_head_common.html" %}
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons@7/css/flag-icons.min.css">
+    {# Появление секций при скролле держится на JS (IntersectionObserver добавляет
+       .in-view) - без него контент навсегда остался бы на opacity:0. Без JS такое
+       бывает у части поисковых краулеров и совсем без скриптов у пользователя. #}
+    <noscript><style>.content-box, .grid-cards .glass-card { opacity: 1 !important; transform: none !important; }</style></noscript>
     <style>
         /* ── Токены оформления - те же переменные, что и во всём приложении
            (_head_common.html), никаких отдельных фиолетовых/голубых цветов -
@@ -82,9 +86,27 @@
         }
         @media (prefers-reduced-motion: reduce) {
             * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
+            /* Оживление при скролле (.in-view ниже) тоже приглушаем - без этого
+               контент держался бы на opacity:0 до конца transition даже здесь. */
+            .content-box, .grid-cards .glass-card { opacity: 1 !important; transform: none !important; transition: none !important; }
         }
 
         .content-box { max-width: 1100px; width: 100%; position: relative; z-index: 2; }
+
+        /* ── Появление секций при скролле - лёгкий сдвиг+прозрачность вместо
+           мгновенного появления. Один раз на секцию (см. JS), не мигает туда-обратно
+           при повторной прокрутке. Плитки преимуществ - тем же приёмом с небольшой
+           задержкой по очереди (веер), остальное - целиком одним блоком. ── */
+        .content-box { opacity: 0; transform: translateY(28px); transition: opacity .7s ease, transform .7s ease; }
+        .content-box.in-view { opacity: 1; transform: translateY(0); }
+        .grid-cards .glass-card { opacity: 0; transform: translateY(20px); transition: opacity .5s ease, transform .5s ease; }
+        .content-box.in-view .grid-cards .glass-card { opacity: 1; transform: translateY(0); }
+        .content-box.in-view .grid-cards .glass-card:nth-child(1) { transition-delay: .05s; }
+        .content-box.in-view .grid-cards .glass-card:nth-child(2) { transition-delay: .1s; }
+        .content-box.in-view .grid-cards .glass-card:nth-child(3) { transition-delay: .15s; }
+        .content-box.in-view .grid-cards .glass-card:nth-child(4) { transition-delay: .2s; }
+        .content-box.in-view .grid-cards .glass-card:nth-child(5) { transition-delay: .25s; }
+        .content-box.in-view .grid-cards .glass-card:nth-child(6) { transition-delay: .3s; }
 
         header {
             position: fixed; top: 0; left: 0; width: 100%; padding: 18px 40px;
@@ -128,6 +150,51 @@
         .gradient-text { background: var(--gradient-main); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
         .hero-desc { font-size: clamp(.95rem, 2vw, 1.1rem); color: var(--muted); margin-bottom: 36px; max-width: 580px; }
         .hero-actions { display: flex; gap: 14px; flex-wrap: wrap; }
+
+        /* ── Hero: две колонки - текст слева, "экран подключения" справа.
+           Никаких выдуманных цифр (пинг/IP) - см. комментарий у частиц ниже
+           про то, почему здесь принципиально не имитируем измерения. ── */
+        .hero-columns { display: flex; align-items: center; gap: 56px; }
+        .hero-text-col { flex: 1 1 480px; min-width: 0; }
+        .hero-mockup-col { flex: 0 0 auto; display: flex; justify-content: center; }
+
+        .hero-mockup { position: relative; width: 260px; }
+        .mockup-glow {
+            position: absolute; inset: -50px; background: var(--gradient-glow);
+            filter: blur(50px); z-index: -1; opacity: .9;
+        }
+        .mockup-card {
+            background: var(--panel); border: 1px solid var(--border); border-radius: 28px;
+            padding: 34px 22px; text-align: center;
+            box-shadow: 0 30px 60px -20px rgba(0,0,0,.6);
+            animation: mockup-float 5s ease-in-out infinite;
+        }
+        @keyframes mockup-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+
+        .mockup-card-top {
+            display: flex; align-items: center; gap: 8px; justify-content: center;
+            margin-bottom: 30px; color: var(--muted); font-size: .78rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .04em;
+        }
+        .mockup-card-top i { color: var(--accent); }
+
+        .mockup-ring {
+            width: 92px; height: 92px; border-radius: 50%; margin: 0 auto 18px;
+            display: flex; align-items: center; justify-content: center;
+            border: 2px solid var(--border); font-size: 1.9rem; color: var(--muted);
+            transition: border-color .5s ease, color .5s ease, box-shadow .5s ease;
+        }
+        .mockup-ring.connecting { animation: mockup-pulse 1.1s ease-in-out infinite; }
+        .mockup-ring.connected {
+            border-color: var(--accent); color: var(--accent);
+            box-shadow: 0 0 0 8px var(--accent-soft), 0 0 34px var(--accent-glow);
+        }
+        @keyframes mockup-pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+
+        .mockup-status { font-weight: 700; font-size: 1.02rem; margin-bottom: 6px; color: var(--text); transition: color .3s ease; }
+        .mockup-status.connected { color: var(--accent); }
+        .mockup-location { color: var(--muted); font-size: .8rem; display: flex; align-items: center; justify-content: center; gap: 7px; }
+        .mockup-location .fi { width: 18px; height: 13px; border-radius: 2px; box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
 
         /* ── Общий заголовок секции ── */
         .section-header { margin-bottom: 36px; }
@@ -186,6 +253,13 @@
 
         .landing-footer-slide { text-align: center; color: var(--muted); font-size: .78rem; margin-top: 32px; }
 
+        /* Мокап держится в паре с текстом до ~900px, дальше карточкам уже
+           тесно в ряд - переносим его под текст, а не сжимаем до нечитаемости. */
+        @media (max-width: 900px) {
+            .hero-columns { flex-direction: column; gap: 36px; }
+            .hero-mockup-col { width: 100%; }
+        }
+
         @media (max-width: 768px) {
             header { padding: 12px 16px; gap: .6rem; }
             .logo { font-size: 1rem; gap: 9px; }
@@ -202,6 +276,9 @@
             .side-watermark { font-size: min(85vw, 500px); right: -18vw; top: 12%; opacity: .045; }
             .hero-actions { flex-direction: column; width: 100%; }
             .btn { width: 100%; }
+            .hero-mockup { width: 210px; }
+            .mockup-card { padding: 26px 18px; }
+            .mockup-ring { width: 78px; height: 78px; font-size: 1.6rem; }
 
             /* ── Преимущества на телефоне ──
                На широком экране иконка стоит НАД заголовком - вертикально это
@@ -263,12 +340,27 @@
     <!-- Слайд 1: Hero -->
     <section class="section-slide">
         <div class="content-box hero-slide">
-            <div class="tag-pill"><span class="pulse-dot"></span> No-Logs Policy · Приватный VPN-сервис</div>
-            <h1 class="hero-title">Приватный, быстрый,<br>на <span class="gradient-text">любые устройства</span></h1>
-            <p class="hero-desc">Подключись за 2 минуты и пользуйся преимуществами безопасного сёрфинга — без логов активности и лишних настроек.</p>
-            <div class="hero-actions">
-                <a href="/auth/login" class="btn btn-glow"><i class="bi bi-arrow-right-circle"></i> Начать</a>
-                <a href="{{ contact_url }}" target="_blank" rel="noopener" class="btn btn-glass"><i class="bi bi-telegram"></i> Написать в Telegram</a>
+            <div class="hero-columns">
+                <div class="hero-text-col">
+                    <div class="tag-pill"><span class="pulse-dot"></span> No-Logs Policy · Приватный VPN-сервис</div>
+                    <h1 class="hero-title">Приватный, быстрый,<br>на <span class="gradient-text">любые устройства</span></h1>
+                    <p class="hero-desc">Подключись за 2 минуты и пользуйся преимуществами безопасного сёрфинга — без логов активности и лишних настроек.</p>
+                    <div class="hero-actions">
+                        <a href="/auth/login" class="btn btn-glow"><i class="bi bi-arrow-right-circle"></i> Начать</a>
+                        <a href="{{ contact_url }}" target="_blank" rel="noopener" class="btn btn-glass"><i class="bi bi-telegram"></i> Написать в Telegram</a>
+                    </div>
+                </div>
+                <div class="hero-mockup-col">
+                    <div class="hero-mockup">
+                        <div class="mockup-glow"></div>
+                        <div class="mockup-card">
+                            <div class="mockup-card-top"><i class="bi bi-shield-lock-fill"></i> Unlockless VPN</div>
+                            <div class="mockup-ring connecting" id="mockupRing"><i class="bi bi-power" id="mockupIcon"></i></div>
+                            <div class="mockup-status" id="mockupStatus">Подключение...</div>
+                            <div class="mockup-location"><span class="fi fi-nl"></span> Нидерланды</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -453,6 +545,55 @@
     function toggleFaq(element) {
         element.classList.toggle('open');
     }
+
+    // Мокап "подключения" в hero - только смена статуса/цвета, никаких
+    // выдуманных цифр (пинг/IP) - см. комментарий у частиц выше про то, почему
+    // здесь принципиально не имитируем измерения.
+    (function () {
+        const ring = document.getElementById('mockupRing');
+        if (!ring) return;
+        const icon = document.getElementById('mockupIcon');
+        const status = document.getElementById('mockupStatus');
+
+        function setConnected(connected) {
+            ring.classList.toggle('connecting', !connected);
+            ring.classList.toggle('connected', connected);
+            status.classList.toggle('connected', connected);
+            status.textContent = connected ? 'Подключено' : 'Подключение...';
+            icon.className = connected ? 'bi bi-check-lg' : 'bi bi-power';
+        }
+
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            setConnected(true);
+            return;
+        }
+
+        setTimeout(() => setConnected(true), 1800);
+        setInterval(() => {
+            setConnected(false);
+            setTimeout(() => setConnected(true), 1800);
+        }, 7000);
+    })();
+
+    // Появление секций при скролле - см. .content-box/.in-view в <style>.
+    // Один раз на секцию: unobserve сразу после первого появления, чтобы не
+    // мигать туда-обратно при пролистывании вверх-вниз.
+    (function () {
+        const boxes = document.querySelectorAll('.content-box');
+        if (!('IntersectionObserver' in window)) {
+            boxes.forEach(b => b.classList.add('in-view'));
+            return;
+        }
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('in-view');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.25 });
+        boxes.forEach(b => observer.observe(b));
+    })();
 </script>
 </body>
 </html>
