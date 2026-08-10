@@ -79,11 +79,6 @@
             background: var(--gradient-glow); pointer-events: none; z-index: 0; filter: blur(60px);
         }
 
-        @keyframes pulse2 {
-            0% { transform: scale(.95); box-shadow: 0 0 0 0 rgba(61,220,132,.6); }
-            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(61,220,132,0); }
-            100% { transform: scale(.95); box-shadow: 0 0 0 0 rgba(61,220,132,0); }
-        }
         @media (prefers-reduced-motion: reduce) {
             * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
             /* Оживление при скролле (.in-view ниже) тоже приглушаем - без этого
@@ -140,12 +135,6 @@
 
         /* ── Слайд 1: Hero ── */
         .hero-slide { text-align: left; }
-        .tag-pill {
-            display: inline-flex; align-items: center; gap: 9px; padding: 8px 16px .8rem;
-            background: var(--accent-soft); border: 1px solid rgba(61,220,132,.3); border-radius: 40px;
-            color: var(--accent); font-size: .82rem; font-weight: 600; margin-bottom: 26px;
-        }
-        .pulse-dot { width: 7px; height: 7px; background: var(--accent); border-radius: 50%; animation: pulse2 2s infinite; }
         h1.hero-title { font-size: clamp(2.1rem, 5vw, 3.6rem); font-weight: 800; line-height: 1.12; margin-bottom: 22px; letter-spacing: -.02em; }
         .gradient-text { background: var(--gradient-main); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
         .hero-desc { font-size: clamp(.95rem, 2vw, 1.1rem); color: var(--muted); margin-bottom: 36px; max-width: 580px; }
@@ -257,6 +246,12 @@
            тесно в ряд - переносим его под текст, а не сжимаем до нечитаемости. */
         @media (max-width: 900px) {
             .hero-columns { flex-direction: column; gap: 36px; }
+            /* flex: 1 1 480px у .hero-text-col задан для строчной раскладки
+               (480px там - это минимальная ШИРИНА). В колоночной раскладке
+               главная ось - вертикальная, и та же flex-basis: 480px превращала
+               её в минимальную ВЫСОТУ - между кнопками и карточкой подключения
+               появлялась пустая зона под сотню с лишним пикселей на телефоне. */
+            .hero-text-col { flex: 0 1 auto; }
             .hero-mockup-col { width: 100%; }
         }
 
@@ -272,13 +267,25 @@
             header .btn-glass, header .btn-glow { padding: 8px 12px; font-size: .78rem; }
             header .btn-glass .btn-label { display: none; }
             .slide-dots { display: none; }
-            .section-slide { padding: 92px 18px 48px; height: auto; min-height: 100vh; min-height: 100dvh; }
+            .section-slide { padding: 78px 18px 40px; height: auto; min-height: 100vh; min-height: 100dvh; }
             .side-watermark { font-size: min(85vw, 500px); right: -18vw; top: 12%; opacity: .045; }
-            .hero-actions { flex-direction: column; width: 100%; }
-            .btn { width: 100%; }
-            .hero-mockup { width: 210px; }
-            .mockup-card { padding: 26px 18px; }
-            .mockup-ring { width: 78px; height: 78px; font-size: 1.6rem; }
+            /* На узком экране убираем лишний воздух вокруг заголовка/описания -
+               раньше сюда же добавлялся плашка "No-Logs Policy" (её убрали
+               совсем, не только на мобильном - см. HTML), из-за неё и общей
+               высоты блока карточка подключения справа уходила за пределы
+               экрана даже на iPhone SE. */
+            .hero-columns { gap: 26px; }
+            h1.hero-title { font-size: 1.85rem; line-height: 1.22; margin-bottom: 14px; }
+            .hero-desc { margin-bottom: 22px; }
+            .hero-actions { flex-direction: column; width: 100%; gap: 10px; }
+            .btn { width: 100%; padding: 12px 20px; }
+            .hero-mockup { width: 176px; }
+            .mockup-glow { inset: -34px; }
+            .mockup-card { padding: 20px 16px; border-radius: 22px; }
+            .mockup-card-top { margin-bottom: 20px; font-size: .72rem; }
+            .mockup-ring { width: 68px; height: 68px; font-size: 1.4rem; margin-bottom: 14px; }
+            .mockup-status { font-size: .92rem; }
+            .mockup-location { font-size: .76rem; }
 
             /* ── Преимущества на телефоне ──
                На широком экране иконка стоит НАД заголовком - вертикально это
@@ -342,8 +349,7 @@
         <div class="content-box hero-slide">
             <div class="hero-columns">
                 <div class="hero-text-col">
-                    <div class="tag-pill"><span class="pulse-dot"></span> No-Logs Policy · Приватный VPN-сервис</div>
-                    <h1 class="hero-title">Приватный, быстрый,<br>на <span class="gradient-text">любые устройства</span></h1>
+                    <h1 class="hero-title">Приватный, быстрый, на <span class="gradient-text">любые устройства</span></h1>
                     <p class="hero-desc">Подключись за 2 минуты и пользуйся преимуществами безопасного сёрфинга — без логов активности и лишних настроек.</p>
                     <div class="hero-actions">
                         <a href="/auth/login" class="btn btn-glow"><i class="bi bi-arrow-right-circle"></i> Начать</a>
