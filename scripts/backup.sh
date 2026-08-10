@@ -87,6 +87,45 @@ if [ -n "${REMOTE_BACKUP_PATH:-}" ]; then
     fi
 fi
 
+if [ "${TELEGRAM_BACKUP_NOTIFY:-}" = "1" ]; then
+    BOT_TOKEN="$(grep -E '^BOT_TOKEN=' .env | cut -d= -f2- || true)"
+    ADMIN_IDS="$(grep -E '^ADMIN_IDS=' .env | cut -d= -f2- || true)"
+    if [ -z "$BOT_TOKEN" ] || [ -z "$ADMIN_IDS" ]; then
+        echo "ПРЕДУПРЕЖДЕНИЕ: TELEGRAM_BACKUP_NOTIFY=1, но BOT_TOKEN/ADMIN_IDS не найдены в .env - отправка пропущена." >&2
+    else
+        # Отдельный архив БЕЗ .env специально для Telegram - боты не шлют файлы через
+        # E2E-шифрование (в отличие от Secret Chats), документы хранятся на серверах
+        # Telegram, и гонять туда пароли/токены из .env не стоит даже в приватном чате
+        # с самим собой. БД и загруженные файлы для восстановления данных достаточно -
+        # секреты для .env предполагаются сохранёнными отдельно (см. README).
+        echo "==> Отправка бэкапа (без .env) админам в Telegram..."
+        TG_ARCHIVE="$WORKDIR/telegram_${ARCHIVE_NAME}"
+        tar -czf "$TG_ARCHIVE" -C "$WORKDIR" --exclude='.env' --exclude="telegram_${ARCHIVE_NAME}" .
+        TG_SIZE="$(du -h "$TG_ARCHIVE" | cut -f1)"
+        TG_SIZE_BYTES="$(stat -c%s "$TG_ARCHIVE" 2>/dev/null || stat -f%z "$TG_ARCHIVE")"
+
+        # Bot API принимает документы до 50 МБ - пока БД маленькая, это не проблема,
+        # но однажды может стать актуальным (тогда используйте REMOTE_BACKUP_PATH).
+        if [ "$TG_SIZE_BYTES" -gt $((50 * 1024 * 1024)) ]; then
+            echo "ПРЕДУПРЕЖДЕНИЕ: архив для Telegram больше 50 МБ (${TG_SIZE}) - Bot API его не примет, пропускаю отправку. Используйте REMOTE_BACKUP_PATH." >&2
+        else
+            IFS=',' read -ra IDS <<< "$ADMIN_IDS"
+            for chat_id in "${IDS[@]}"; do
+                chat_id="$(echo "$chat_id" | xargs)"
+                [ -z "$chat_id" ] && continue
+                if curl -sf -F chat_id="$chat_id" \
+                     -F document=@"$TG_ARCHIVE;filename=${ARCHIVE_NAME}" \
+                     -F caption="🗄 Бэкап Unlockless VPN — $(date '+%d.%m.%Y %H:%M') (${TG_SIZE}, без .env)" \
+                     "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" > /dev/null; then
+                    echo "    -> $chat_id: отправлено"
+                else
+                    echo "    -> $chat_id: ОШИБКА отправки" >&2
+                fi
+            done
+        fi
+    fi
+fi
+
 echo "==> Удаление локальных бэкапов старше ${KEEP_DAYS} дней..."
 find "$BACKUP_DIR" -maxdepth 1 -name 'backup_*.tar.gz' -mtime "+${KEEP_DAYS}" -print -delete
 
