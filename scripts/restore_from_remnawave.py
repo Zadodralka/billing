@@ -38,7 +38,15 @@ import asyncio
 import argparse
 import json
 import logging
+import sys
+from pathlib import Path
 from datetime import datetime, timezone
+
+# Скрипт лежит в scripts/, а не в корне репозитория (как diagnose_remnawave.py) -
+# при запуске `python3 scripts/restore_from_remnawave.py` в sys.path[0] попадает
+# scripts/, а не корень с пакетом core/. Добавляем корень явно, иначе
+# `ModuleNotFoundError: No module named 'core'` независимо от текущей директории.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import select
 
