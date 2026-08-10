@@ -148,7 +148,7 @@ vpn_shop_bot/
 - Кошелёк ЮMoney с включёнными HTTP-уведомлениями об оплате
 - SMTP-аккаунт для отправки писем (вход по email, подарочные коды)
 
-### Быстрый способ — одним скриптом
+### Быстрый СТАРТ — одним скриптом
 
 ```bash
 git clone https://github.com/Zadodralka/billing.git vpn_shop_bot
