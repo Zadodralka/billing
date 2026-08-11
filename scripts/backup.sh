@@ -22,7 +22,12 @@ ARCHIVE_NAME="backup_${TIMESTAMP}.tar.gz"
 NGINX_CONF="${NGINX_CONF:-/etc/nginx/sites-available/vpnbot}"
 
 WORKDIR="$(mktemp -d)"
-trap 'rm -rf "$WORKDIR"' EXIT
+# Второй временный каталог - для архива, отправляемого в Telegram (см. ниже,
+# TELEGRAM_BACKUP_NOTIFY). Обязательно ОТДЕЛЬНЫЙ от WORKDIR: класть его файл
+# внутрь WORKDIR нельзя - именно так и запаковывался WORKDIR, из-за чего tar
+# видел, что читаемая директория меняется прямо во время чтения, и падал.
+TG_WORKDIR="$(mktemp -d)"
+trap 'rm -rf "$WORKDIR" "$TG_WORKDIR"' EXIT
 
 mkdir -p "$BACKUP_DIR"
 
@@ -99,8 +104,16 @@ if [ "${TELEGRAM_BACKUP_NOTIFY:-}" = "1" ]; then
         # с самим собой. БД и загруженные файлы для восстановления данных достаточно -
         # секреты для .env предполагаются сохранёнными отдельно (см. README).
         echo "==> Отправка бэкапа (без .env) админам в Telegram..."
-        TG_ARCHIVE="$WORKDIR/telegram_${ARCHIVE_NAME}"
-        tar -czf "$TG_ARCHIVE" -C "$WORKDIR" --exclude='.env' --exclude="telegram_${ARCHIVE_NAME}" .
+        # Архив пишется в TG_WORKDIR, а не в WORKDIR (см. объявление выше) -
+        # раньше он писался прямо в $WORKDIR, который же и паковался (-C
+        # "$WORKDIR" .), tar видел, что читаемая им директория меняется
+        # прямо во время чтения (в неё дописывается новый файл), выводил
+        # "file changed as we read it" и завершался с кодом 1. Из-за set -e
+        # это тихо убивало скрипт ДО отправки в Telegram, хотя сам бэкап
+        # (дамп БД и т.д.) в $BACKUP_DIR уже успешно создавался - именно
+        # так и выглядел баг: архив в backups/ есть, а в Telegram ничего.
+        TG_ARCHIVE="$TG_WORKDIR/${ARCHIVE_NAME}"
+        tar -czf "$TG_ARCHIVE" -C "$WORKDIR" --exclude='.env' .
         TG_SIZE="$(du -h "$TG_ARCHIVE" | cut -f1)"
         TG_SIZE_BYTES="$(stat -c%s "$TG_ARCHIVE" 2>/dev/null || stat -f%z "$TG_ARCHIVE")"
 
