@@ -1,21 +1,14 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Unlockless VPN — приватный и быстрый VPN</title>
     <meta name="description" content="Unlockless VPN — приватный, быстрый VPN на любые устройства. Подключись за 2 минуты и пользуйся преимуществами безопасного сёрфинга.">
 
-    {# Канонический адрес. Если страницу отдадут на чужом домене (например, кто-то
-       направит свой домен на наш IP), этот тег говорит поисковику, что
-       первоисточник - shop.unlockless.com, и дубль не должен конкурировать
-       с оригиналом в выдаче. #}
+    {# Канонический адрес - см. комментарий ниже про og:/schema.org, ничего
+       здесь не поменялось с прошлого дизайна страницы, это чисто SEO-часть. #}
     <link rel="canonical" href="{{ site_url }}/">
-
-    {# Название сайта в выдаче Google. Без этой разметки поисковик подставляет
-       вместо имени сам домен ("unlockless.com"). Схема WebSite обязана лежать
-       именно на главной странице сайта - на вложенных Google её не учитывает.
-       og:site_name - дополнительный сигнал того же назначения. #}
     <meta property="og:site_name" content="Unlockless VPN">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Unlockless VPN — приватный и быстрый VPN">
@@ -32,574 +25,178 @@
     }
     </script>
 
-    {% include "_head_common.html" %}
+    <link rel="icon" href="/static/img/logo.jpg">
+    <link rel="apple-touch-icon" href="/static/img/logo.jpg">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0a0f1c">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons@7/css/flag-icons.min.css">
-    {# Появление секций при скролле держится на JS (IntersectionObserver добавляет
-       .in-view) - без него контент навсегда остался бы на opacity:0. Без JS такое
-       бывает у части поисковых краулеров и совсем без скриптов у пользователя. #}
-    <noscript><style>.content-box, .grid-cards .glass-card { opacity: 1 !important; transform: none !important; }</style></noscript>
-    <style>
-        /* ── Токены оформления - те же переменные, что и во всём приложении
-           (_head_common.html), никаких отдельных фиолетовых/голубых цветов -
-           страница должна выглядеть частью того же продукта, а не вставкой
-           из другого шаблона. ── */
-        :root {
-            --gradient-main: linear-gradient(135deg, var(--accent) 0%, #2fd490 100%);
-            --gradient-glow: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
-        }
 
-        html, body { height: 100%; }
-        body { overflow-x: hidden; }
-
-        #particleCanvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 0; }
-
-        .scroll-container {
-            height: 100vh; height: 100dvh;
-            overflow-y: auto;
-            scroll-snap-type: y mandatory;
-            scroll-behavior: smooth;
-        }
-        .section-slide {
-            height: 100vh; height: 100dvh; width: 100%;
-            scroll-snap-align: start; scroll-snap-stop: always;
-            position: relative; display: flex; align-items: center; justify-content: center;
-            padding: 96px 24px 40px; overflow: hidden;
-        }
-
-        /* Полупрозрачный водяной знак сбоку - тот же bi-shield-lock, что и в
-           бейдже на первом экране, просто огромный и почти прозрачный. */
-        .side-watermark {
-            position: fixed; right: -6vw; top: 18%; z-index: 1; pointer-events: none;
-            font-size: min(48vw, 620px); line-height: 1; color: var(--accent);
-            opacity: .05; transform: rotate(-15deg);
-        }
-        .ambient-glow {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 80vw; height: 80vw; max-width: 900px; max-height: 900px;
-            background: var(--gradient-glow); pointer-events: none; z-index: 0; filter: blur(60px);
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
-            /* Оживление при скролле (.in-view ниже) тоже приглушаем - без этого
-               контент держался бы на opacity:0 до конца transition даже здесь. */
-            .content-box, .grid-cards .glass-card { opacity: 1 !important; transform: none !important; transition: none !important; }
-        }
-
-        .content-box { max-width: 1100px; width: 100%; position: relative; z-index: 2; }
-
-        /* ── Появление секций при скролле - лёгкий сдвиг+прозрачность вместо
-           мгновенного появления. Один раз на секцию (см. JS), не мигает туда-обратно
-           при повторной прокрутке. Плитки преимуществ - тем же приёмом с небольшой
-           задержкой по очереди (веер), остальное - целиком одним блоком. ── */
-        .content-box { opacity: 0; transform: translateY(28px); transition: opacity .7s ease, transform .7s ease; }
-        .content-box.in-view { opacity: 1; transform: translateY(0); }
-        .grid-cards .glass-card { opacity: 0; transform: translateY(20px); transition: opacity .5s ease, transform .5s ease; }
-        .content-box.in-view .grid-cards .glass-card { opacity: 1; transform: translateY(0); }
-        .content-box.in-view .grid-cards .glass-card:nth-child(1) { transition-delay: .05s; }
-        .content-box.in-view .grid-cards .glass-card:nth-child(2) { transition-delay: .1s; }
-        .content-box.in-view .grid-cards .glass-card:nth-child(3) { transition-delay: .15s; }
-        .content-box.in-view .grid-cards .glass-card:nth-child(4) { transition-delay: .2s; }
-        .content-box.in-view .grid-cards .glass-card:nth-child(5) { transition-delay: .25s; }
-        .content-box.in-view .grid-cards .glass-card:nth-child(6) { transition-delay: .3s; }
-
-        header {
-            position: fixed; top: 0; left: 0; width: 100%; padding: 18px 40px;
-            display: flex; justify-content: space-between; align-items: center; z-index: 100;
-            backdrop-filter: blur(16px); background: rgba(10,14,20,.65); border-bottom: 1px solid var(--border);
-        }
-        .logo { display: flex; align-items: center; gap: 12px; text-decoration: none; color: #fff; font-weight: 800; font-size: 1.15rem; white-space: nowrap; }
-        .logo img { width: 36px; height: 36px; border-radius: 10px; box-shadow: 0 0 0 1px var(--border); object-fit: cover; }
-
-        .btn {
-            display: inline-flex; align-items: center; justify-content: center; gap: 9px;
-            padding: 13px 28px; border-radius: 13px; font-weight: 600; font-size: .92rem;
-            text-decoration: none; transition: all .25s cubic-bezier(.16,1,.3,1); cursor: pointer; border: none;
-        }
-        .btn-glow { background: var(--gradient-main); color: #06140c; box-shadow: 0 6px 24px -6px rgba(61,220,132,.5); }
-        .btn-glow:hover { transform: translateY(-3px); box-shadow: 0 10px 30px -6px rgba(61,220,132,.65); }
-        .btn-glass { background: var(--panel); color: var(--text); border: 1px solid var(--border); }
-        .btn-glass:hover { border-color: var(--blue); color: #fff; transform: translateY(-2px); }
-        .header-actions { display: flex; align-items: center; gap: .6rem; }
-        header .btn-glass, header .btn-glow { padding: 8px 18px; font-size: .84rem; }
-
-        .slide-dots { position: fixed; right: 26px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 15px; z-index: 100; }
-        .dot-item { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,.18); cursor: pointer; transition: all .3s ease; position: relative; }
-        .dot-item.active { background: var(--accent); box-shadow: 0 0 10px var(--accent-glow); transform: scale(1.35); }
-        .dot-item::after {
-            content: attr(data-label); position: absolute; right: 22px; top: 50%; transform: translateY(-50%);
-            background: var(--panel); padding: 4px 10px; border-radius: 6px; font-size: .72rem; color: var(--muted);
-            white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .2s ease; border: 1px solid var(--border);
-        }
-        .dot-item:hover::after { opacity: 1; }
-
-        /* ── Слайд 1: Hero ── */
-        .hero-slide { text-align: left; }
-        h1.hero-title { font-size: clamp(2.1rem, 5vw, 3.6rem); font-weight: 800; line-height: 1.12; margin-bottom: 22px; letter-spacing: -.02em; }
-        .gradient-text { background: var(--gradient-main); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
-        .hero-desc { font-size: clamp(.95rem, 2vw, 1.1rem); color: var(--muted); margin-bottom: 36px; max-width: 580px; }
-        .hero-actions { display: flex; gap: 14px; flex-wrap: wrap; }
-
-        /* ── Hero: две колонки - текст слева, "экран подключения" справа.
-           Никаких выдуманных цифр (пинг/IP) - см. комментарий у частиц ниже
-           про то, почему здесь принципиально не имитируем измерения. ── */
-        .hero-columns { display: flex; align-items: center; gap: 56px; }
-        .hero-text-col { flex: 1 1 480px; min-width: 0; }
-        .hero-mockup-col { flex: 0 0 auto; display: flex; justify-content: center; }
-
-        .hero-mockup { position: relative; width: 260px; }
-        .mockup-glow {
-            position: absolute; inset: -50px; background: var(--gradient-glow);
-            filter: blur(50px); z-index: -1; opacity: .9;
-        }
-        .mockup-card {
-            background: var(--panel); border: 1px solid var(--border); border-radius: 28px;
-            padding: 34px 22px; text-align: center;
-            box-shadow: 0 30px 60px -20px rgba(0,0,0,.6);
-            animation: mockup-float 5s ease-in-out infinite;
-        }
-        @keyframes mockup-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-
-        .mockup-card-top {
-            display: flex; align-items: center; gap: 8px; justify-content: center;
-            margin-bottom: 30px; color: var(--muted); font-size: .78rem; font-weight: 700;
-            text-transform: uppercase; letter-spacing: .04em;
-        }
-        .mockup-card-top i { color: var(--accent); }
-
-        .mockup-ring {
-            width: 92px; height: 92px; border-radius: 50%; margin: 0 auto 18px;
-            display: flex; align-items: center; justify-content: center;
-            border: 2px solid var(--border); font-size: 1.9rem; color: var(--muted);
-            transition: border-color .5s ease, color .5s ease, box-shadow .5s ease;
-        }
-        .mockup-ring.connecting { animation: mockup-pulse 1.1s ease-in-out infinite; }
-        .mockup-ring.connected {
-            border-color: var(--accent); color: var(--accent);
-            box-shadow: 0 0 0 8px var(--accent-soft), 0 0 34px var(--accent-glow);
-        }
-        @keyframes mockup-pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
-
-        .mockup-status { font-weight: 700; font-size: 1.02rem; margin-bottom: 6px; color: var(--text); transition: color .3s ease; }
-        .mockup-status.connected { color: var(--accent); }
-        .mockup-location { color: var(--muted); font-size: .8rem; display: flex; align-items: center; justify-content: center; gap: 7px; }
-        .mockup-location .fi { width: 18px; height: 13px; border-radius: 2px; box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
-
-        /* ── Общий заголовок секции ── */
-        .section-header { margin-bottom: 36px; }
-        .section-header h2 { font-size: clamp(1.7rem, 3.5vw, 2.4rem); font-weight: 800; letter-spacing: -.02em; margin-bottom: 10px; }
-        .section-header p { color: var(--muted); font-size: .95rem; }
-
-        /* ── Слайд 2: Преимущества ── */
-        /* minmax(280px..) - при 6 карточках даёт ровно 3 колонки (2 строки по 3),
-           а не 4+2: с более узким порогом auto-fit втискивал 4 в ряд и вниз
-           уезжала пара карточек в одиночестве - та же проблема, что раньше
-           была с плитками преимуществ на главной. */
-        .grid-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
-        .glass-card { background: var(--panel); border: 1px solid var(--border); padding: 24px; border-radius: 18px; transition: all .25s ease; text-align: left; }
-        .glass-card:hover { border-color: rgba(61,220,132,.35); transform: translateY(-4px); box-shadow: 0 18px 36px -18px rgba(0,0,0,.5); }
-        .card-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; margin-bottom: 16px; }
-        .glass-card.c-accent .card-icon { background: var(--accent-soft); color: var(--accent); }
-        .glass-card.c-blue .card-icon   { background: var(--blue-soft); color: var(--blue); }
-        .glass-card.c-gold .card-icon   { background: var(--gold-soft); color: var(--gold); }
-        .glass-card h3 { font-size: 1.02rem; font-weight: 700; margin-bottom: 8px; }
-        /* margin: 0 обязателен - у p браузерный отступ 1em сверху и снизу
-           (~26px суммарно на карточку), глобального reset'а для p в
-           _head_common.html нет. На телефоне это была самая большая часть
-           высоты плитки: сам текст занимал 37px, а отступы вокруг - 26px. */
-        .glass-card p { color: var(--muted); font-size: .85rem; line-height: 1.5; margin: 0; }
-
-        /* Флаги локаций внутри карточки - на своей строке, чтобы не пытаться
-           уместить название страны текстом (на телефоне не влезет). */
-        .card-flags { display: flex; gap: 8px; margin-top: 4px; }
-        .card-flags .fi { width: 24px; height: 18px; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255,255,255,.12); background-size: cover; }
-
-        .stat-value { font-family: 'Manrope', sans-serif; font-size: 1.6rem; font-weight: 800; color: var(--accent); }
-
-        /* ── Слайд 3: призыв к действию ──
-           Раньше здесь был блок тарифов; цены переехали в личный кабинет,
-           на публичной странице остался только переход ко входу. */
-        .cta-block { max-width: 620px; margin: 0 auto; text-align: center; }
-        .cta-icon {
-            width: 64px; height: 64px; border-radius: 18px; margin: 0 auto 22px;
-            background: var(--accent-soft); color: var(--accent);
-            display: flex; align-items: center; justify-content: center; font-size: 1.7rem;
-        }
-        .cta-block h2 { font-size: clamp(1.7rem, 3.5vw, 2.4rem); font-weight: 800; letter-spacing: -.02em; margin-bottom: 14px; }
-        .cta-text { color: var(--muted); font-size: 1rem; line-height: 1.6; margin: 0 auto 30px; max-width: 480px; }
-        .cta-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
-        .cta-note { color: var(--muted); font-size: .82rem; margin-top: 20px; }
-
-        /* ── Слайд 4: FAQ ── */
-        .faq-box { display: grid; gap: 12px; max-width: 760px; margin: 0 auto; }
-        .faq-item { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px 22px; cursor: pointer; transition: border-color .2s ease; }
-        .faq-item:hover { border-color: rgba(255,255,255,.18); }
-        .faq-q { font-weight: 600; font-size: .96rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
-        .faq-a { color: var(--muted); font-size: .87rem; margin-top: 10px; display: none; line-height: 1.55; }
-        .faq-item.open .faq-a { display: block; }
-        .faq-item.open .faq-toggle { transform: rotate(45deg); }
-        .faq-toggle { transition: transform .25s ease; font-size: 1.15rem; color: var(--accent); flex-shrink: 0; }
-
-        .landing-footer-slide { text-align: center; color: var(--muted); font-size: .78rem; margin-top: 32px; }
-
-        /* Мокап держится в паре с текстом до ~900px, дальше карточкам уже
-           тесно в ряд - переносим его под текст, а не сжимаем до нечитаемости. */
-        @media (max-width: 900px) {
-            .hero-columns { flex-direction: column; gap: 36px; }
-            /* flex: 1 1 480px у .hero-text-col задан для строчной раскладки
-               (480px там - это минимальная ШИРИНА). В колоночной раскладке
-               главная ось - вертикальная, и та же flex-basis: 480px превращала
-               её в минимальную ВЫСОТУ - между кнопками и карточкой подключения
-               появлялась пустая зона под сотню с лишним пикселей на телефоне. */
-            .hero-text-col { flex: 0 1 auto; }
-            .hero-mockup-col { width: 100%; }
-        }
-
-        @media (max-width: 768px) {
-            header { padding: 12px 16px; gap: .6rem; }
-            .logo { font-size: 1rem; gap: 9px; }
-            .logo img { width: 30px; height: 30px; }
-            .header-actions { gap: .45rem; }
-            /* На узких экранах не помещаются подписи у обеих кнопок сразу -
-               оставляем только иконки, у "Войти" (более важное действие для
-               вернувшихся пользователей) подпись сохраняем, жертвуем текстом
-               только у Telegram-кнопки. */
-            header .btn-glass, header .btn-glow { padding: 8px 12px; font-size: .78rem; }
-            header .btn-glass .btn-label { display: none; }
-            .slide-dots { display: none; }
-            .section-slide { padding: 78px 18px 40px; height: auto; min-height: 100vh; min-height: 100dvh; }
-            .side-watermark { font-size: min(85vw, 500px); right: -18vw; top: 12%; opacity: .045; }
-            /* На узком экране убираем лишний воздух вокруг заголовка/описания -
-               раньше сюда же добавлялся плашка "No-Logs Policy" (её убрали
-               совсем, не только на мобильном - см. HTML), из-за неё и общей
-               высоты блока карточка подключения справа уходила за пределы
-               экрана даже на iPhone SE. */
-            .hero-columns { gap: 26px; }
-            h1.hero-title { font-size: 1.85rem; line-height: 1.22; margin-bottom: 14px; }
-            .hero-desc { margin-bottom: 22px; }
-            .hero-actions { flex-direction: column; width: 100%; gap: 10px; }
-            .btn { width: 100%; padding: 12px 20px; }
-            .hero-mockup { width: 176px; }
-            .mockup-glow { inset: -34px; }
-            .mockup-card { padding: 20px 16px; border-radius: 22px; }
-            .mockup-card-top { margin-bottom: 20px; font-size: .72rem; }
-            .mockup-ring { width: 68px; height: 68px; font-size: 1.4rem; margin-bottom: 14px; }
-            .mockup-status { font-size: .92rem; }
-            .mockup-location { font-size: .76rem; }
-
-            /* ── Преимущества на телефоне ──
-               На широком экране иконка стоит НАД заголовком - вертикально это
-               ~211px на карточку, шесть штук растягивались почти на два экрана
-               и слайд приходилось долго листать. Здесь разворачиваем карточку
-               в строку: иконка слева, весь текст справа. Grid, а не flex -
-               у карточек разный набор детей (у локаций есть флаги, у
-               надёжности - крупная цифра), поэтому иконку кладём в первую
-               колонку на все строки, а всё остальное автоматически уходит
-               во вторую. */
-            .section-header { margin-bottom: 22px; }
-            .section-header h2 { font-size: 1.55rem; }
-            .section-header p { font-size: .88rem; }
-
-            .grid-cards { gap: 8px; }
-            .glass-card {
-                display: grid; grid-template-columns: 34px 1fr; gap: 0 12px;
-                align-items: start; padding: 12px 14px; border-radius: 14px;
-            }
-            .glass-card .card-icon { grid-row: 1 / -1; grid-column: 1; margin-bottom: 0; width: 34px; height: 34px; font-size: .92rem; border-radius: 10px; }
-            .glass-card > *:not(.card-icon) { grid-column: 2; }
-            .glass-card h3 { margin-bottom: 2px; font-size: .93rem; }
-            .glass-card p { font-size: .79rem; line-height: 1.38; }
-            .glass-card .stat-value { font-size: 1.2rem; }
-            .card-flags { gap: 6px; margin-top: 2px; }
-            .card-flags .fi { width: 21px; height: 15px; }
-
-            /* Блок призыва на телефоне: кнопки в столбик на всю ширину
-               (общее правило .btn { width: 100% } выше уже это делает). */
-            .cta-icon { width: 54px; height: 54px; font-size: 1.45rem; margin-bottom: 18px; }
-            .cta-text { font-size: .92rem; margin-bottom: 24px; }
-            .cta-actions { flex-direction: column; width: 100%; }
-        }
-    </style>
-</head>
-<body>
-
-<canvas id="particleCanvas"></canvas>
-<div class="side-watermark"><i class="bi bi-shield-lock-fill"></i></div>
-<div class="ambient-glow"></div>
-
-<header>
-    <a href="/" class="logo"><img src="/static/img/logo.jpg" alt="Unlockless VPN"> Unlockless VPN</a>
-    <div class="header-actions">
-        <a href="{{ contact_url }}" target="_blank" rel="noopener" class="btn btn-glass"><i class="bi bi-telegram"></i><span class="btn-label"> Telegram-бот</span></a>
-        <a href="/auth/login" class="btn btn-glow"><i class="bi bi-box-arrow-in-right"></i><span class="btn-label"> Войти</span></a>
-    </div>
-</header>
-
-<div class="slide-dots">
-    <div class="dot-item active" onclick="scrollToSlide(0)" data-label="Главная"></div>
-    <div class="dot-item" onclick="scrollToSlide(1)" data-label="Преимущества"></div>
-    <div class="dot-item" onclick="scrollToSlide(2)" data-label="Подключение"></div>
-    <div class="dot-item" onclick="scrollToSlide(3)" data-label="Вопросы"></div>
-</div>
-
-<div class="scroll-container" id="scrollContainer">
-
-    <!-- Слайд 1: Hero -->
-    <section class="section-slide">
-        <div class="content-box hero-slide">
-            <div class="hero-columns">
-                <div class="hero-text-col">
-                    <h1 class="hero-title">Приватный, быстрый, на <span class="gradient-text">любые устройства</span></h1>
-                    <p class="hero-desc">Подключись за 2 минуты и пользуйся преимуществами безопасного сёрфинга — без логов активности и лишних настроек.</p>
-                    <div class="hero-actions">
-                        <a href="/auth/login" class="btn btn-glow"><i class="bi bi-arrow-right-circle"></i> Начать</a>
-                        <a href="{{ contact_url }}" target="_blank" rel="noopener" class="btn btn-glass"><i class="bi bi-telegram"></i> Написать в Telegram</a>
-                    </div>
-                </div>
-                <div class="hero-mockup-col">
-                    <div class="hero-mockup">
-                        <div class="mockup-glow"></div>
-                        <div class="mockup-card">
-                            <div class="mockup-card-top"><i class="bi bi-shield-lock-fill"></i> Unlockless VPN</div>
-                            <div class="mockup-ring connecting" id="mockupRing"><i class="bi bi-power" id="mockupIcon"></i></div>
-                            <div class="mockup-status" id="mockupStatus">Подключение...</div>
-                            <div class="mockup-location"><span class="fi fi-nl"></span> Нидерланды</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Слайд 2: Преимущества -->
-    <section class="section-slide">
-        <div class="content-box">
-            <div class="section-header">
-                <h2>Почему именно <span class="gradient-text">Unlockless VPN</span></h2>
-                <p>Всё, что нужно от VPN — без лишнего</p>
-            </div>
-            <div class="grid-cards">
-                <div class="glass-card c-accent">
-                    <div class="card-icon"><i class="bi bi-incognito"></i></div>
-                    <h3>Приватность</h3>
-                    <p>Не храним логи активности и не передаём данные третьим лицам.</p>
-                </div>
-                <div class="glass-card c-blue">
-                    <div class="card-icon"><i class="bi bi-lightning-charge"></i></div>
-                    <h3>Скорость</h3>
-                    <p>Стабильное соединение без просадок — для видео, звонков и работы.</p>
-                </div>
-                <div class="glass-card c-gold">
-                    <div class="card-icon"><i class="bi bi-phone"></i></div>
-                    <h3>Любые устройства</h3>
-                    <p>iOS, Android, Windows и macOS — один аккаунт на всех устройствах.</p>
-                </div>
-                <div class="glass-card c-accent">
-                    <div class="card-icon"><i class="bi bi-stopwatch"></i></div>
-                    <h3>Быстрый старт</h3>
-                    <p>Регистрация и подключение занимают пару минут, без сложных настроек.</p>
-                </div>
-                <div class="glass-card c-blue">
-                    <div class="card-icon"><i class="bi bi-hdd-network"></i></div>
-                    <h3>Локации серверов</h3>
-                    <div class="card-flags">
-                        <span class="fi fi-nl" title="Нидерланды"></span>
-                        <span class="fi fi-de" title="Германия"></span>
-                        <span class="fi fi-fi" title="Финляндия"></span>
-                        <span class="fi fi-kz" title="Казахстан"></span>
-                    </div>
-                    <p style="margin-top:8px;">Нидерланды, Германия, Финляндия, Казахстан.</p>
-                </div>
-                <div class="glass-card c-gold">
-                    <div class="card-icon"><i class="bi bi-graph-up"></i></div>
-                    <h3>Надёжность</h3>
-                    <div class="stat-value">99.9%</div>
-                    <p>Uptime серверов.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Слайд 3: Переход в кабинет (тарифы и оплата - там) -->
-    <section class="section-slide">
-        <div class="content-box">
-            <div class="cta-block">
-                <div class="cta-icon"><i class="bi bi-rocket-takeoff"></i></div>
-                <h2>Готовы <span class="gradient-text">подключиться?</span></h2>
-                <p class="cta-text">
-                    Войдите в личный кабинет — там доступны варианты подписки,
-                    оплата и готовый конфиг для подключения.
-                </p>
-                <div class="cta-actions">
-                    <a href="/auth/login" class="btn btn-glow"><i class="bi bi-box-arrow-in-right"></i> Перейти в личный кабинет</a>
-                    <a href="{{ contact_url }}" target="_blank" rel="noopener" class="btn btn-glass"><i class="bi bi-telegram"></i> Задать вопрос</a>
-                </div>
-                <p class="cta-note">Вход без пароля — через Telegram или по ссылке на почту</p>
-            </div>
-        </div>
-    </section>
-
-    <!-- Слайд 4: FAQ -->
-    <section class="section-slide">
-        <div class="content-box">
-            <div class="section-header" style="text-align:center;">
-                <h2>Остались <span class="gradient-text">вопросы?</span></h2>
-                <p>Отвечаем на главное про работу сервиса</p>
-            </div>
-            <div class="faq-box">
-                <div class="faq-item" onclick="toggleFaq(this)">
-                    <div class="faq-q"><span>Как подключиться после оплаты?</span><span class="faq-toggle">+</span></div>
-                    <div class="faq-a">Сразу после оплаты в личном кабинете появится QR-код и ссылка для подключения. Добавьте её в приложение Happ или V2RayTun — и VPN готов к работе.</div>
-                </div>
-                <div class="faq-item" onclick="toggleFaq(this)">
-                    <div class="faq-q"><span>Есть ли ограничения по трафику?</span><span class="faq-toggle">+</span></div>
-                    <div class="faq-a">Зависит от тарифа — у части планов есть безлимитный вариант за доплату, у остальных указан объём в гигабайтах на весь период.</div>
-                </div>
-                <div class="faq-item" onclick="toggleFaq(this)">
-                    <div class="faq-q"><span>Что если возникнут проблемы?</span><span class="faq-toggle">+</span></div>
-                    <div class="faq-a">Пишите в поддержку прямо в личном кабинете или в Telegram-боте — ответим и поможем разобраться.</div>
-                </div>
-            </div>
-            <div class="landing-footer-slide">© {{ current_year }} Unlockless VPN</div>
-        </div>
-    </section>
-
-</div>
-
-<script>
-    // Частицы на фоне - декоративная canvas-анимация (без фейковых
-    // "измерений" вроде IP/пинга, которые были в референсе - это просто
-    // движущиеся точки, ничего не имитирует и не может ввести в заблуждение).
-    // Не запускаем вовсе при prefers-reduced-motion - это бесконечный
-    // requestAnimationFrame, не CSS-анимация, поэтому глобальное правило
-    // "* { animation-duration: .001ms }" в <style> на неё не действует.
-    (function () {
-        const canvas = document.getElementById('particleCanvas');
-        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            canvas.style.display = 'none';
-            return;
-        }
-        const ctx = canvas.getContext('2d');
-        let particles = [];
-
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
-
-        function Particle() {
-            this.x = Math.random() * canvas.width;
-            this.y = Math.random() * canvas.height;
-            this.vx = (Math.random() - 0.5) * 0.35;
-            this.vy = (Math.random() - 0.5) * 0.35;
-            this.radius = Math.random() * 1.6 + 0.5;
-        }
-        Particle.prototype.update = function () {
-            this.x += this.vx;
-            this.y += this.vy;
-            if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
-            if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
-        };
-        Particle.prototype.draw = function () {
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(61, 220, 132, 0.45)';
-            ctx.fill();
-        };
-
-        const count = window.innerWidth < 768 ? 24 : 42;
-        for (let i = 0; i < count; i++) particles.push(new Particle());
-
-        function animate() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            for (let i = 0; i < particles.length; i++) {
-                particles[i].update();
-                particles[i].draw();
-                for (let j = i + 1; j < particles.length; j++) {
-                    const dx = particles[i].x - particles[j].x;
-                    const dy = particles[i].y - particles[j].y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < 110) {
-                        ctx.beginPath();
-                        ctx.moveTo(particles[i].x, particles[i].y);
-                        ctx.lineTo(particles[j].x, particles[j].y);
-                        ctx.strokeStyle = `rgba(61, 220, 132, ${0.14 - dist / 1100})`;
-                        ctx.stroke();
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: '#3b82f6', // Спокойный синий
+                        dark: '#0a0f1c', // Глубокий темный
+                        card: '#111827'
                     }
                 }
             }
-            requestAnimationFrame(animate);
         }
-        animate();
-    })();
+    </script>
 
-    const scrollContainer = document.getElementById('scrollContainer');
-    const dots = document.querySelectorAll('.dot-item');
-
-    function scrollToSlide(index) {
-        const height = window.innerHeight;
-        scrollContainer.scrollTo({ top: height * index, behavior: 'smooth' });
-    }
-
-    scrollContainer.addEventListener('scroll', () => {
-        const index = Math.round(scrollContainer.scrollTop / window.innerHeight);
-        dots.forEach((dot, i) => dot.classList.toggle('active', i === index));
-    });
-
-    function toggleFaq(element) {
-        element.classList.toggle('open');
-    }
-
-    // Мокап "подключения" в hero - только смена статуса/цвета, никаких
-    // выдуманных цифр (пинг/IP) - см. комментарий у частиц выше про то, почему
-    // здесь принципиально не имитируем измерения.
-    (function () {
-        const ring = document.getElementById('mockupRing');
-        if (!ring) return;
-        const icon = document.getElementById('mockupIcon');
-        const status = document.getElementById('mockupStatus');
-
-        function setConnected(connected) {
-            ring.classList.toggle('connecting', !connected);
-            ring.classList.toggle('connected', connected);
-            status.classList.toggle('connected', connected);
-            status.textContent = connected ? 'Подключено' : 'Подключение...';
-            icon.className = connected ? 'bi bi-check-lg' : 'bi bi-power';
-        }
-
-        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            setConnected(true);
-            return;
-        }
-
-        setTimeout(() => setConnected(true), 1800);
-        setInterval(() => {
-            setConnected(false);
-            setTimeout(() => setConnected(true), 1800);
-        }, 7000);
-    })();
-
-    // Появление секций при скролле - см. .content-box/.in-view в <style>.
-    // Один раз на секцию: unobserve сразу после первого появления, чтобы не
-    // мигать туда-обратно при пролистывании вверх-вниз.
-    (function () {
-        const boxes = document.querySelectorAll('.content-box');
-        if (!('IntersectionObserver' in window)) {
-            boxes.forEach(b => b.classList.add('in-view'));
-            return;
-        }
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('in-view');
-                    observer.unobserve(entry.target);
+    {# Мини-приложение Telegram: кнопка "🌐 Личный кабинет" в боте открывает
+       settings.webapp_url - это корень сайта, то есть именно эту страницу
+       (см. bot/keyboards/main.py). Без ready() Telegram держит свой спиннер
+       поверх страницы бесконечно; остальное - принудительный выход из
+       fullscreen на десктопном клиенте Telegram (на мобильном это норма).
+       Не через {% include "_head_common.html" %}: тот тянет Manrope/Inter,
+       Bootstrap Icons и старую палитру CSS-переменных, которые этому дизайну
+       (Tailwind, свои цвета, инлайновые SVG-иконки) не нужны. #}
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData !== undefined) {
+            var _tg = window.Telegram.WebApp;
+            _tg.ready();
+            var _tgMobile = _tg.platform === 'android' || _tg.platform === 'ios';
+            function _tgExitDesktopFullscreen() {
+                if (!_tgMobile && _tg.isFullscreen && _tg.exitFullscreen) {
+                    try { _tg.exitFullscreen(); } catch (e) { /* старый клиент без метода */ }
                 }
-            });
-        }, { threshold: 0.25 });
-        boxes.forEach(b => observer.observe(b));
-    })();
-</script>
+            }
+            _tgExitDesktopFullscreen();
+            if (_tg.onEvent) {
+                _tg.onEvent('fullscreenChanged', _tgExitDesktopFullscreen);
+                setTimeout(function () {
+                    if (_tg.offEvent) _tg.offEvent('fullscreenChanged', _tgExitDesktopFullscreen);
+                }, 3000);
+            }
+        }
+    </script>
+</head>
+<body class="bg-dark text-slate-300 font-sans antialiased selection:bg-brand selection:text-white">
+
+    <!-- Header -->
+    <header class="fixed w-full top-0 z-50 bg-dark/90 backdrop-blur-sm border-b border-white/5">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+            <a href="/" class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded overflow-hidden border border-white/10 flex-shrink-0">
+                    <img src="/static/img/logo.jpg" alt="Unlockless VPN" class="w-full h-full object-cover">
+                </div>
+                <span class="text-lg font-medium text-slate-100 tracking-wide">Unlockless</span>
+            </a>
+            <nav class="hidden md:flex gap-8">
+                <a href="#about" class="text-sm text-slate-400 hover:text-white transition-colors">О сервисе</a>
+                <a href="#infrastructure" class="text-sm text-slate-400 hover:text-white transition-colors">Инфраструктура</a>
+            </nav>
+            <div>
+                <a href="/auth/login" class="text-sm text-white border border-white/20 hover:bg-white hover:text-dark px-4 py-2 rounded transition-all">Личный кабинет</a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="relative pt-32 pb-16 lg:pt-40 lg:pb-24 flex flex-col items-center text-center px-4">
+        <!-- Легкое свечение на фоне -->
+        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-brand/5 rounded-[100%] blur-[100px] pointer-events-none"></div>
+
+        <div class="relative z-10 max-w-3xl">
+            <h1 class="text-4xl md:text-5xl font-medium text-white mb-6 leading-tight">
+                Приватная сеть для безопасной <br class="hidden sm:block">работы в интернете
+            </h1>
+            <p class="text-lg text-slate-400 mb-10 max-w-2xl mx-auto font-light leading-relaxed">
+                Закрытый VPN-сервис. Надёжное шифрование, строгая политика отсутствия логов и стабильная скорость подключения на всех ваших устройствах.
+            </p>
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
+                <a href="/auth/login" class="bg-white text-dark px-8 py-3 rounded text-sm font-medium hover:bg-slate-200 transition-colors">
+                    Войти в систему
+                </a>
+                <a href="{{ contact_url }}" target="_blank" rel="noopener" class="border border-white/10 bg-white/5 px-8 py-3 rounded text-sm font-medium hover:bg-white/10 transition-colors">
+                    Связаться с поддержкой
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- About / Features -->
+    <section id="about" class="py-16 border-t border-white/5 bg-slate-900/20 scroll-mt-16">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+
+                <!-- Feature 1 -->
+                <div class="p-6">
+                    <div class="w-10 h-10 border border-white/10 rounded flex items-center justify-center mb-5 bg-card">
+                        <svg class="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    </div>
+                    <h3 class="text-white text-lg font-medium mb-2">Конфиденциальность</h3>
+                    <p class="text-sm text-slate-400 leading-relaxed">Мы не ведём журналы активности и не собираем данные о ваших подключениях. Ваш трафик полностью зашифрован.</p>
+                </div>
+
+                <!-- Feature 2 -->
+                <div class="p-6">
+                    <div class="w-10 h-10 border border-white/10 rounded flex items-center justify-center mb-5 bg-card">
+                        <svg class="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    </div>
+                    <h3 class="text-white text-lg font-medium mb-2">Высокая пропускная способность</h3>
+                    <p class="text-sm text-slate-400 leading-relaxed">Оптимизированная маршрутизация обеспечивает стабильное соединение для потокового видео и рабочих задач.</p>
+                </div>
+
+                <!-- Feature 3 -->
+                <div class="p-6">
+                    <div class="w-10 h-10 border border-white/10 rounded flex items-center justify-center mb-5 bg-card">
+                        <svg class="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                    </div>
+                    <h3 class="text-white text-lg font-medium mb-2">Мультиплатформенность</h3>
+                    <p class="text-sm text-slate-400 leading-relaxed">Единый профиль доступа для всех сред: iOS, Android, Windows и macOS — один аккаунт на всех устройствах.</p>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Infrastructure -->
+    <section id="infrastructure" class="py-20 scroll-mt-16">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6">
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between border border-white/5 bg-card rounded-xl p-8 lg:p-12">
+                <div class="mb-8 md:mb-0 md:mr-8 max-w-lg">
+                    <h2 class="text-2xl font-medium text-white mb-4">Надёжная инфраструктура</h2>
+                    <p class="text-slate-400 text-sm leading-relaxed">
+                        Серверы расположены в нескольких странах Европы и Азии. Мы следим за качеством соединения
+                        и стабильностью узлов. Доступ осуществляется через личный кабинет после входа по Telegram или почте.
+                    </p>
+                </div>
+                <div class="grid grid-cols-2 gap-4 w-full md:w-auto min-w-[250px]">
+                    <div class="border border-white/5 bg-dark p-4 rounded flex items-center justify-center gap-2">
+                        <span class="fi fi-nl rounded-sm" style="width:20px;height:14px;flex-shrink:0;"></span>
+                        <span class="text-white font-medium text-sm">Нидерланды</span>
+                    </div>
+                    <div class="border border-white/5 bg-dark p-4 rounded flex items-center justify-center gap-2">
+                        <span class="fi fi-de rounded-sm" style="width:20px;height:14px;flex-shrink:0;"></span>
+                        <span class="text-white font-medium text-sm">Германия</span>
+                    </div>
+                    <div class="border border-white/5 bg-dark p-4 rounded flex items-center justify-center gap-2">
+                        <span class="fi fi-fi rounded-sm" style="width:20px;height:14px;flex-shrink:0;"></span>
+                        <span class="text-white font-medium text-sm">Финляндия</span>
+                    </div>
+                    <div class="border border-white/5 bg-dark p-4 rounded flex items-center justify-center gap-2">
+                        <span class="fi fi-kz rounded-sm" style="width:20px;height:14px;flex-shrink:0;"></span>
+                        <span class="text-white font-medium text-sm">Казахстан</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-8 border-t border-white/5">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-slate-600">
+            <p>© {{ current_year }} Unlockless. Все права защищены.</p>
+            <div class="flex gap-6">
+                <a href="{{ contact_url }}" target="_blank" rel="noopener" class="hover:text-slate-300 transition-colors">Telegram</a>
+            </div>
+        </div>
+    </footer>
+
 </body>
 </html>
