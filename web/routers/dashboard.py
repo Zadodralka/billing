@@ -28,6 +28,34 @@ templates.env.globals["app_version"] = APP_VERSION
 templates.env.filters["localtime"] = to_local
 
 
+def _split_subscriptions(subscriptions, now: datetime):
+    """Делит подписки пользователя на активные и "видимые, но не активные"
+    (приостановленные вручную или недавно истёкшие).
+
+    Истёкшая подписка считается видимой, пока у неё ещё не обнулён
+    remnawave_sub_id - то есть пока её VPN-аккаунт в Remnawave физически
+    существует и кнопка "Возобновить" ещё реально продлевает тот же
+    конфиг/ссылку (не создавая новый). Обнуляется он планировщиком через
+    DELETE_AFTER_DAYS=7 дней (scheduler.delete_old_expired_accounts) или
+    сразу, если пользователь сам нажал "Отказаться" (dashboard: give-up).
+
+    Раньше здесь была отдельная проверка "истекла не больше 30 дней назад"
+    по дате - формально работала, но давала карточку без единой рабочей
+    кнопки на 23 из этих 30 дней (аккаунт уже удалён на 7-й день, а карточка
+    висела ещё три недели с одной лишь ссылкой "Оформить новую подписку").
+    Условие на remnawave_sub_id снимает это несоответствие и держит карточку
+    ровно до момента, когда она перестаёт быть полезной - то же самое условие
+    уже использует бот (см. _load_giveupable_subscriptions в
+    bot/handlers/subscriptions.py).
+    """
+    active_subs = [s for s in subscriptions if s.status == SubscriptionStatus.ACTIVE and (not s.expires_at or s.expires_at > now)]
+    paused_subs = [s for s in subscriptions if
+        s.status == SubscriptionStatus.CANCELLED or
+        (s.status == SubscriptionStatus.EXPIRED and s.remnawave_sub_id)
+    ]
+    return active_subs, paused_subs
+
+
 @router.get("", response_class=HTMLResponse)
 async def dashboard(request: Request, user: User = Depends(require_user), session: AsyncSession = Depends(get_db)):
     result = await session.execute(
@@ -38,16 +66,7 @@ async def dashboard(request: Request, user: User = Depends(require_user), sessio
     user = result.scalar_one()
 
     now = datetime.utcnow()
-    recent_cutoff = now - timedelta(days=30)  # истёкшие <= 30 дней назад тоже показываем
-
-    # Разделяем подписки на три группы:
-    # 1. Активные (нормальный доступ)
-    active_subs = [s for s in user.subscriptions if s.status == SubscriptionStatus.ACTIVE and (not s.expires_at or s.expires_at > now)]
-    # 2. Приостановленные (доступ заблокирован вручную) или недавно истёкшие — клиент должен их видеть
-    paused_subs = [s for s in user.subscriptions if
-        s.status == SubscriptionStatus.CANCELLED or
-        (s.status == SubscriptionStatus.EXPIRED and s.expires_at and s.expires_at >= recent_cutoff)
-    ]
+    active_subs, paused_subs = _split_subscriptions(user.subscriptions, now)
 
     all_plans = await get_all_plans(session)
     active_plans = await get_active_plans(session)
