@@ -22,12 +22,7 @@ ARCHIVE_NAME="backup_${TIMESTAMP}.tar.gz"
 NGINX_CONF="${NGINX_CONF:-/etc/nginx/sites-available/vpnbot}"
 
 WORKDIR="$(mktemp -d)"
-# Второй временный каталог - для архива, отправляемого в Telegram (см. ниже,
-# TELEGRAM_BACKUP_NOTIFY). Обязательно ОТДЕЛЬНЫЙ от WORKDIR: класть его файл
-# внутрь WORKDIR нельзя - именно так и запаковывался WORKDIR, из-за чего tar
-# видел, что читаемая директория меняется прямо во время чтения, и падал.
-TG_WORKDIR="$(mktemp -d)"
-trap 'rm -rf "$WORKDIR" "$TG_WORKDIR"' EXIT
+trap 'rm -rf "$WORKDIR"' EXIT
 
 mkdir -p "$BACKUP_DIR"
 
@@ -104,31 +99,21 @@ if [ "${TELEGRAM_BACKUP_NOTIFY:-}" = "1" ]; then
     if [ -z "$BOT_TOKEN" ] || { [ -z "$ADMIN_IDS" ] && [ -z "$ADMIN_GROUP_CHAT_ID" ]; }; then
         echo "ПРЕДУПРЕЖДЕНИЕ: TELEGRAM_BACKUP_NOTIFY=1, но BOT_TOKEN и ни ADMIN_IDS, ни ADMIN_GROUP_CHAT_ID не найдены в .env - отправка пропущена." >&2
     else
-        # Отдельный архив БЕЗ .env специально для Telegram - боты не шлют файлы через
-        # E2E-шифрование (в отличие от Secret Chats), документы хранятся на серверах
-        # Telegram, и гонять туда пароли/токены из .env не стоит даже в приватном чате
-        # с самим собой. БД и загруженные файлы для восстановления данных достаточно -
-        # секреты для .env предполагаются сохранёнными отдельно (см. README).
-        echo "==> Отправка бэкапа (без .env) админам в Telegram..."
-        # Архив пишется в TG_WORKDIR, а не в WORKDIR (см. объявление выше) -
-        # раньше он писался прямо в $WORKDIR, который же и паковался (-C
-        # "$WORKDIR" .), tar видел, что читаемая им директория меняется
-        # прямо во время чтения (в неё дописывается новый файл), выводил
-        # "file changed as we read it" и завершался с кодом 1. Из-за set -e
-        # это тихо убивало скрипт ДО отправки в Telegram, хотя сам бэкап
-        # (дамп БД и т.д.) в $BACKUP_DIR уже успешно создавался - именно
-        # так и выглядел баг: архив в backups/ есть, а в Telegram ничего.
-        TG_ARCHIVE="$TG_WORKDIR/${ARCHIVE_NAME}"
-        tar -czf "$TG_ARCHIVE" -C "$WORKDIR" --exclude='.env' .
-        TG_SIZE="$(du -h "$TG_ARCHIVE" | cut -f1)"
+        # Отправляем тот же архив, что уже лежит в $BACKUP_DIR - он содержит .env
+        # с секретами (это осознанный выбор, см. README): архив специально для
+        # Telegram отдельно от него больше не собираем, раньше это был отдельный
+        # tar БЕЗ .env, но теперь содержимое совпадает 1-в-1, так что нет смысла
+        # паковать его дважды.
+        echo "==> Отправка бэкапа админам в Telegram..."
+        TG_ARCHIVE="$BACKUP_DIR/$ARCHIVE_NAME"
         TG_SIZE_BYTES="$(stat -c%s "$TG_ARCHIVE" 2>/dev/null || stat -f%z "$TG_ARCHIVE")"
 
         # Bot API принимает документы до 50 МБ - пока БД маленькая, это не проблема,
         # но однажды может стать актуальным (тогда используйте REMOTE_BACKUP_PATH).
         if [ "$TG_SIZE_BYTES" -gt $((50 * 1024 * 1024)) ]; then
-            echo "ПРЕДУПРЕЖДЕНИЕ: архив для Telegram больше 50 МБ (${TG_SIZE}) - Bot API его не примет, пропускаю отправку. Используйте REMOTE_BACKUP_PATH." >&2
+            echo "ПРЕДУПРЕЖДЕНИЕ: архив для Telegram больше 50 МБ (${SIZE}) - Bot API его не примет, пропускаю отправку. Используйте REMOTE_BACKUP_PATH." >&2
         elif [ -n "$ADMIN_GROUP_CHAT_ID" ]; then
-            CAPTION="🗄 Бэкап Unlockless VPN — $(date '+%d.%m.%Y %H:%M') (${TG_SIZE}, без .env)"
+            CAPTION="🗄 Бэкап Unlockless VPN — $(date '+%d.%m.%Y %H:%M') (${SIZE}, содержит .env - храните бережно)"
             if [ -n "$ADMIN_TOPIC_BACKUPS" ]; then
                 SEND_OK=$(curl -sf -F chat_id="$ADMIN_GROUP_CHAT_ID" -F message_thread_id="$ADMIN_TOPIC_BACKUPS" \
                      -F document=@"$TG_ARCHIVE;filename=${ARCHIVE_NAME}" -F caption="$CAPTION" \
@@ -150,7 +135,7 @@ if [ "${TELEGRAM_BACKUP_NOTIFY:-}" = "1" ]; then
                 [ -z "$chat_id" ] && continue
                 if curl -sf -F chat_id="$chat_id" \
                      -F document=@"$TG_ARCHIVE;filename=${ARCHIVE_NAME}" \
-                     -F caption="🗄 Бэкап Unlockless VPN — $(date '+%d.%m.%Y %H:%M') (${TG_SIZE}, без .env)" \
+                     -F caption="🗄 Бэкап Unlockless VPN — $(date '+%d.%m.%Y %H:%M') (${SIZE}, содержит .env - храните бережно)" \
                      "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" > /dev/null; then
                     echo "    -> $chat_id: отправлено"
                 else
