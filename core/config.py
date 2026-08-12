@@ -1,12 +1,19 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, NoDecode
 from pydantic import field_validator
-from typing import List
+from typing import List, Annotated
 
 
 class Settings(BaseSettings):
     # Telegram
     bot_token: str
-    admin_ids: List[int] = []
+    # NoDecode - без неё pydantic-settings считает List[int] "сложным" типом и
+    # пытается сам распарсить значение env-переменной как JSON ДО того, как
+    # добираются наши field_validator'ы ниже. "1" - валидный JSON (число), поэтому
+    # с одним админом всё работало, а вот "1,2" (ровно то, что описано в
+    # .env.example - "через запятую") - невалидный JSON, и старт приложения падал
+    # с SettingsError на любом ADMIN_IDS с более чем одним ID. NoDecode отключает
+    # эту предварительную JSON-попытку - строка доходит до parse_admin_ids как есть.
+    admin_ids: Annotated[List[int], NoDecode] = []
 
     # Database
     database_url: str
@@ -92,6 +99,30 @@ class Settings(BaseSettings):
     # Referral bonuses (RUB)
     referral_bonus_referrer: int = 100
     referral_bonus_referred: int = 50
+
+    # Уведомления админам в Telegram-группу с топиками (опционально) - см.
+    # README "Уведомления в группу с топиками". Если ADMIN_GROUP_CHAT_ID не
+    # задан, всё работает как раньше: личными сообщениями каждому из ADMIN_IDS.
+    # Топики per-категория опциональны и по отдельности - незаполненная
+    # категория просто уходит в главный чат группы (без темы), а не падает.
+    admin_group_chat_id: int | None = None
+    admin_topic_payments: int | None = None
+    admin_topic_support: int | None = None
+    admin_topic_system: int | None = None
+    admin_topic_backups: int | None = None
+
+    @field_validator(
+        "admin_group_chat_id", "admin_topic_payments", "admin_topic_support",
+        "admin_topic_system", "admin_topic_backups",
+        mode="before",
+    )
+    @classmethod
+    def empty_str_to_none(cls, v):
+        # Пустая строка в .env для Optional[int] иначе падает при старте -
+        # тот же класс бага, что уже был с SMTP_PORT/SESSION_MAX_AGE (см. git log).
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
     class Config:
         env_file = ".env"

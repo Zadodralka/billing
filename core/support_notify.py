@@ -30,6 +30,7 @@ async def notify_admins_new_message(ticket_id: int, subject: str, user_display_n
         f"📋 Тема: {subject}\n\n"
         f"«{text_preview[:300]}»",
         reply_markup=_admin_ticket_keyboard(ticket_id),
+        topic="support",
     )
 
 

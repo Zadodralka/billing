@@ -95,8 +95,14 @@ fi
 if [ "${TELEGRAM_BACKUP_NOTIFY:-}" = "1" ]; then
     BOT_TOKEN="$(grep -E '^BOT_TOKEN=' .env | cut -d= -f2- || true)"
     ADMIN_IDS="$(grep -E '^ADMIN_IDS=' .env | cut -d= -f2- || true)"
-    if [ -z "$BOT_TOKEN" ] || [ -z "$ADMIN_IDS" ]; then
-        echo "ПРЕДУПРЕЖДЕНИЕ: TELEGRAM_BACKUP_NOTIFY=1, но BOT_TOKEN/ADMIN_IDS не найдены в .env - отправка пропущена." >&2
+    # Группа с топиками (см. README "Уведомления в группу с топиками") -
+    # опционально, если задана ADMIN_GROUP_CHAT_ID, бэкап уходит одним
+    # сообщением в группу (в топик ADMIN_TOPIC_BACKUPS, если он тоже указан),
+    # а не личным сообщением каждому из ADMIN_IDS по отдельности.
+    ADMIN_GROUP_CHAT_ID="$(grep -E '^ADMIN_GROUP_CHAT_ID=' .env | cut -d= -f2- || true)"
+    ADMIN_TOPIC_BACKUPS="$(grep -E '^ADMIN_TOPIC_BACKUPS=' .env | cut -d= -f2- || true)"
+    if [ -z "$BOT_TOKEN" ] || { [ -z "$ADMIN_IDS" ] && [ -z "$ADMIN_GROUP_CHAT_ID" ]; }; then
+        echo "ПРЕДУПРЕЖДЕНИЕ: TELEGRAM_BACKUP_NOTIFY=1, но BOT_TOKEN и ни ADMIN_IDS, ни ADMIN_GROUP_CHAT_ID не найдены в .env - отправка пропущена." >&2
     else
         # Отдельный архив БЕЗ .env специально для Telegram - боты не шлют файлы через
         # E2E-шифрование (в отличие от Secret Chats), документы хранятся на серверах
@@ -121,6 +127,22 @@ if [ "${TELEGRAM_BACKUP_NOTIFY:-}" = "1" ]; then
         # но однажды может стать актуальным (тогда используйте REMOTE_BACKUP_PATH).
         if [ "$TG_SIZE_BYTES" -gt $((50 * 1024 * 1024)) ]; then
             echo "ПРЕДУПРЕЖДЕНИЕ: архив для Telegram больше 50 МБ (${TG_SIZE}) - Bot API его не примет, пропускаю отправку. Используйте REMOTE_BACKUP_PATH." >&2
+        elif [ -n "$ADMIN_GROUP_CHAT_ID" ]; then
+            CAPTION="🗄 Бэкап Unlockless VPN — $(date '+%d.%m.%Y %H:%M') (${TG_SIZE}, без .env)"
+            if [ -n "$ADMIN_TOPIC_BACKUPS" ]; then
+                SEND_OK=$(curl -sf -F chat_id="$ADMIN_GROUP_CHAT_ID" -F message_thread_id="$ADMIN_TOPIC_BACKUPS" \
+                     -F document=@"$TG_ARCHIVE;filename=${ARCHIVE_NAME}" -F caption="$CAPTION" \
+                     "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" > /dev/null && echo 1 || echo 0)
+            else
+                SEND_OK=$(curl -sf -F chat_id="$ADMIN_GROUP_CHAT_ID" \
+                     -F document=@"$TG_ARCHIVE;filename=${ARCHIVE_NAME}" -F caption="$CAPTION" \
+                     "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" > /dev/null && echo 1 || echo 0)
+            fi
+            if [ "$SEND_OK" = "1" ]; then
+                echo "    -> группа: отправлено"
+            else
+                echo "    -> группа: ОШИБКА отправки" >&2
+            fi
         else
             IFS=',' read -ra IDS <<< "$ADMIN_IDS"
             for chat_id in "${IDS[@]}"; do

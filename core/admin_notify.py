@@ -10,7 +10,8 @@ async def notify_admins_new_payment(user_display_name: str, plan_name: str, amou
         f"{kind}\n"
         f"👤 {user_display_name}\n"
         f"📦 {plan_name}\n"
-        f"💰 {amount} ₽"
+        f"💰 {amount} ₽",
+        topic="payments",
     )
 
 
@@ -24,5 +25,6 @@ async def notify_admins_scheduler_step_failed(step_name: str, error: Exception):
         f"🚨 <b>Сбой планировщика</b>\n\n"
         f"Шаг: <code>{step_name}</code>\n"
         f"Ошибка: {error}\n\n"
-        f"Будет повторён на следующем часовом цикле."
+        f"Будет повторён на следующем часовом цикле.",
+        topic="system",
     )

@@ -1209,7 +1209,8 @@ async def _run_email_broadcast(
         f"✉️ <b>Email-рассылка завершена</b>\n\n"
         f"Тема: {subject}\n"
         f"Отправлено: {sent}\n"
-        f"Ошибок: {failed}"
+        f"Ошибок: {failed}",
+        topic="system",
     )
 
 
