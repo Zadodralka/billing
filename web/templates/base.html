@@ -206,11 +206,43 @@
 
         .mobile-topbar { display: none; }
         .sidebar-overlay { display: none; }
+        .mobile-bottom-nav { display: none; }
 
         @media (max-width: 900px) {
             .sidebar { transform: translateX(-100%); transition: transform .2s ease; width: 264px; }
             .sidebar.open { transform: translateX(0); }
             .main { margin-left: 0; padding: 1rem 1rem 2.5rem; }
+            /* Запас снизу под фиксированный таб-бар (см. .mobile-bottom-nav) - иначе
+               последняя карточка/кнопка страницы пряталась бы под ним. Только у
+               .has-bottom-nav (клиентские страницы - см. base.html), у админки
+               таб-бара нет, лишний отступ там не нужен. */
+            .main.has-bottom-nav { padding-bottom: calc(5.4rem + env(safe-area-inset-bottom, 0px)); }
+
+            /* ── Нижний таб-бар: на телефоне это единственный способ понять,
+               куда вообще можно перейти, не открывая гамбургер-меню - раньше
+               "Планы"/"Тарифы" были видны только внутри него, и это было
+               неочевидно (реальная жалоба пользователя). Дублирует 5 главных
+               пунктов сайдбара, сам сайдбар/гамбургер остаётся - там есть ещё
+               и Инструкции, и Выход. Только для клиентской части (см. Jinja-
+               условие в base.html) - в админке остаётся прежняя навигация. ── */
+            .mobile-bottom-nav {
+                display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 95;
+                background: var(--panel); border-top: 1px solid var(--border);
+                padding: .3rem .25rem calc(.3rem + env(safe-area-inset-bottom, 0px));
+                justify-content: space-around;
+            }
+            .mobile-bottom-nav-item {
+                display: flex; flex-direction: column; align-items: center; gap: .2rem;
+                color: var(--muted); font-size: .64rem; font-weight: 600; flex: 1; min-width: 0;
+                padding: .35rem .1rem; border-radius: 9px; position: relative; text-align: center;
+            }
+            .mobile-bottom-nav-item i { font-size: 1.2rem; }
+            .mobile-bottom-nav-item span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .mobile-bottom-nav-item.active { color: var(--accent); }
+            .mobile-bottom-nav-item .mbn-dot {
+                position: absolute; top: .15rem; right: 22%; width: 7px; height: 7px; border-radius: 50%;
+                background: var(--accent); box-shadow: 0 0 0 2px var(--panel);
+            }
             .mobile-topbar {
                 display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 90;
                 background: var(--panel); border-bottom: 1px solid var(--border); margin: -1rem -1rem 1.25rem;
@@ -346,7 +378,8 @@
             {% endif %}
         </div>
     </aside>
-    <div class="main">
+    {% set is_admin_area = '/admin' in request.url.path %}
+    <div class="main{% if not is_admin_area %} has-bottom-nav{% endif %}">
         <div class="mobile-topbar">
             <div class="brand"><img src="/static/img/logo.jpg" alt="Unlockless VPN" class="brand-logo"> Unlockless VPN <span class="dot"></span></div>
             <button class="mobile-burger" onclick="toggleSidebar(true)"><i class="bi bi-list"></i></button>
@@ -354,6 +387,30 @@
         {% block content %}{% endblock %}
     </div>
 </div>
+
+{% if not is_admin_area %}
+<!-- Нижний таб-бар (только мобильный экран, см. @media в <style> выше) - те же
+     5 главных пунктов, что и в шапке сайдбара "Кабинет", плюс сам сайдбар и
+     гамбургер остаются доступны для Инструкций/Выхода. -->
+<nav class="mobile-bottom-nav">
+    <a href="/dashboard" class="mobile-bottom-nav-item {% if request.url.path == '/dashboard' %}active{% endif %}">
+        <i class="bi bi-house"></i><span>Главная</span>
+    </a>
+    <a href="/dashboard/plans" class="mobile-bottom-nav-item {% if request.url.path == '/dashboard/plans' %}active{% endif %}">
+        <i class="bi bi-credit-card"></i><span>Планы</span>
+    </a>
+    <a href="/dashboard/referral" class="mobile-bottom-nav-item {% if '/dashboard/referral' in request.url.path %}active{% endif %}">
+        <i class="bi bi-gift"></i><span>Рефералы</span>
+        {% if user and user.balance > 0 %}<span class="mbn-dot"></span>{% endif %}
+    </a>
+    <a href="/dashboard/support" class="mobile-bottom-nav-item {% if '/dashboard/support' in request.url.path %}active{% endif %}">
+        <i class="bi bi-life-preserver"></i><span>Поддержка</span>
+    </a>
+    <a href="/dashboard/profile" class="mobile-bottom-nav-item {% if '/dashboard/profile' in request.url.path %}active{% endif %}">
+        <i class="bi bi-person-gear"></i><span>Профиль</span>
+    </a>
+</nav>
+{% endif %}
 
 <!-- Модалка действий для карточки в мобильном списке (.data-card) - см. openCardActions().
      Общая для всех страниц с .data-card, чтобы не дублировать разметку/JS в каждом шаблоне. -->
