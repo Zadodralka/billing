@@ -481,6 +481,32 @@ async def send_zero_traffic_email(recipient_email: str, plan_name: str):
     await send_email(recipient_email, "📡 Не видим активности по вашей VPN-подписке", html)
 
 
+async def send_traffic_exhausted_email(recipient_email: str, plan_name: str, traffic_gb: int):
+    """Письмо о том, что лимит трафика по подписке исчерпан и VPN временно не
+    работает (Remnawave блокирует трафик сама, но никого об этом не уведомляет -
+    см. scheduler.notify_traffic_exhausted_subscriptions)."""
+    body_html = f"""
+    <p style="color: #4b5565; font-size: 15px; line-height: 1.6; margin-bottom: 24px;">
+      По подписке <strong style="color: #14181f;">«{escape(plan_name)}»</strong> исчерпан
+      лимит трафика ({traffic_gb} ГБ) — доступ к VPN временно заблокирован.
+      Он восстановится автоматически при обновлении лимита в новом периоде, либо
+      можно оформить тариф с бОльшим объёмом или безлимитным трафиком в личном кабинете.
+    </p>
+    """
+    html = _simple_notice_html(
+        emoji="📶",
+        title="Лимит трафика исчерпан",
+        body_html=body_html,
+        cta_text="Открыть личный кабинет",
+        cta_url=f"{settings.webapp_url}/dashboard",
+        footer_note=(
+            "Это письмо отправлено автоматически по вашей подписке на "
+            f"<a href='{settings.webapp_url}' style='color: #97a1b0; text-decoration: underline;'>{settings.webapp_url}</a>."
+        ),
+    )
+    await send_email(recipient_email, "📶 Лимит трафика исчерпан — Unlockless VPN", html)
+
+
 async def send_ticket_reply_email(recipient_email: str, ticket_id: int, subject: str, text_preview: str):
     """Письмо о том, что администратор ответил на тикет поддержки - дублирует
     Telegram-уведомление на случай, если у пользователя не привязан Telegram

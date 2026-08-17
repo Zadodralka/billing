@@ -408,6 +408,7 @@ async def activate_subscription(user: User, payment: Payment, session: AsyncSess
         sub.expires_at = base + timedelta(days=plan["days"])
         sub.status = SubscriptionStatus.ACTIVE
         sub.expiry_reminder_sent = False
+        sub.traffic_exhausted_notified = False
 
         if sub.remnawave_sub_id:
             try:

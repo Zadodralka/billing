@@ -574,6 +574,7 @@ async def extend_subscription(
         sub.expires_at = new_expires
         sub.status = SubscriptionStatus.ACTIVE
         sub.expiry_reminder_sent = False
+        sub.traffic_exhausted_notified = False
 
         remnawave_warning = None
         if sub.remnawave_sub_id:

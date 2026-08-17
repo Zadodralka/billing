@@ -92,6 +92,14 @@ class Subscription(Base):
     # бесконечно каждый час.
     zero_traffic_checked: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Уведомление "лимит трафика по подписке исчерпан" уже отправлено -
+    # см. scheduler.notify_traffic_exhausted_subscriptions. В отличие от
+    # zero_traffic_checked (разовая проверка на весь срок подписки), этот флаг
+    # планировщик сам сбрасывает обратно в False, как только расход падает
+    # ниже лимита (сброс счётчика Remnawave по traffic_reset_strategy) - чтобы
+    # повторное исчерпание в следующем периоде снова уведомило, а не молчало.
+    traffic_exhausted_notified: Mapped[bool] = mapped_column(Boolean, default=False)
+
     user: Mapped["User"] = relationship(back_populates="subscriptions")
 
     @property

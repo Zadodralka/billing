@@ -251,6 +251,97 @@ async def notify_zero_traffic_subscriptions():
             logger.info(f"Zero-traffic check: checked {checked_count} subscription(s), notified {notified_count}")
 
 
+async def notify_traffic_exhausted_subscriptions():
+    """Предупреждает пользователя, когда расход трафика по подписке достиг лимита
+    тарифа - Remnawave в этот момент сама блокирует дальнейший трафик, но никого
+    об этом не уведомляет (ни нас, ни пользователя), и раньше это молча оставалось
+    незамеченным. traffic_gb == 0 (безлимит) не проверяется - там лимита нет.
+
+    В отличие от zero_traffic_checked (проверяется один раз за всю жизнь подписки),
+    traffic_exhausted_notified планировщик сам сбрасывает обратно в False, как
+    только расход падает ниже лимита - это происходит при периодическом сбросе
+    счётчика Remnawave (см. traffic_reset_strategy в core/plans.py) или при
+    продлении подписки. Без сброса исчерпание лимита в следующем периоде
+    (например на 12-месячном тарифе с ежемесячным сбросом) осталось бы без
+    уведомления - флаг был бы уже выставлен с первого раза."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Subscription).where(
+                Subscription.status == SubscriptionStatus.ACTIVE,
+                Subscription.remnawave_sub_id.is_not(None),
+                Subscription.traffic_gb > 0,
+            )
+        )
+        candidates = result.scalars().all()
+
+        checked_count = 0
+        notified_count = 0
+        for sub in candidates:
+            used_gb = await remnawave.get_traffic_usage_gb(sub.remnawave_sub_id)
+            if used_gb is None:
+                # Remnawave недоступна/не ответила - пробуем в следующем цикле,
+                # флаг не трогаем (см. аналогичную логику в других функциях этого файла)
+                continue
+            checked_count += 1
+
+            exhausted = used_gb >= sub.traffic_gb
+
+            if not exhausted:
+                if sub.traffic_exhausted_notified:
+                    sub.traffic_exhausted_notified = False
+                    try:
+                        await session.commit()
+                    except Exception as e:
+                        logger.error(f"Failed to reset traffic_exhausted_notified for sub {sub.id}: {e}")
+                continue
+
+            if sub.traffic_exhausted_notified:
+                continue  # уже уведомляли об исчерпании в этом периоде
+
+            sub.traffic_exhausted_notified = True
+
+            # Коммитим флаг СРАЗУ, до попытки уведомления - см. комментарий в
+            # disable_expired_subscriptions про тот же класс бага (частичный
+            # откат при сбое уведомления задваивает рассылку в следующем цикле).
+            try:
+                await session.commit()
+            except Exception as e:
+                logger.error(f"Failed to commit traffic_exhausted_notified for sub {sub.id}: {e}")
+                continue
+
+            try:
+                user_result = await session.execute(select(User).where(User.id == sub.user_id))
+                user = user_result.scalar_one_or_none()
+                if not user:
+                    continue
+
+                from core.plans import get_plan
+                plan = await get_plan(session, sub.plan_key)
+                plan_name = plan["name"] if plan else sub.plan_key
+
+                if user.telegram_id:
+                    await send_telegram(
+                        user.telegram_id,
+                        f"📶 <b>Лимит трафика по подписке «{plan_name}» исчерпан</b>\n\n"
+                        f"Использовано {round(used_gb, 1)} из {sub.traffic_gb} ГБ — VPN временно не работает.\n"
+                        "Доступ восстановится при обновлении лимита в новом периоде, либо "
+                        "оформите тариф с бОльшим объёмом или безлимитным трафиком.",
+                    )
+                if user.email:
+                    try:
+                        from core.email import send_traffic_exhausted_email
+                        await send_traffic_exhausted_email(user.email, plan_name, sub.traffic_gb)
+                    except Exception as e:
+                        logger.warning(f"Failed to send traffic-exhausted email to {user.email}: {e}")
+
+                notified_count += 1
+            except Exception as e:
+                logger.error(f"Failed to notify user for traffic-exhausted sub {sub.id}: {e}")
+
+        if checked_count:
+            logger.info(f"Traffic-exhausted check: checked {checked_count} subscription(s), notified {notified_count}")
+
+
 async def delete_old_expired_accounts():
     """Шаг 2: полностью удаляет аккаунты, истёкшие более DELETE_AFTER_DAYS дней назад"""
     async with AsyncSessionLocal() as session:
@@ -343,6 +434,12 @@ async def run_cycle():
     except Exception as e:
         logger.error(f"notify_zero_traffic_subscriptions failed: {e}")
         await _report_step_failure("notify_zero_traffic_subscriptions", e)
+
+    try:
+        await notify_traffic_exhausted_subscriptions()
+    except Exception as e:
+        logger.error(f"notify_traffic_exhausted_subscriptions failed: {e}")
+        await _report_step_failure("notify_traffic_exhausted_subscriptions", e)
 
     try:
         await delete_old_expired_accounts()

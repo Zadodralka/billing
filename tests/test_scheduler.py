@@ -200,3 +200,130 @@ async def test_fresh_pending_payment_untouched(db_session):
 
     await db_session.refresh(payment)
     assert payment.status == PaymentStatus.PENDING
+
+
+async def test_traffic_exhausted_notifies_once(db_session):
+    """Регрессия ровно по жалобе пользователя: у подписки с email расход
+    трафика достиг лимита - должно уйти уведомление и в Telegram, и на email,
+    и ровно один раз, а не на каждом часовом проходе."""
+    import scheduler
+    user = await _mk_user(db_session, email="u@example.com")
+    sub = Subscription(
+        user_id=user.id, plan_key="1m", traffic_gb=50,
+        status=SubscriptionStatus.ACTIVE, remnawave_sub_id="uuid-1",
+    )
+    db_session.add(sub)
+    await db_session.commit()
+
+    with _patch_session_factory(db_session), \
+         patch("scheduler.remnawave.get_traffic_usage_gb", new=AsyncMock(return_value=50.0)), \
+         patch("scheduler.send_telegram", new=AsyncMock()) as tg, \
+         patch("core.email.send_traffic_exhausted_email", new=AsyncMock()) as em:
+        await scheduler.notify_traffic_exhausted_subscriptions()
+        # Второй проход не должен слать повторно - флаг уже стоит
+        await scheduler.notify_traffic_exhausted_subscriptions()
+
+    await db_session.refresh(sub)
+    assert sub.traffic_exhausted_notified is True
+    assert tg.await_count == 1
+    assert em.await_count == 1
+
+
+async def test_usage_under_limit_no_notification(db_session):
+    import scheduler
+    user = await _mk_user(db_session)
+    sub = Subscription(
+        user_id=user.id, plan_key="1m", traffic_gb=50,
+        status=SubscriptionStatus.ACTIVE, remnawave_sub_id="uuid-1",
+    )
+    db_session.add(sub)
+    await db_session.commit()
+
+    with _patch_session_factory(db_session), \
+         patch("scheduler.remnawave.get_traffic_usage_gb", new=AsyncMock(return_value=12.0)), \
+         patch("scheduler.send_telegram", new=AsyncMock()) as tg:
+        await scheduler.notify_traffic_exhausted_subscriptions()
+
+    await db_session.refresh(sub)
+    assert sub.traffic_exhausted_notified is False
+    tg.assert_not_awaited()
+
+
+async def test_unlimited_traffic_never_checked(db_session):
+    """traffic_gb=0 - безлимит, лимита нет и проверять нечего. Подписка не
+    должна попадать даже в кандидаты (незачем дёргать Remnawave впустую)."""
+    import scheduler
+    user = await _mk_user(db_session)
+    sub = Subscription(
+        user_id=user.id, plan_key="1m", traffic_gb=0,
+        status=SubscriptionStatus.ACTIVE, remnawave_sub_id="uuid-1",
+    )
+    db_session.add(sub)
+    await db_session.commit()
+
+    with _patch_session_factory(db_session), \
+         patch("scheduler.remnawave.get_traffic_usage_gb", new=AsyncMock()) as rw_usage:
+        await scheduler.notify_traffic_exhausted_subscriptions()
+
+    rw_usage.assert_not_awaited()
+
+
+async def test_flag_resets_when_usage_drops_below_limit_again(db_session):
+    """Ключевой сценарий для многомесячных тарифов с периодическим сбросом
+    счётчика (traffic_reset_strategy): исчерпание лимита в СЛЕДУЮЩЕМ периоде
+    должно уведомить заново, а не молчать из-за флага, оставшегося от прошлого
+    периода."""
+    import scheduler
+    user = await _mk_user(db_session, email="u@example.com")
+    sub = Subscription(
+        user_id=user.id, plan_key="3m", traffic_gb=50,
+        status=SubscriptionStatus.ACTIVE, remnawave_sub_id="uuid-1",
+    )
+    db_session.add(sub)
+    await db_session.commit()
+
+    with _patch_session_factory(db_session), \
+         patch("scheduler.remnawave.get_traffic_usage_gb", new=AsyncMock(return_value=50.0)), \
+         patch("scheduler.send_telegram", new=AsyncMock()) as tg:
+        await scheduler.notify_traffic_exhausted_subscriptions()
+    await db_session.refresh(sub)
+    assert sub.traffic_exhausted_notified is True
+    assert tg.await_count == 1
+
+    # Remnawave сбросила счётчик на новый период - расход снова маленький
+    with _patch_session_factory(db_session), \
+         patch("scheduler.remnawave.get_traffic_usage_gb", new=AsyncMock(return_value=2.0)), \
+         patch("scheduler.send_telegram", new=AsyncMock()) as tg:
+        await scheduler.notify_traffic_exhausted_subscriptions()
+    await db_session.refresh(sub)
+    assert sub.traffic_exhausted_notified is False  # флаг сам сбросился
+    tg.assert_not_awaited()
+
+    # Исчерпала лимит второй раз в новом периоде - должна уведомить снова
+    with _patch_session_factory(db_session), \
+         patch("scheduler.remnawave.get_traffic_usage_gb", new=AsyncMock(return_value=50.0)), \
+         patch("scheduler.send_telegram", new=AsyncMock()) as tg:
+        await scheduler.notify_traffic_exhausted_subscriptions()
+    await db_session.refresh(sub)
+    assert sub.traffic_exhausted_notified is True
+    assert tg.await_count == 1
+
+
+async def test_remnawave_unavailable_does_not_flip_flag(db_session):
+    import scheduler
+    user = await _mk_user(db_session)
+    sub = Subscription(
+        user_id=user.id, plan_key="1m", traffic_gb=50,
+        status=SubscriptionStatus.ACTIVE, remnawave_sub_id="uuid-1",
+    )
+    db_session.add(sub)
+    await db_session.commit()
+
+    with _patch_session_factory(db_session), \
+         patch("scheduler.remnawave.get_traffic_usage_gb", new=AsyncMock(return_value=None)), \
+         patch("scheduler.send_telegram", new=AsyncMock()) as tg:
+        await scheduler.notify_traffic_exhausted_subscriptions()
+
+    await db_session.refresh(sub)
+    assert sub.traffic_exhausted_notified is False
+    tg.assert_not_awaited()
